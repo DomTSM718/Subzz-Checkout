@@ -2,8 +2,13 @@
 /**
  * Plugin Name: Subzz Subscription Payments
  * Description: Custom subscription payment processing with contract signatures and Azure backend integration
- * Version: 1.3.0
+ * Version: 1.4.0 (HYBRID Architecture Update)
  * Author: Subzz Team
+ * 
+ * HYBRID ARCHITECTURE UPDATE (Oct 19, 2025):
+ * - Added billing-date-handler.js loading
+ * - Updated signature-handler.js dependencies
+ * - Separated billing date selection from signature logic
  */
 
 // Prevent direct access
@@ -177,7 +182,7 @@ function subzz_force_load_signature_assets_early() {
         return; // Not the signature page
     }
     
-    error_log('SUBZZ DEBUG: Loading signature assets EARLY on contract signature page');
+    error_log('SUBZZ DEBUG: Loading signature assets EARLY on contract signature page (HYBRID architecture)');
     
     // Force enqueue the assets immediately
     add_action('wp_enqueue_scripts', 'subzz_enqueue_signature_assets_now', 1);
@@ -186,9 +191,12 @@ function subzz_force_load_signature_assets_early() {
     subzz_enqueue_signature_assets_now();
 }
 
-// Separate function to actually enqueue the assets
+// ========================================================================
+// HYBRID ARCHITECTURE UPDATE: Asset loading function
+// Updated to load billing-date-handler.js before signature-handler.js
+// ========================================================================
 function subzz_enqueue_signature_assets_now() {
-    error_log('SUBZZ DEBUG: Actually enqueuing signature assets now');
+    error_log('SUBZZ DEBUG: Actually enqueuing signature assets now (HYBRID architecture)');
     
     // Check if signature-pad.min.js file exists
     $signature_pad_path = plugin_dir_path(__FILE__) . 'assets/signature-pad.min.js';
@@ -196,7 +204,9 @@ function subzz_enqueue_signature_assets_now() {
         error_log('SUBZZ WARNING: signature-pad.min.js not found at: ' . $signature_pad_path);
     }
     
-    // Load signature pad library from CDN as fallback if local file doesn't exist
+    // ========================================================================
+    // STEP 1: Load signature pad library
+    // ========================================================================
     if (file_exists($signature_pad_path)) {
         wp_enqueue_script(
             'signature-pad', 
@@ -218,16 +228,35 @@ function subzz_enqueue_signature_assets_now() {
         error_log('SUBZZ DEBUG: Using CDN for signature-pad.min.js');
     }
     
-    // Load our signature handler
+    // ========================================================================
+    // STEP 2: Load billing date handler (HYBRID ARCHITECTURE - NEW)
+    // This must load BEFORE signature-handler.js
+    // ========================================================================
+    wp_enqueue_script(
+        'subzz-billing-date', 
+        plugin_dir_url(__FILE__) . 'assets/billing-date-handler.js', 
+        array('jquery'),  // Only depends on jQuery
+        '1.0.0', 
+        true
+    );
+    error_log('SUBZZ DEBUG: Loading billing-date-handler.js (HYBRID architecture - Step 1)');
+    
+    // ========================================================================
+    // STEP 3: Load signature handler (depends on billing date handler)
+    // HYBRID ARCHITECTURE UPDATE: Added 'subzz-billing-date' dependency
+    // ========================================================================
     wp_enqueue_script(
         'subzz-signature', 
         plugin_dir_url(__FILE__) . 'assets/signature-handler.js', 
-        array('signature-pad', 'jquery'), 
-        '1.0.1', 
+        array('signature-pad', 'jquery', 'subzz-billing-date'),  // Added billing-date dependency
+        '1.0.2',  // Version bump to indicate HYBRID architecture update
         true
     );
+    error_log('SUBZZ DEBUG: Loading signature-handler.js with billing-date dependency (HYBRID architecture - Steps 2 & 3)');
     
-    // Load our CSS
+    // ========================================================================
+    // STEP 4: Load CSS
+    // ========================================================================
     wp_enqueue_style(
         'subzz-contract', 
         plugin_dir_url(__FILE__) . 'assets/contract-styles.css', 
@@ -235,11 +264,13 @@ function subzz_enqueue_signature_assets_now() {
         '1.0.1'
     );
     
-    error_log('SUBZZ DEBUG: All signature page assets enqueued successfully (early)');
+    error_log('SUBZZ DEBUG: All signature page assets enqueued successfully (HYBRID architecture)');
+    error_log('SUBZZ DEBUG: Load order: signature-pad → billing-date-handler → signature-handler → CSS');
     
     // Debug file paths
     error_log('SUBZZ DEBUG: CSS file URL: ' . plugin_dir_url(__FILE__) . 'assets/contract-styles.css');
-    error_log('SUBZZ DEBUG: JS file URL: ' . plugin_dir_url(__FILE__) . 'assets/signature-handler.js');
+    error_log('SUBZZ DEBUG: Billing date JS URL: ' . plugin_dir_url(__FILE__) . 'assets/billing-date-handler.js');
+    error_log('SUBZZ DEBUG: Signature JS URL: ' . plugin_dir_url(__FILE__) . 'assets/signature-handler.js');
 }
 
 // Handle checkout return with signature completion - NEW FUNCTIONALITY
@@ -404,190 +435,6 @@ function format_delivery_address($order) {
     return implode(', ', $address_parts);
 }
 
-// ENHANCED: Process order for contract signature with comprehensive customer data
-function process_order_for_contract_signature($order_id) {
-    error_log('SUBZZ CONTRACT: Processing order for contract signature - Order ID: ' . $order_id);
-    
-    $order = wc_get_order($order_id);
-    
-    if (!$order) {
-        error_log('SUBZZ CONTRACT ERROR: Order not found - ID: ' . $order_id);
-        wp_die('Order not found');
-    }
-
-    // ENHANCED: Extract comprehensive customer data from WooCommerce order
-    $customer_data = extract_customer_data_from_wc_order($order);
-
-    // Get product information
-    $items = $order->get_items();
-    $product_name = 'Subscription Product';
-    $monthly_amount = 0;
-    $term_length = 12; // Default
-
-    foreach ($items as $item) {
-        $product = $item->get_product();
-        $product_name = $product->get_name();
-        $monthly_amount = floatval($product->get_price());
-        
-        // Try to get term length from product meta
-        $term_meta = get_post_meta($product->get_id(), '_subscription_term_length', true);
-        if ($term_meta) {
-            $term_length = intval($term_meta);
-        }
-        break; // Just get the first product
-    }
-
-    // ENHANCED: Prepare contract generation request with all customer data
-    $contract_request = array(
-        'customer_email' => $customer_data['email'],
-        'product_name' => $product_name,
-        'monthly_amount' => $monthly_amount,
-        'term_length' => $term_length,
-        'delivery_address' => $customer_data['delivery_address'],
-        
-        // NEW: Add comprehensive customer information from checkout
-        'first_name' => $customer_data['first_name'],
-        'last_name' => $customer_data['last_name'],
-        'phone_number' => $customer_data['phone_number'],
-        'id_number' => $customer_data['id_number'], // Can be empty, will prompt in contract
-        'billing_address' => $customer_data['billing_address'],
-        'city' => $customer_data['city'],
-        'province' => $customer_data['province'],
-        'postal_code' => $customer_data['postal_code']
-    );
-
-    error_log('SUBZZ CONTRACT: Sending enhanced customer data to Azure API');
-    error_log('SUBZZ CONTRACT: Request data: ' . wp_json_encode($contract_request));
-
-    // Call Azure API to generate contract with enhanced data
-    $response = wp_remote_post('https://subzzbackendapi-hbgxe2cfavand0hg.southafricanorth-01.azurewebsites.net/api/contract/generate', array(
-        'body' => json_encode($contract_request),
-        'headers' => array(
-            'Content-Type' => 'application/json'
-        ),
-        'timeout' => 30
-    ));
-
-    if (is_wp_error($response)) {
-        error_log('SUBZZ CONTRACT ERROR: Failed to call Azure API - ' . $response->get_error_message());
-        wp_die('Failed to generate contract. Please try again.');
-    }
-
-    $response_code = wp_remote_retrieve_response_code($response);
-    $body = wp_remote_retrieve_body($response);
-    
-    error_log('SUBZZ CONTRACT: Azure API response code: ' . $response_code);
-    error_log('SUBZZ CONTRACT: Azure API response body: ' . $body);
-    
-    $contract_data = json_decode($body, true);
-
-    if ($response_code !== 200 || !$contract_data || !$contract_data['success']) {
-        error_log('SUBZZ CONTRACT ERROR: Contract generation failed - Response: ' . $body);
-        wp_die('Failed to generate contract. Please contact support. Error: ' . ($contract_data['error'] ?? 'Unknown error'));
-    }
-
-    // Store contract data in order meta for later use
-    update_post_meta($order_id, '_subzz_contract_html', $contract_data['contract_html']);
-    update_post_meta($order_id, '_subzz_contract_hash', $contract_data['contract_content_hash']);
-    update_post_meta($order_id, '_subzz_customer_user_id', $contract_data['customer_user_id']);
-    update_post_meta($order_id, '_subzz_agreement_reference', $contract_data['agreement_reference']);
-
-    // Store comprehensive customer data for signature process
-    update_post_meta($order_id, '_subzz_customer_data', $customer_data);
-
-    error_log('SUBZZ CONTRACT SUCCESS: Contract generated with real customer data');
-    error_log('SUBZZ CONTRACT SUCCESS: Agreement reference: ' . $contract_data['agreement_reference']);
-    
-    // Continue with contract display...
-    return $contract_data;
-}
-
-// ENHANCED: Handle signature submission with comprehensive customer data
-function handle_signature_submission() {
-    if (!isset($_POST['action']) || $_POST['action'] !== 'submit_signature') {
-        return;
-    }
-
-    error_log('SUBZZ SIGNATURE: Processing signature submission');
-
-    $order_id = intval($_POST['order_id']);
-    $signature_data = sanitize_text_field($_POST['signature_data']);
-    $order = wc_get_order($order_id);
-    
-    if (!$order) {
-        error_log('SUBZZ SIGNATURE ERROR: Invalid order ID - ' . $order_id);
-        wp_die('Invalid order');
-    }
-
-    // Get stored comprehensive customer data
-    $customer_data = get_post_meta($order_id, '_subzz_customer_data', true);
-    $contract_hash = get_post_meta($order_id, '_subzz_contract_hash', true);
-    $customer_user_id = get_post_meta($order_id, '_subzz_customer_user_id', true);
-
-    if (!$customer_data || !$contract_hash || !$customer_user_id) {
-        error_log('SUBZZ SIGNATURE ERROR: Missing stored data for order ' . $order_id);
-        wp_die('Missing contract data. Please regenerate the contract.');
-    }
-
-    // ENHANCED: Prepare signature request with comprehensive customer data
-    $signature_request = array(
-        'customer_user_id' => $customer_user_id,
-        'customer_email' => $customer_data['email'], // Enhanced: Email for fallback lookup
-        'order_reference_id' => $order->get_order_key(), // Enhanced: Order reference
-        'woo_commerce_order_id' => $order_id,
-        'contract_content_hash' => $contract_hash,
-        'signature_data_base64' => $signature_data,
-        'signature_duration_seconds' => 30, // Default
-        'viewport_size' => $_POST['viewport_size'] ?? 'unknown'
-    );
-
-    error_log('SUBZZ SIGNATURE: Submitting signature with enhanced customer data');
-    error_log('SUBZZ SIGNATURE: Customer email: ' . $customer_data['email']);
-    error_log('SUBZZ SIGNATURE: Customer name: ' . $customer_data['first_name'] . ' ' . $customer_data['last_name']);
-
-    // Submit signature to Azure
-    $response = wp_remote_post('https://subzzbackendapi-hbgxe2cfavand0hg.southafricanorth-01.azurewebsites.net/api/contract/sign', array(
-        'body' => json_encode($signature_request),
-        'headers' => array(
-            'Content-Type' => 'application/json'
-        ),
-        'timeout' => 30
-    ));
-
-    if (is_wp_error($response)) {
-        error_log('SUBZZ SIGNATURE ERROR: Failed to call Azure API - ' . $response->get_error_message());
-        wp_die('Failed to submit signature. Please try again.');
-    }
-
-    $response_code = wp_remote_retrieve_response_code($response);
-    $body = wp_remote_retrieve_body($response);
-    
-    error_log('SUBZZ SIGNATURE: Azure API response code: ' . $response_code);
-    error_log('SUBZZ SIGNATURE: Azure API response body: ' . $body);
-
-    $signature_response = json_decode($body, true);
-
-    if ($response_code !== 200 || !$signature_response || !$signature_response['success']) {
-        error_log('SUBZZ SIGNATURE ERROR: Signature submission failed - Response: ' . $body);
-        wp_die('Failed to submit signature. Please contact support. Error: ' . ($signature_response['error'] ?? 'Unknown error'));
-    }
-
-    // Store signature details
-    update_post_meta($order_id, '_subzz_signature_id', $signature_response['signature_id']);
-    update_post_meta($order_id, '_subzz_contract_reference', $signature_response['contract_reference']);
-
-    error_log('SUBZZ SIGNATURE SUCCESS: Signature submitted successfully');
-    error_log('SUBZZ SIGNATURE SUCCESS: Signature ID: ' . $signature_response['signature_id']);
-
-    // Redirect to payment page
-    $payment_url = home_url('/subscription-payment/') . '?order_id=' . $order_id . '&signature_id=' . $signature_response['signature_id'];
-    wp_redirect($payment_url);
-    exit;
-}
-
-// Hook the signature submission handler
-add_action('init', 'handle_signature_submission');
-
 // Debug function to check if our URLs are working
 add_action('wp', 'subzz_debug_url_handling');
 function subzz_debug_url_handling() {
@@ -640,14 +487,16 @@ function subzz_settings_page() {
         // Check if signature page assets exist
         $plugin_path = plugin_dir_path(__FILE__);
         $css_exists = file_exists($plugin_path . 'assets/contract-styles.css');
-        $js_exists = file_exists($plugin_path . 'assets/signature-handler.js');
+        $js_billing_exists = file_exists($plugin_path . 'assets/billing-date-handler.js');
+        $js_signature_exists = file_exists($plugin_path . 'assets/signature-handler.js');
         $signature_pad_exists = file_exists($plugin_path . 'assets/signature-pad.min.js');
         
         echo '<div class="notice notice-info"><p>';
-        echo '<strong>Signature Page Asset Check:</strong><br>';
-        echo 'contract-styles.css: ' . ($css_exists ? 'Found' : 'Missing') . '<br>';
-        echo 'signature-handler.js: ' . ($js_exists ? 'Found' : 'Missing') . '<br>';
-        echo 'signature-pad.min.js: ' . ($signature_pad_exists ? 'Found' : 'Missing (will use CDN)') . '<br>';
+        echo '<strong>Signature Page Asset Check (HYBRID Architecture):</strong><br>';
+        echo 'contract-styles.css: ' . ($css_exists ? '✅ Found' : '❌ Missing') . '<br>';
+        echo 'billing-date-handler.js: ' . ($js_billing_exists ? '✅ Found' : '❌ Missing') . '<br>';
+        echo 'signature-handler.js: ' . ($js_signature_exists ? '✅ Found' : '❌ Missing') . '<br>';
+        echo 'signature-pad.min.js: ' . ($signature_pad_exists ? '✅ Found' : '⚠️ Missing (will use CDN)') . '<br>';
         echo '</p></div>';
     }
     
@@ -657,42 +506,7 @@ function subzz_settings_page() {
         
         echo '<div class="notice notice-info"><p>';
         echo '<strong>Payment Page Check:</strong><br>';
-        echo 'subscription-payment.php template: ' . ($template_exists ? 'Found' : 'Missing') . '<br>';
-        echo '</p></div>';
-    }
-    
-    if (isset($_POST['test_contract_generation'])) {
-        // Test contract generation with sample data
-        echo '<div class="notice notice-info"><p>';
-        echo '<strong>Contract Generation Test:</strong><br>';
-        
-        $sample_request = array(
-            'customer_email' => 'test@example.com',
-            'first_name' => 'John',
-            'last_name' => 'Doe',
-            'phone_number' => '0821234567',
-            'product_name' => 'Premium Golf Set',
-            'monthly_amount' => 299.99,
-            'term_length' => 12,
-            'billing_address' => '123 Main St',
-            'city' => 'Cape Town',
-            'province' => 'Western Cape',
-            'postal_code' => '8001',
-            'delivery_address' => '123 Main St, Cape Town, Western Cape, 8001'
-        );
-        
-        $response = wp_remote_post('https://subzzbackendapi-hbgxe2cfavand0hg.southafricanorth-01.azurewebsites.net/api/contract/generate', array(
-            'body' => json_encode($sample_request),
-            'headers' => array('Content-Type' => 'application/json'),
-            'timeout' => 30
-        ));
-        
-        if (is_wp_error($response)) {
-            echo 'Contract generation test: FAILED - ' . $response->get_error_message();
-        } else {
-            $response_code = wp_remote_retrieve_response_code($response);
-            echo 'Contract generation test: ' . ($response_code === 200 ? 'SUCCESS' : 'FAILED') . ' (HTTP ' . $response_code . ')';
-        }
+        echo 'subscription-payment.php template: ' . ($template_exists ? '✅ Found' : '❌ Missing') . '<br>';
         echo '</p></div>';
     }
     
@@ -700,11 +514,16 @@ function subzz_settings_page() {
     <div class="wrap">
         <h1>Subzz Subscription Settings</h1>
         
-        <h2>Enhanced Contract System Testing</h2>
-        <form method="post">
-            <p>Test the enhanced contract generation with checkout data:</p>
-            <input type="submit" name="test_contract_generation" value="Test Contract Generation" class="button-primary">
-        </form>
+        <h2>HYBRID Architecture Status</h2>
+        <div style="background: #e7f3ff; border-left: 4px solid #007bff; padding: 15px; margin: 20px 0;">
+            <p><strong>✅ HYBRID Architecture Active</strong></p>
+            <p>Version 1.4.0 with separated billing date selection and signature handling.</p>
+            <ul style="margin-left: 20px;">
+                <li>✅ billing-date-handler.js - Step 1: Billing date selection</li>
+                <li>✅ signature-handler.js - Steps 2 & 3: Legal compliance and signature</li>
+                <li>✅ Event-driven architecture with proper load order</li>
+            </ul>
+        </div>
         
         <h2>Page Testing</h2>
         <form method="post">
@@ -731,18 +550,19 @@ function subzz_settings_page() {
         
         <h2>Plugin Status</h2>
         <ul>
-            <li>WooCommerce: <?php echo class_exists('WooCommerce') ? 'Active' : 'Not Found'; ?></li>
-            <li>Payment Handler: <?php echo class_exists('Subzz_Payment_Handler') ? 'Loaded' : 'Not Loaded'; ?></li>
-            <li>Contract Integration: <?php echo class_exists('Subzz_Contract_Integration') ? 'Loaded' : 'Not Loaded'; ?></li>
-            <li>Azure API Client: <?php echo class_exists('Subzz_Azure_API_Client') ? 'Loaded' : 'Not Loaded'; ?></li>
+            <li>WooCommerce: <?php echo class_exists('WooCommerce') ? '✅ Active' : '❌ Not Found'; ?></li>
+            <li>Payment Handler: <?php echo class_exists('Subzz_Payment_Handler') ? '✅ Loaded' : '❌ Not Loaded'; ?></li>
+            <li>Contract Integration: <?php echo class_exists('Subzz_Contract_Integration') ? '✅ Loaded' : '❌ Not Loaded'; ?></li>
+            <li>Azure API Client: <?php echo class_exists('Subzz_Azure_API_Client') ? '✅ Loaded' : '❌ Not Loaded'; ?></li>
         </ul>
         
         <h2>Enhanced Features Status</h2>
         <ul>
-            <li>Custom Checkout Fields: Active (ID Number collection)</li>
-            <li>Enhanced Customer Data: Active (Name, Address, Phone extraction)</li>
-            <li>Contract Generation: Enhanced with checkout data</li>
-            <li>Signature Processing: Enhanced with customer email lookup</li>
+            <li>✅ Custom Checkout Fields: Active (ID Number collection)</li>
+            <li>✅ Enhanced Customer Data: Active (Name, Address, Phone extraction)</li>
+            <li>✅ Contract Generation: Enhanced with checkout data</li>
+            <li>✅ Signature Processing: Enhanced with customer email lookup</li>
+            <li>✅ HYBRID Architecture: Active (Separated billing date and signature logic)</li>
         </ul>
         
         <?php
@@ -752,15 +572,15 @@ function subzz_settings_page() {
         $payment_rule_active = isset($rules['^subscription-payment/?$']);
         
         if ($signature_rule_active) {
-            echo '<p style="color: green;">Contract signature URL rule is active</p>';
+            echo '<p style="color: green;">✅ Contract signature URL rule is active</p>';
         } else {
-            echo '<p style="color: red;">Contract signature URL rule is missing - click "Fix Page URLs" above</p>';
+            echo '<p style="color: red;">❌ Contract signature URL rule is missing - click "Fix Page URLs" above</p>';
         }
         
         if ($payment_rule_active) {
-            echo '<p style="color: green;">Payment page URL rule is active</p>';
+            echo '<p style="color: green;">✅ Payment page URL rule is active</p>';
         } else {
-            echo '<p style="color: red;">Payment page URL rule is missing - click "Fix Page URLs" above</p>';
+            echo '<p style="color: red;">❌ Payment page URL rule is missing - click "Fix Page URLs" above</p>';
         }
         
         // Show plugin directory information
@@ -769,7 +589,7 @@ function subzz_settings_page() {
         echo '<p><strong>Plugin URL:</strong> ' . plugin_dir_url(__FILE__) . '</p>';
         echo '<p><strong>Assets Directory:</strong> ' . plugin_dir_path(__FILE__) . 'assets/</p>';
         echo '<p><strong>Templates Directory:</strong> ' . plugin_dir_path(__FILE__) . 'templates/</p>';
-        echo '<p><strong>Version:</strong> 1.3.0 (Enhanced with checkout data collection)</p>';
+        echo '<p><strong>Version:</strong> 1.4.0 (HYBRID Architecture - Enhanced with separated billing date selection)</p>';
         ?>
     </div>
     <?php

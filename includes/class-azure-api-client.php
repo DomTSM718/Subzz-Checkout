@@ -1,8 +1,9 @@
 <?php
 /**
- * Azure API Client Class - Enhanced with Complete Data Flow Logging
+ * Azure API Client Class - Enhanced with Billing Day Support
  * Handles communication with local Azure backend with comprehensive request/response tracking
  * 
+ * BILLING DATE ENHANCEMENT (Oct 19, 2025): Added billing_day parameter to generate_contract
  * PHASE 5A ENHANCEMENT: Added compatibility for mock payment gateway status updates
  * VARIANT ENHANCEMENT: Modified generate_contract to return full response object
  * ORDER REFERENCE ENHANCEMENT: Now passes orderReferenceId for database order retrieval
@@ -240,11 +241,19 @@ class Subzz_Azure_API_Client {
     }
     
     /**
-     * Generate contract - ENHANCED TO RETURN FULL RESPONSE WITH VARIANT INFO
+     * Generate contract - ENHANCED WITH BILLING DAY SUPPORT
+     * 
+     * BILLING DATE ENHANCEMENT (Oct 19, 2025): Added $billing_day parameter
      * VARIANT ENHANCEMENT: Returns complete response object including contractHtml and variant_info
      * ORDER REFERENCE ENHANCEMENT: Accepts reference_id to enable backend database retrieval
+     * 
+     * @param string $customer_email Customer email address
+     * @param array $order_data Order data array
+     * @param string|null $reference_id Order reference ID for database retrieval
+     * @param int|null $billing_day Billing day of month (1, 8, 15, or 22)
+     * @return array|false Full response array with contractHtml and billing info, or false on failure
      */
-    public function generate_contract($customer_email, $order_data, $reference_id = null) {
+    public function generate_contract($customer_email, $order_data, $reference_id = null, $billing_day = null) {
         error_log('=== SUBZZ AZURE API: GENERATE CONTRACT REQUEST ===');
         
         // Log request details
@@ -252,6 +261,17 @@ class Subzz_Azure_API_Client {
         error_log('SUBZZ AZURE REQUEST: POST ' . $endpoint);
         error_log('SUBZZ AZURE REQUEST: Customer email: ' . $customer_email);
         error_log('SUBZZ AZURE REQUEST: Order data keys: ' . implode(', ', array_keys($order_data)));
+        
+        // BILLING DATE ENHANCEMENT: Log billing day if provided
+        if ($billing_day !== null) {
+            error_log('SUBZZ AZURE REQUEST: Billing day provided: ' . $billing_day);
+            
+            // Validate billing day
+            if (!in_array($billing_day, [1, 8, 15, 22])) {
+                error_log('SUBZZ AZURE ERROR: Invalid billing day: ' . $billing_day . ' (must be 1, 8, 15, or 22)');
+                return false;
+            }
+        }
         
         // Log if reference ID is being used
         if (!empty($reference_id)) {
@@ -279,12 +299,9 @@ class Subzz_Azure_API_Client {
         $postal_code = null;
         
         // Try to find billing address in the order data structure
-        // Check both possible locations where WooCommerce might place it
         if (isset($order_data['billing_address'])) {
-            // Direct billing_address field
             $billing = $order_data['billing_address'];
         } elseif (isset($order_data['customer_data']['billing_address'])) {
-            // Nested under customer_data
             $billing = $order_data['customer_data']['billing_address'];
         } else {
             $billing = null;
@@ -316,6 +333,12 @@ class Subzz_Azure_API_Client {
         if (!empty($reference_id)) {
             $payload['orderReferenceId'] = $reference_id;
             error_log('SUBZZ AZURE REQUEST: Including orderReferenceId for database retrieval: ' . $reference_id);
+        }
+        
+        // BILLING DATE ENHANCEMENT: Add billing day to payload
+        if ($billing_day !== null) {
+            $payload['billingDayOfMonth'] = $billing_day;
+            error_log('SUBZZ AZURE REQUEST: Including billingDayOfMonth in payload: ' . $billing_day);
         }
         
         // Add individual address fields if found
@@ -374,10 +397,24 @@ class Subzz_Azure_API_Client {
             
             error_log('SUBZZ AZURE RESPONSE: Decoded data keys: ' . implode(', ', array_keys($response_data)));
             
-            // VARIANT ENHANCEMENT: Return full response object instead of just HTML
+            // Return full response object
             if (isset($response_data['contractHtml'])) {
                 error_log('SUBZZ AZURE SUCCESS: Contract generated successfully');
                 error_log('SUBZZ AZURE SUCCESS: Contract HTML length: ' . strlen($response_data['contractHtml']) . ' characters');
+                
+                // BILLING DATE ENHANCEMENT: Log billing date information from response
+                if (isset($response_data['billing_day_of_month'])) {
+                    error_log('SUBZZ AZURE SUCCESS: Billing day of month: ' . $response_data['billing_day_of_month']);
+                }
+                if (isset($response_data['billing_day_formatted'])) {
+                    error_log('SUBZZ AZURE SUCCESS: Billing day formatted: ' . $response_data['billing_day_formatted']);
+                }
+                if (isset($response_data['next_billing_date'])) {
+                    error_log('SUBZZ AZURE SUCCESS: Next billing date: ' . $response_data['next_billing_date']);
+                }
+                if (isset($response_data['days_of_coverage'])) {
+                    error_log('SUBZZ AZURE SUCCESS: Days of coverage: ' . $response_data['days_of_coverage']);
+                }
                 
                 // Log variant info if present
                 if (isset($response_data['variant_info'])) {
@@ -394,7 +431,7 @@ class Subzz_Azure_API_Client {
                 
                 error_log('SUBZZ AZURE SUCCESS: Total processing time: ' . $request_duration . 'ms');
                 
-                // RETURN FULL RESPONSE OBJECT FOR VARIANT DATA CAPTURE
+                // RETURN FULL RESPONSE OBJECT
                 return $response_data;
             } else {
                 error_log('SUBZZ AZURE ERROR: Response missing contractHtml field');
@@ -408,8 +445,7 @@ class Subzz_Azure_API_Client {
     }
     
     /**
-     * Store signature - ENHANCED FOR VARIANT SUPPORT
-     * Will be further enhanced to accept variant and legal compliance fields
+     * Store signature - ENHANCED FOR BILLING DAY SUPPORT
      */
     public function store_signature($customer_email, $signature_data, $order_reference_id, $additional_data = array()) {
         error_log('=== SUBZZ AZURE API: STORE SIGNATURE REQUEST ===');
@@ -421,9 +457,14 @@ class Subzz_Azure_API_Client {
         error_log('SUBZZ AZURE REQUEST: Order reference ID: ' . $order_reference_id);
         error_log('SUBZZ AZURE REQUEST: Signature data length: ' . strlen($signature_data) . ' characters');
         
-        // Log additional data if provided (for variant support)
+        // Log additional data if provided
         if (!empty($additional_data)) {
             error_log('SUBZZ AZURE REQUEST: Additional data keys: ' . implode(', ', array_keys($additional_data)));
+            
+            // BILLING DATE ENHANCEMENT: Log billing day if present
+            if (isset($additional_data['billing_day_of_month'])) {
+                error_log('SUBZZ AZURE REQUEST: Billing day of month: ' . $additional_data['billing_day_of_month']);
+            }
         }
         
         // Prepare metadata
@@ -447,7 +488,7 @@ class Subzz_Azure_API_Client {
             'metadata' => $metadata
         );
         
-        // Add additional data to payload (for variant and legal compliance fields)
+        // Add additional data to payload (includes billing_day_of_month and legal compliance fields)
         if (!empty($additional_data)) {
             $payload = array_merge($payload, $additional_data);
         }
@@ -634,7 +675,6 @@ class Subzz_Azure_API_Client {
             
             error_log('SUBZZ AZURE RESPONSE: Decoded data keys: ' . implode(', ', array_keys($response_data)));
             
-            // FIXED: Check for lowercase 'success' to match Azure's camelCase response
             if (isset($response_data['success']) && $response_data['success'] === true) {
                 error_log('SUBZZ AZURE SUCCESS: Order status updated successfully');
                 error_log('SUBZZ AZURE SUCCESS: Previous status: ' . ($response_data['previousStatus'] ?? 'unknown'));
@@ -646,7 +686,7 @@ class Subzz_Azure_API_Client {
                 error_log('SUBZZ AZURE ERROR: Order status update failed - Success flag not true or missing');
                 error_log('SUBZZ AZURE ERROR: Response success value: ' . json_encode($response_data['success'] ?? 'MISSING'));
                 
-                // ENHANCED: Log all response fields for debugging
+                // Log all response fields for debugging
                 foreach ($response_data as $key => $value) {
                     error_log('SUBZZ AZURE RESPONSE FIELD: ' . $key . ' = ' . json_encode($value));
                 }
@@ -672,7 +712,7 @@ class Subzz_Azure_API_Client {
             error_log('SUBZZ AZURE ERROR: Update order status failed with HTTP ' . $response_code);
             error_log('SUBZZ AZURE ERROR: Response body: ' . $response_body);
             
-            // ENHANCED: Try to decode error response for better debugging
+            // Try to decode error response for better debugging
             $error_data = json_decode($response_body, true);
             if ($error_data && isset($error_data['error'])) {
                 error_log('SUBZZ AZURE ERROR: Structured error message: ' . $error_data['error']);

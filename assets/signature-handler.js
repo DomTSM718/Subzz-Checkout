@@ -1,11 +1,40 @@
 /**
  * Subzz Signature Handler - Enhanced with Variant Support and Legal Compliance
  * Manages signature pad, legal compliance fields, and form submission with Azure backend
+ * 
+ * HYBRID ARCHITECTURE UPDATE (Oct 19, 2025):
+ * - Now waits for billing date selection to complete before initializing
+ * - Listens for 'subzz:contractGenerated' event from billing-date-handler.js
+ * - Includes billing_day_of_month in signature submission
+ * 
  * ENHANCEMENT: Added variant support and legal compliance field collection
  */
 
 jQuery(document).ready(function($) {
     console.log('SUBZZ SIGNATURE: Handler loading with Azure integration and variant support');
+    
+    // HYBRID ARCHITECTURE: Wait for contract to be generated before initializing
+    if (window.SubzzContract && window.SubzzContract.contractGenerated) {
+        // Contract already generated (unlikely but handle it)
+        console.log('SUBZZ SIGNATURE: Contract already generated, initializing immediately');
+        initializeSignatureHandler();
+    } else {
+        // Wait for contract generation event from billing-date-handler.js
+        console.log('SUBZZ SIGNATURE: Waiting for contract generation to complete...');
+        document.addEventListener('subzz:contractGenerated', function(e) {
+            console.log('SUBZZ SIGNATURE: Contract generated event received', e.detail);
+            initializeSignatureHandler();
+        });
+    }
+});
+
+/**
+ * Initialize signature handler (called after contract is generated)
+ */
+function initializeSignatureHandler() {
+    const $ = jQuery;
+    
+    console.log('SUBZZ SIGNATURE: Initializing signature handler (contract ready)');
     
     // Enhanced validation with detailed logging
     if (!window.subzzContractToken || !window.subzzReferenceId || !window.subzzCustomerEmail) {
@@ -91,8 +120,8 @@ jQuery(document).ready(function($) {
         signaturePad.clear();
         
         console.log('SUBZZ SIGNATURE: Canvas resized', {
-            oldSize: `${oldWidth}x${oldHeight}`,
-            newSize: `${canvas.width}x${canvas.height}`,
+            oldSize: oldWidth + 'x' + oldHeight,
+            newSize: canvas.width + 'x' + canvas.height,
             containerWidth: container.offsetWidth,
             ratio: ratio
         });
@@ -317,7 +346,21 @@ jQuery(document).ready(function($) {
             return;
         }
 
-        // Prepare AJAX data with legal compliance fields and variant info
+        // HYBRID ARCHITECTURE: Get billing day from billing-date-handler
+        const billingDayOfMonth = window.SubzzContract && window.SubzzContract.billingDay 
+            ? window.SubzzContract.billingDay 
+            : null;
+        
+        console.log('SUBZZ SIGNATURE: Billing day from billing-date-handler:', billingDayOfMonth);
+        
+        if (!billingDayOfMonth) {
+            console.error('SUBZZ SIGNATURE ERROR: Billing day not found - contract may not have been generated properly');
+            alert('Billing date information missing. Please refresh and try again.');
+            $button.prop('disabled', false).text(originalText);
+            return;
+        }
+
+        // Prepare AJAX data with legal compliance fields, variant info, and billing day
         const ajaxData = {
             action: 'subzz_save_signature',
             token: window.subzzContractToken,
@@ -330,6 +373,9 @@ jQuery(document).ready(function($) {
             typed_initials: typedInitials,
             electronic_consent: electronicConsent,
             terms_consent: termsConsent,
+            
+            // HYBRID ARCHITECTURE: Include billing day from billing-date-handler
+            billing_day_of_month: billingDayOfMonth,
             
             // NEW: Variant info if available
             variant_info: window.subzzVariantInfo ? JSON.stringify(window.subzzVariantInfo) : '',
@@ -347,11 +393,12 @@ jQuery(document).ready(function($) {
             initials: ajaxData.typed_initials,
             electronicConsent: ajaxData.electronic_consent,
             termsConsent: ajaxData.terms_consent,
+            billingDay: ajaxData.billing_day_of_month,
             hasVariantInfo: !!ajaxData.variant_info,
             hasNonce: !!ajaxData.nonce
         });
 
-        console.log('SUBZZ SIGNATURE API: Sending signature with legal compliance data to Azure backend via WordPress AJAX');
+        console.log('SUBZZ SIGNATURE API: Sending signature with legal compliance data and billing day to Azure backend via WordPress AJAX');
 
         // Enhanced AJAX call with comprehensive error handling
         $.ajax({
@@ -369,7 +416,8 @@ jQuery(document).ready(function($) {
                         message: response.data?.message,
                         redirectUrl: response.data?.redirect_url,
                         referenceId: response.data?.reference_id,
-                        variantInfo: response.data?.variant_info
+                        variantInfo: response.data?.variant_info,
+                        billingDay: response.data?.billing_day
                     });
                     
                     // Show enhanced success message
@@ -383,6 +431,7 @@ jQuery(document).ready(function($) {
                         '<li>✓ Initials: ' + typedInitials + '</li>' +
                         '<li>✓ Electronic signature consent: Given</li>' +
                         '<li>✓ Terms and conditions: Accepted</li>' +
+                        '<li>✓ Billing date: ' + (window.SubzzContract.billingInfo ? window.SubzzContract.billingInfo.billing_day_formatted : billingDayOfMonth + 'th') + ' of each month</li>' +
                         (window.subzzVariantInfo && window.subzzVariantInfo.subscription_duration_months ? 
                             '<li>✓ Subscription duration: ' + window.subzzVariantInfo.subscription_duration_months + ' months</li>' : '') +
                         '</ul>' +
@@ -497,7 +546,7 @@ jQuery(document).ready(function($) {
     updateSignaturePadVisuals();
     validateForm();
     
-    console.log('SUBZZ SIGNATURE: Handler initialization complete with variant and legal compliance support');
+    console.log('SUBZZ SIGNATURE: Handler initialization complete with variant, legal compliance, and HYBRID architecture support');
     
     // Debug information for production support
     console.log('SUBZZ SIGNATURE DEBUG: Environment information', {
@@ -509,7 +558,8 @@ jQuery(document).ready(function($) {
         signaturePadLoaded: typeof SignaturePad !== 'undefined',
         pageUrl: window.location.href,
         variantSupport: 'enabled',
-        legalComplianceFields: 'active'
+        legalComplianceFields: 'active',
+        hybridArchitecture: 'active'
     });
     
     // Add CSS for field validation states
@@ -522,4 +572,4 @@ jQuery(document).ready(function($) {
         .signature-empty { border-color: #dc3545 !important; }
     `;
     document.head.appendChild(style);
-});
+}

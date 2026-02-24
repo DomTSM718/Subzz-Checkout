@@ -41,6 +41,10 @@ class Subzz_Contract_Integration {
         // AJAX handler for contract regeneration with billing date
         add_action('wp_ajax_subzz_regenerate_contract', array($this, 'regenerate_contract_with_billing_date'));
         add_action('wp_ajax_nopriv_subzz_regenerate_contract', array($this, 'regenerate_contract_with_billing_date'));
+
+        // AJAX handler for order cancellation
+        add_action('wp_ajax_subzz_cancel_order', array($this, 'handle_order_cancellation'));
+        add_action('wp_ajax_nopriv_subzz_cancel_order', array($this, 'handle_order_cancellation'));
     }
 
     /**
@@ -79,7 +83,7 @@ class Subzz_Contract_Integration {
         
         // Check token expiry
         $current_time = time();
-        $expires_at = $token_data['expires_at'];
+        $expires_at = $token_data['exp'];
         $time_until_expiry = $expires_at - $current_time;
         
         error_log("SUBZZ TOKEN VALIDATION: Current time: {$current_time}");
@@ -109,6 +113,15 @@ class Subzz_Contract_Integration {
         error_log('SUBZZ API SUCCESS: Order data retrieved from Azure');
         error_log('SUBZZ HYBRID ARCHITECTURE: Contract will be generated after billing date selection');
         
+        // Enqueue order cancellation script
+        wp_enqueue_script(
+        'subzz-order-cancellation',
+        plugins_url('assets/order-cancellation.js', dirname(__FILE__)),
+        array('jquery'),
+        '1.0.0',
+        true
+        );    
+
         // Display contract signature page - contract generation deferred to JavaScript
         $this->display_contract_signature_page($jwt_token, $token_data, $order_data, null, null);
         exit;
@@ -223,36 +236,40 @@ class Subzz_Contract_Integration {
     }
 
     /**
-     * Decode JWT token
+     * Decode and verify HMAC-SHA256 signed JWT token (CHK-001 fix).
+     * Rejects forged, tampered, or expired tokens.
+     * Returns associative array of payload fields on success, false on failure.
      */
     private function decode_jwt_token($token) {
-        error_log('SUBZZ JWT DECODE: Starting decode process for token length: ' . strlen($token));
-        
-        // Decode from base64
-        $decoded = base64_decode($token);
-        if (!$decoded) {
-            error_log('SUBZZ JWT ERROR: Base64 decode failed');
+        error_log('SUBZZ JWT DECODE: Starting signed token verification for length: ' . strlen($token));
+
+        // Load vendored JWT library
+        require_once dirname(__FILE__) . '/vendor/firebase/php-jwt/src/JWT.php';
+        require_once dirname(__FILE__) . '/vendor/firebase/php-jwt/src/Key.php';
+        require_once dirname(__FILE__) . '/vendor/firebase/php-jwt/src/ExpiredException.php';
+
+        $secret_key = defined('SUBZZ_CHECKOUT_JWT_SECRET') ? SUBZZ_CHECKOUT_JWT_SECRET : wp_salt('auth');
+
+        try {
+            $decoded = \Firebase\JWT\JWT::decode($token, new \Firebase\JWT\Key($secret_key, 'HS256'));
+            $token_data = (array) $decoded;
+
+            // Validate required fields
+            if (!isset($token_data['reference_id']) || !isset($token_data['customer_email'])) {
+                error_log('SUBZZ JWT ERROR: Missing required fields in signed token');
+                return false;
+            }
+
+            error_log('SUBZZ JWT SUCCESS: Signed token verified successfully');
+            return $token_data;
+
+        } catch (\Firebase\JWT\ExpiredException $e) {
+            error_log('SUBZZ JWT ERROR: Token expired - ' . $e->getMessage());
+            return false;
+        } catch (\Exception $e) {
+            error_log('SUBZZ JWT ERROR: Token verification failed - ' . $e->getMessage());
             return false;
         }
-        
-        error_log('SUBZZ JWT DECODE: Base64 decode successful, JSON length: ' . strlen($decoded));
-        
-        // Decode JSON
-        $token_data = json_decode($decoded, true);
-        if ($token_data === null) {
-            error_log('SUBZZ JWT ERROR: JSON decode failed - ' . json_last_error_msg());
-            return false;
-        }
-        
-        // Validate required fields
-        if (!isset($token_data['reference_id']) || !isset($token_data['customer_email'])) {
-            error_log('SUBZZ JWT ERROR: Missing required fields in token');
-            return false;
-        }
-        
-        error_log('SUBZZ JWT SUCCESS: Token decoded successfully');
-        
-        return $token_data;
     }
 
     /**
@@ -266,10 +283,7 @@ class Subzz_Contract_Integration {
         <div class="subzz-contract-page">
             <div class="container">
                 <div class="contract-header">
-                    <h1>📋 Contract Signature Error</h1>
-                    <div class="progress-indicator">
-                        ✅ Order Details → ❌ Agreement Error → ⏸ Payment → ⏹ Complete
-                    </div>
+                    <h1>Contract Error</h1>
                 </div>
 
                 <div class="contract-content">
@@ -278,7 +292,7 @@ class Subzz_Contract_Integration {
                         <p class="error-description"><?php echo esc_html($message); ?></p>
                         
                         <div class="error-actions">
-                            <a href="<?php echo esc_url(wc_get_checkout_url()); ?>" class="button primary">
+                            <a href="<?php echo esc_url(wc_get_checkout_url()); ?>" class="btn-primary">
                                 ← Return to Checkout
                             </a>
                         </div>
@@ -313,14 +327,23 @@ class Subzz_Contract_Integration {
         $customer_email = $order_data['customer_data']['email'];
         $customer_phone = isset($order_data['customer_data']['phone']) ? $order_data['customer_data']['phone'] : 'Not provided';
         
-        // Extract variant details for display
-        $subscription_months = 12; // Default
-        $monthly_amount = $order_data['order_totals']['total'];
-        $total_contract_value = $monthly_amount * $subscription_months;
+        // Extract variant details from new checkout flow fields (stored by ajax_store_checkout_order)
+        $standard_monthly = isset($order_data['standard_monthly_amount']) ? floatval($order_data['standard_monthly_amount']) : 0;
+        $reduced_monthly = isset($order_data['reduced_monthly_amount']) ? floatval($order_data['reduced_monthly_amount']) : 0;
+        $initial_payment = isset($order_data['initial_payment_amount']) ? floatval($order_data['initial_payment_amount']) : 0;
+        $subscription_months = isset($order_data['selected_term_months']) ? intval($order_data['selected_term_months']) : 12;
         $currency = $order_data['order_totals']['currency'];
-        
+
+        // Monthly amount: use reduced if initial payment exists, otherwise standard
+        $monthly_amount = ($initial_payment > 0 && $reduced_monthly > 0) ? $reduced_monthly : $standard_monthly;
+        // Fallback to order_totals if new fields not present (backward compat)
+        if ($monthly_amount <= 0) {
+            $monthly_amount = floatval($order_data['order_totals']['total']);
+        }
+        $total_contract_value = $monthly_amount * $subscription_months;
+
         if ($variant_info) {
-            $subscription_months = $variant_info['subscription_duration_months'] ?? 12;
+            $subscription_months = $variant_info['subscription_duration_months'] ?? $subscription_months;
             $monthly_amount = $variant_info['monthly_amount'] ?? $monthly_amount;
             $total_contract_value = $variant_info['total_contract_value'] ?? ($monthly_amount * $subscription_months);
         }
@@ -334,412 +357,374 @@ class Subzz_Contract_Integration {
         
         <style>
         /* ============================================================================
-           BASE STYLES AND EXISTING LEGAL COMPLIANCE STYLING
+           CONTRACT PAGE STYLES — Aligned with checkout-plans.css design language
+           Primary: #3498db | Text: #2c3e50 | Muted: #6c757d | Radius: 12px
            ============================================================================ */
-        
+
         .subzz-contract-page {
-            max-width: 1200px;
-            margin: 0 auto;
-            padding: 20px;
+            max-width: 900px;
+            margin: 30px auto;
+            padding: 0 20px;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            color: #333;
         }
-        
+
         .container {
-            background: white;
-            padding: 40px;
+            background: #fff;
             border-radius: 12px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+            padding: 40px;
         }
-        
+
+        /* ── Header & Progress ────────────────────────────────────────────── */
         .contract-header {
             text-align: center;
-            margin-bottom: 40px;
-            padding-bottom: 20px;
-            border-bottom: 3px solid #007bff;
+            margin-bottom: 32px;
         }
-        
+
         .contract-header h1 {
             color: #2c3e50;
-            margin-bottom: 15px;
-            font-size: 32px;
+            margin: 0 0 20px;
+            font-size: 22px;
+            font-weight: 700;
         }
-        
-        .progress-indicator {
+
+        .checkout-progress {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0;
+            margin-bottom: 0;
+        }
+
+        .progress-step {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .step-dot {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: #dee2e6;
+            color: #fff;
+            font-weight: 700;
             font-size: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background 0.3s;
+        }
+
+        .progress-step.active .step-dot,
+        .progress-step.done .step-dot {
+            background: #3498db;
+        }
+
+        .progress-step.done .step-dot {
+            background: #27ae60;
+        }
+
+        .step-label {
+            font-size: 12px;
             color: #6c757d;
             font-weight: 500;
         }
-        
-        /* ============================================================================
-           BILLING DATE SELECTION - STYLES
-           ============================================================================ */
-        
-        .contract-step {
-            margin-bottom: 40px;
-            transition: opacity 0.3s ease;
+
+        .progress-step.active .step-label {
+            color: #3498db;
+            font-weight: 600;
         }
-        
-        .contract-step.hidden {
+
+        .progress-line {
+            width: 48px;
+            height: 3px;
+            background: #dee2e6;
+            margin: 0 4px;
+            margin-bottom: 20px;
+        }
+
+        /* Legacy progress indicator (hidden when new progress exists) */
+        .progress-indicator {
             display: none;
         }
-        
+
+        /* ── Steps ────────────────────────────────────────────────────────── */
+        .contract-step {
+            margin-bottom: 28px;
+            transition: opacity 0.3s ease;
+        }
+
+        .contract-step.hidden { display: none; }
+
         .step-header {
             display: flex;
             align-items: center;
-            margin-bottom: 25px;
-            padding-bottom: 15px;
-            border-bottom: 3px solid #007bff;
+            margin-bottom: 20px;
+            padding-bottom: 0;
+            border-bottom: none;
         }
-        
+
         .step-number {
-            width: 45px;
-            height: 45px;
-            background: linear-gradient(135deg, #007bff 0%, #0056b3 100%);
+            width: 32px;
+            height: 32px;
+            background: #3498db;
             color: white;
             border-radius: 50%;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 22px;
+            font-size: 14px;
             font-weight: 700;
-            margin-right: 15px;
+            margin-right: 12px;
             flex-shrink: 0;
         }
-        
+
         .step-header h2 {
             color: #2c3e50;
             margin: 0;
-            font-size: 26px;
+            font-size: 20px;
             font-weight: 700;
         }
-        
+
         .step-description {
-            color: #495057;
-            font-size: 16px;
+            color: #6c757d;
+            font-size: 14px;
             line-height: 1.6;
-            margin-bottom: 30px;
-            padding: 20px;
+            margin-bottom: 20px;
+            padding: 14px 16px;
             background: #f8f9fa;
-            border-left: 4px solid #007bff;
-            border-radius: 6px;
+            border-left: 3px solid #3498db;
+            border-radius: 8px;
         }
-        
-        /* Billing Options Grid */
+
+        /* ── Billing Options Grid ─────────────────────────────────────────── */
         .billing-options {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 20px;
-            margin-bottom: 30px;
+            display: flex;
+            gap: 12px;
+            margin-bottom: 24px;
         }
-        
-        @media (max-width: 768px) {
-            .billing-options {
-                grid-template-columns: 1fr;
-            }
+
+        @media (max-width: 600px) {
+            .billing-options { flex-direction: column; }
         }
-        
+
         .billing-option {
+            flex: 1;
             position: relative;
             cursor: pointer;
             display: block;
         }
-        
+
         .billing-option input[type="radio"] {
             position: absolute;
             opacity: 0;
+            pointer-events: none;
         }
-        
+
         .option-content {
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            padding: 30px 20px;
+            padding: 14px 8px;
             background: white;
-            border: 3px solid #dee2e6;
-            border-radius: 12px;
-            transition: all 0.3s ease;
-            min-height: 140px;
+            border: 2px solid #dee2e6;
+            border-radius: 10px;
+            transition: all 0.2s;
+            min-height: auto;
         }
-        
+
         .billing-option:hover .option-content {
-            border-color: #007bff;
-            box-shadow: 0 4px 12px rgba(0,123,255,0.15);
-            transform: translateY(-2px);
+            border-color: #3498db;
+            color: #3498db;
         }
-        
+
         .billing-option input[type="radio"]:checked + .option-content {
-            background: linear-gradient(135deg, #e7f3ff 0%, #d0e8ff 100%);
-            border-color: #007bff;
-            border-width: 4px;
-            box-shadow: 0 6px 16px rgba(0,123,255,0.25);
+            background: #eaf4fd;
+            border-color: #3498db;
         }
-        
+
         .day-number {
-            font-size: 36px;
+            font-size: 18px;
             font-weight: 700;
-            color: #007bff;
-            margin-bottom: 8px;
+            color: #6c757d;
+            margin-bottom: 0;
         }
-        
+
+        .billing-option:hover .day-number,
         .billing-option input[type="radio"]:checked + .option-content .day-number {
-            color: #0056b3;
+            color: #3498db;
         }
-        
+
         .day-label {
-            font-size: 15px;
+            font-size: 12px;
             color: #6c757d;
             font-weight: 500;
         }
-        
-        /* Billing Preview */
+
+        /* ── Billing Preview ──────────────────────────────────────────────── */
         .billing-preview {
-            background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%);
-            border: 3px solid #4caf50;
+            background: #eafaf1;
+            border: 1px solid #27ae60;
             border-radius: 12px;
-            padding: 25px;
-            margin-bottom: 30px;
+            padding: 16px 20px;
+            margin-bottom: 24px;
             display: flex;
             align-items: flex-start;
-            gap: 15px;
+            gap: 12px;
         }
-        
-        .preview-icon {
-            font-size: 32px;
-            flex-shrink: 0;
-        }
-        
-        .preview-content {
-            flex: 1;
-        }
-        
-        .preview-content p {
-            margin: 0;
-            color: #2e7d32;
-            font-size: 16px;
-            line-height: 1.6;
-            font-weight: 500;
-        }
-        
-        .preview-content strong {
-            color: #1b5e20;
-        }
-        
-        /* Loading State */
+
+        .preview-icon { font-size: 20px; flex-shrink: 0; }
+        .preview-content { flex: 1; }
+        .preview-content p { margin: 0; color: #2c3e50; font-size: 14px; line-height: 1.6; }
+        .preview-content strong { color: #27ae60; }
+
+        /* ── Loading State ────────────────────────────────────────────────── */
         .loading-state {
             text-align: center;
-            padding: 60px 20px;
-            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
-            border: 3px solid #007bff;
+            padding: 40px 20px;
+            background: #f8f9fa;
+            border: 2px solid #3498db;
             border-radius: 12px;
-            margin-bottom: 40px;
+            margin-bottom: 28px;
         }
-        
+
         .loading-spinner {
-            width: 60px;
-            height: 60px;
-            border: 6px solid #e9ecef;
-            border-top-color: #007bff;
+            width: 40px;
+            height: 40px;
+            border: 4px solid #e9ecef;
+            border-top-color: #3498db;
             border-radius: 50%;
             animation: spin 1s linear infinite;
-            margin: 0 auto 20px;
+            margin: 0 auto 16px;
         }
-        
-        @keyframes spin {
-            to { transform: rotate(360deg); }
-        }
-        
+
+        @keyframes spin { to { transform: rotate(360deg); } }
+
         .loading-state p {
-            color: #495057;
-            font-size: 18px;
+            color: #6c757d;
+            font-size: 15px;
             font-weight: 600;
             margin: 0;
         }
-        
-        /* Billing Summary */
+
+        /* ── Billing Summary ──────────────────────────────────────────────── */
         .billing-summary {
-            background: linear-gradient(135deg, #e7f3ff 0%, #d0e8ff 100%);
-            border: 3px solid #007bff;
+            background: #eaf4fd;
+            border: 2px solid #3498db;
             border-radius: 12px;
-            padding: 20px 30px;
-            margin-bottom: 30px;
+            padding: 14px 20px;
+            margin-bottom: 28px;
         }
-        
+
         .summary-content {
             display: flex;
             align-items: center;
             justify-content: space-between;
-            gap: 15px;
+            gap: 12px;
         }
-        
-        .summary-icon {
-            font-size: 28px;
-            flex-shrink: 0;
-        }
-        
+
+        .summary-icon { font-size: 20px; flex-shrink: 0; }
+
         .summary-text {
             flex: 1;
-            font-size: 16px;
+            font-size: 14px;
             color: #2c3e50;
         }
-        
+
         .summary-text strong {
             font-weight: 700;
-            color: #0056b3;
+            color: #3498db;
         }
-        
+
         .change-link {
-            color: #007bff;
+            color: #3498db;
             text-decoration: none;
             font-weight: 600;
-            padding: 8px 16px;
-            border: 2px solid #007bff;
-            border-radius: 6px;
-            transition: all 0.3s ease;
+            font-size: 14px;
+            padding: 6px 14px;
+            border: 2px solid #3498db;
+            border-radius: 8px;
+            transition: all 0.2s;
             flex-shrink: 0;
         }
-        
+
         .change-link:hover {
-            background: #007bff;
+            background: #3498db;
             color: white;
             text-decoration: none;
         }
-        
-        /* Step Actions */
-        .step-actions {
-            text-align: center;
-        }
-        
-        /* ============================================================================
-           LEGAL COMPLIANCE STYLING - EXISTING (Oct 9, 2025)
-           ============================================================================ */
-        
-        .legal-compliance-section {
-            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
-            border: 3px solid #495057;
-            border-radius: 12px;
-            padding: 35px;
-            margin-bottom: 35px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-        }
 
-        .legal-compliance-section h2 {
-            color: #2c3e50;
-            margin-bottom: 30px;
-            font-size: 26px;
-            font-weight: 700;
-            text-align: center;
-            padding-bottom: 15px;
-            border-bottom: 3px solid #007bff;
-        }
+        .step-actions { text-align: center; }
 
-        .compliance-step {
-            background: white;
-            border: 2px solid #dee2e6;
-            border-radius: 10px;
-            padding: 25px;
-            margin-bottom: 25px;
-            transition: all 0.3s ease;
-        }
-
-        .compliance-step:hover {
-            border-color: #007bff;
-            box-shadow: 0 3px 12px rgba(0,123,255,0.15);
-        }
-
-        .compliance-step:last-child {
-            margin-bottom: 0;
-        }
-
-        .compliance-step h3 {
-            color: #495057;
-            font-size: 20px;
-            font-weight: 600;
-            margin-bottom: 20px;
-            padding-bottom: 12px;
-            border-bottom: 2px solid #007bff;
-            display: flex;
-            align-items: center;
-        }
-
-        .compliance-step h3:before {
-            content: '';
-            width: 32px;
-            height: 32px;
-            background: linear-gradient(135deg, #007bff 0%, #0056b3 100%);
-            border-radius: 50%;
-            margin-right: 12px;
-            flex-shrink: 0;
-        }
+        /* ── Legacy compliance (kept for JS compatibility) ───────────────── */
 
         .typed-name-section {
             display: grid;
             grid-template-columns: 1fr 1fr;
-            gap: 25px;
+            gap: 16px;
         }
 
-        @media (max-width: 768px) {
-            .typed-name-section {
-                grid-template-columns: 1fr;
-                gap: 20px;
-            }
+        @media (max-width: 600px) {
+            .typed-name-section { grid-template-columns: 1fr; }
         }
 
-        .form-field {
-            margin-bottom: 0;
-        }
+        .form-field { margin-bottom: 0; }
 
         .form-field label {
             display: block;
             font-weight: 600;
-            margin-bottom: 10px;
+            margin-bottom: 6px;
             color: #2c3e50;
-            font-size: 15px;
+            font-size: 14px;
         }
 
         .form-field input[type="text"] {
             width: 100%;
-            padding: 14px 16px;
-            border: 2px solid #ced4da;
+            padding: 10px 14px;
+            border: 2px solid #dee2e6;
             border-radius: 8px;
-            font-size: 16px;
-            transition: all 0.3s ease;
+            font-size: 15px;
+            transition: border-color 0.2s;
+            box-sizing: border-box;
             font-family: inherit;
         }
 
         .form-field input[type="text"]:focus {
             outline: none;
-            border-color: #007bff;
-            box-shadow: 0 0 0 3px rgba(0,123,255,0.1);
+            border-color: #3498db;
+            box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.1);
         }
 
         .field-hint {
             display: block;
-            font-size: 13px;
+            font-size: 12px;
             color: #6c757d;
-            margin-top: 8px;
-            font-style: italic;
+            margin-top: 4px;
+            font-style: normal;
             line-height: 1.4;
         }
 
         .consent-checkboxes {
             display: flex;
             flex-direction: column;
-            gap: 20px;
+            gap: 12px;
         }
 
         .consent-checkbox {
             background: white;
             border: 2px solid #dee2e6;
-            border-radius: 10px;
-            padding: 20px;
-            transition: all 0.3s ease;
+            border-radius: 8px;
+            padding: 16px;
+            transition: all 0.2s;
             cursor: pointer;
         }
 
         .consent-checkbox:hover {
-            border-color: #007bff;
-            box-shadow: 0 2px 10px rgba(0,123,255,0.1);
-            transform: translateY(-2px);
+            border-color: #3498db;
         }
 
         .consent-checkbox label {
@@ -747,161 +732,238 @@ class Subzz_Contract_Integration {
             align-items: flex-start;
             cursor: pointer;
             margin: 0;
-            line-height: 1.6;
+            line-height: 1.5;
+            font-size: 14px;
         }
 
         .consent-checkbox input[type="checkbox"] {
-            width: 22px;
-            height: 22px;
-            margin-right: 15px;
+            width: 20px;
+            height: 20px;
+            margin-right: 12px;
             margin-top: 2px;
             cursor: pointer;
             flex-shrink: 0;
-            accent-color: #007bff;
+            accent-color: #3498db;
         }
 
         .consent-checkbox strong {
             color: #2c3e50;
             display: block;
-            margin-bottom: 5px;
+            margin-bottom: 4px;
         }
 
-        /* Signature Section */
-        .signature-section {
-            background: white;
-            border: 3px solid #495057;
-            border-radius: 12px;
-            padding: 35px;
-            margin-bottom: 35px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-        }
-
-        .signature-section h2 {
-            color: #2c3e50;
-            margin-bottom: 15px;
-            font-size: 26px;
-            font-weight: 700;
-        }
-
-        .signature-section > p {
-            color: #6c757d;
-            font-size: 15px;
-            margin-bottom: 25px;
-        }
+        /* ── Signature pad (within sign-section) ──────────────────────────── */
 
         .signature-pad-container {
-            border: 3px solid #dee2e6;
-            border-radius: 10px;
-            padding: 15px;
-            background: #fafafa;
-            margin-top: 20px;
-            transition: all 0.3s ease;
+            border: 2px solid #dee2e6;
+            border-radius: 6px;
+            overflow: hidden;
         }
 
         #signature-pad {
             display: block;
+            width: 100% !important;
             cursor: crosshair;
             background: white;
-            border-radius: 6px;
         }
 
         .signature-controls {
-            margin-top: 15px;
-            text-align: center;
+            padding: 8px 12px;
+            text-align: right;
+            background: #f8f9fa;
+            border-top: 1px solid #eee;
         }
 
-        /* Other Sections */
-        .order-summary-section,
+        /* ── Contract Terms (scrollable) ──────────────────────────────────── */
         .contract-terms-section {
             background: white;
             border: 2px solid #dee2e6;
-            border-radius: 10px;
-            padding: 30px;
-            margin-bottom: 30px;
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 20px;
         }
 
-        .order-summary-section h2,
         .contract-terms-section h2 {
             color: #2c3e50;
-            margin-bottom: 20px;
-            font-size: 24px;
-            padding-bottom: 10px;
-            border-bottom: 2px solid #dee2e6;
+            margin: 0 0 8px;
+            font-size: 20px;
+            font-weight: 700;
         }
 
-        /* Buttons */
-        .button {
+        .contract-scroll-hint {
+            color: #6c757d;
+            font-size: 13px;
+            margin: 0 0 12px;
+        }
+
+        .contract-text-scroll {
+            max-height: 400px;
+            overflow-y: auto;
+            border: 1px solid #eee;
+            border-radius: 8px;
+            padding: 20px;
+            background: #fafbfc;
+            font-size: 14px;
+            line-height: 1.6;
+        }
+
+        .contract-text-scroll::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .contract-text-scroll::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 3px;
+        }
+
+        .contract-text-scroll::-webkit-scrollbar-thumb {
+            background: #ccc;
+            border-radius: 3px;
+        }
+
+        .contract-text-scroll::-webkit-scrollbar-thumb:hover {
+            background: #aaa;
+        }
+
+        /* ── Combined Sign Section ────────────────────────────────────────── */
+        .sign-section {
+            background: #f8f9fa;
+            border: 2px solid #dee2e6;
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 20px;
+        }
+
+        .sign-section h2 {
+            color: #2c3e50;
+            margin: 0 0 16px;
+            font-size: 20px;
+            font-weight: 700;
+        }
+
+        .sign-fields {
+            margin-top: 12px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .sign-card {
+            background: white;
+            border: 2px solid #dee2e6;
+            border-radius: 8px;
+            padding: 16px;
+        }
+
+        .sign-card-label {
+            display: block;
+            font-weight: 600;
+            color: #2c3e50;
+            font-size: 14px;
+            margin-bottom: 12px;
+        }
+
+        /* ── Buttons ──────────────────────────────────────────────────────── */
+        /* Uses .btn-primary/.btn-secondary (custom classes) instead of .button
+           to avoid CSS conflicts with ANY WordPress theme (Astra, Divi, etc.) */
+        .btn-primary {
             display: inline-block;
             padding: 14px 28px;
             font-size: 16px;
-            font-weight: 600;
+            font-weight: 700;
             text-align: center;
             text-decoration: none;
             border: none;
-            border-radius: 8px;
+            border-radius: 12px;
             cursor: pointer;
-            transition: all 0.3s ease;
+            transition: all 0.2s;
+            background: linear-gradient(135deg, #3498db 0%, #2980b9 100%);
+            color: #fff;
         }
 
-        .button.primary {
-            background: linear-gradient(135deg, #007bff 0%, #0056b3 100%);
-            color: white;
+        .btn-primary:hover:not(:disabled) {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(52, 152, 219, 0.3);
         }
 
-        .button.primary:hover {
-            background: linear-gradient(135deg, #0056b3 0%, #004085 100%);
-            transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(0,123,255,0.3);
-        }
-
-        .button.primary:disabled {
-            background: #6c757d;
+        .btn-primary:disabled {
+            background: #adb5bd;
+            color: #fff;
             cursor: not-allowed;
-            opacity: 0.6;
             transform: none;
             box-shadow: none;
         }
 
-        .button.secondary {
-            background: white;
-            color: #007bff;
-            border: 2px solid #007bff;
+        .btn-secondary {
+            display: inline-block;
+            padding: 10px 20px;
+            font-size: 14px;
+            font-weight: 600;
+            text-align: center;
+            text-decoration: none;
+            border: 2px solid #3498db;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+            background: #fff;
+            color: #3498db;
         }
 
-        .button.secondary:hover {
-            background: #007bff;
-            color: white;
+        .btn-secondary:hover {
+            background: #3498db;
+            color: #fff;
         }
 
         .contract-actions {
             display: flex;
             justify-content: space-between;
-            gap: 20px;
-            margin-top: 35px;
+            gap: 16px;
+            margin-top: 24px;
         }
 
-        @media (max-width: 768px) {
-            .contract-actions {
-                flex-direction: column;
-            }
-            
-            .container {
-                padding: 20px;
-            }
-            
-            .legal-compliance-section,
-            .signature-section {
-                padding: 20px;
-            }
+        @media (max-width: 600px) {
+            .container { padding: 20px 16px; }
+            .contract-actions { flex-direction: column; }
+            .sign-section { padding: 20px 16px; }
+            .contract-text-scroll { max-height: 300px; }
         }
+
+        /* ── Error page ───────────────────────────────────────────────────── */
+        .error-message-section {
+            text-align: center;
+            padding: 30px 20px;
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            border-radius: 12px;
+        }
+
+        .error-actions { margin-top: 20px; }
         </style>
         
         <div class="subzz-contract-page">
             <div class="container">
                 <div class="contract-header">
-                    <h1>📋 Subscription Agreement Review</h1>
-                    <div class="progress-indicator">
-                        ✅ Order Details → ⏳ Agreement → ⏸ Payment → ⏹ Complete
+                    <h1>Subscription Agreement</h1>
+                    <div class="checkout-progress">
+                        <div class="progress-step done">
+                            <span class="step-dot">1</span>
+                            <span class="step-label">Choose Plan</span>
+                        </div>
+                        <div class="progress-line"></div>
+                        <div class="progress-step active">
+                            <span class="step-dot">2</span>
+                            <span class="step-label">Contract</span>
+                        </div>
+                        <div class="progress-line"></div>
+                        <div class="progress-step">
+                            <span class="step-dot">3</span>
+                            <span class="step-label">Payment</span>
+                        </div>
+                        <div class="progress-line"></div>
+                        <div class="progress-step">
+                            <span class="step-dot">4</span>
+                            <span class="step-label">Complete</span>
+                        </div>
                     </div>
                 </div>
 
@@ -966,7 +1028,7 @@ class Subzz_Contract_Integration {
                             </div>
                             
                             <div class="step-actions">
-                                <button id="btn-continue-step-1" class="button primary" disabled>
+                                <button id="btn-continue-step-1" class="btn-primary" disabled>
                                     Continue to Review Contract →
                                 </button>
                             </div>
@@ -996,120 +1058,82 @@ class Subzz_Contract_Integration {
                          NOTE: contract-actions moved INSIDE this container to hide initially
                          ============================================================================ -->
                     <div id="step-2-3-container" class="contract-step" style="display: none;">
-                        
-                        <!-- Order Summary -->
-                        <div class="order-summary-section">
-                            <h2>Your Subscription Details</h2>
-                            <div class="customer-info">
-                                <h3>Customer Information</h3>
-                                <p><strong>Name:</strong> <?php echo esc_html($customer_name); ?></p>
-                                <p><strong>Email:</strong> <?php echo esc_html($customer_email); ?></p>
-                                <?php if (!empty($order_data['customer_data']['phone'])): ?>
-                                <p><strong>Phone:</strong> <?php echo esc_html($order_data['customer_data']['phone']); ?></p>
-                                <?php endif; ?>
-                            </div>
-                            
-                            <div class="order-items">
-                                <?php foreach ($subscription_items as $item): ?>
-                                    <div class="subscription-item">
-                                        <h3><?php echo esc_html($item['name']); ?></h3>
-                                        <p><strong>Subscription Duration:</strong> <?php echo esc_html($subscription_months); ?> months</p>
-                                        <p><strong>Monthly Payment:</strong> <?php echo esc_html($currency); ?> <?php echo esc_html(number_format((float)$monthly_amount, 2)); ?></p>
-                                        <p><strong>Total Contract Value:</strong> <?php echo esc_html($currency); ?> <?php echo esc_html(number_format((float)$total_contract_value, 2)); ?></p>
-                                        <p><strong>Quantity:</strong> <?php echo esc_html($item['quantity']); ?></p>
-                                    </div>
-                                <?php endforeach; ?>
-                            </div>
-                            
-                            <div class="order-totals">
-                                <p><strong>Total Monthly Payment: <?php echo esc_html($currency); ?> <?php echo esc_html(number_format((float)$monthly_amount, 2)); ?></strong></p>
-                            </div>
-                        </div>
 
-                        <!-- Contract Terms (populated via AJAX) -->
+                        <!-- Contract Terms (populated via AJAX) — scrollable -->
                         <div class="contract-terms-section">
-                            <h2>Subscription Agreement Terms</h2>
-                            <div id="contract-text-container" class="contract-text">
+                            <h2>Subscription Agreement</h2>
+                            <p class="contract-scroll-hint">Please review the full agreement below before signing.</p>
+                            <div id="contract-text-container" class="contract-text-scroll">
                                 <!-- Contract HTML will be inserted here via JavaScript -->
                             </div>
                         </div>
 
-                        <!-- STEP 2: Legal Compliance Section -->
-                        <div class="legal-compliance-section">
-                            <h2>Step 2: Legal Verification & Consent</h2>
-                            
-                            <div class="compliance-step">
-                                <h3>Step 2A: Type Your Legal Information</h3>
-                                <div class="typed-name-section">
-                                    <div class="form-field">
-                                        <label for="typed-full-name">Full Legal Name (as it appears on your ID): *</label>
-                                        <input type="text" id="typed-full-name" name="typed_full_name" 
-                                               placeholder="Enter your full name" required 
-                                               value="<?php echo esc_attr($customer_name); ?>">
-                                        <small class="field-hint">Enter your complete first and last name exactly as it appears on your ID</small>
-                                    </div>
-                                    
-                                    <div class="form-field">
-                                        <label for="typed-initials">Your Initials: *</label>
-                                        <input type="text" id="typed-initials" name="typed_initials" 
-                                               placeholder="e.g., JDS" maxlength="10" required>
-                                        <small class="field-hint">Minimum 2 characters, will be automatically converted to uppercase</small>
-                                    </div>
+                        <!-- Review & Sign — combined section -->
+                        <div class="sign-section">
+                            <h2>Review & Sign</h2>
+
+                            <div class="consent-checkboxes">
+                                <div class="consent-checkbox">
+                                    <label>
+                                        <input type="checkbox" id="electronic-consent" required>
+                                        <span>
+                                            I consent to signing this agreement electronically in accordance
+                                            with the Electronic Communications and Transactions Act (ECTA).
+                                        </span>
+                                    </label>
+                                </div>
+
+                                <div class="consent-checkbox">
+                                    <label>
+                                        <input type="checkbox" id="terms-consent" required>
+                                        <span>
+                                            I confirm that I have read and agree to all terms and conditions
+                                            of this subscription agreement.
+                                        </span>
+                                    </label>
                                 </div>
                             </div>
-                            
-                            <div class="compliance-step">
-                                <h3>Step 2B: Legal Consent & Acknowledgment</h3>
-                                <div class="consent-checkboxes">
-                                    <div class="consent-checkbox">
-                                        <label>
-                                            <input type="checkbox" id="electronic-consent" required>
-                                            <span>
-                                                <strong>Electronic Signature Consent:</strong><br>
-                                                I consent to signing this agreement electronically and agree that my electronic 
-                                                signature is the legal equivalent of my manual signature on this agreement, in 
-                                                accordance with the South African Electronic Communications and Transactions Act (ECTA).
-                                            </span>
-                                        </label>
+
+                            <div class="sign-fields">
+                                <div class="sign-card">
+                                    <label class="sign-card-label">Your Details</label>
+                                    <div class="typed-name-section">
+                                        <div class="form-field">
+                                            <label for="typed-full-name">Full Name (as on your ID) *</label>
+                                            <input type="text" id="typed-full-name" name="typed_full_name"
+                                                   placeholder="Enter your full name" required
+                                                   value="<?php echo esc_attr($customer_name); ?>">
+                                        </div>
+
+                                        <div class="form-field">
+                                            <label for="typed-initials">Initials *</label>
+                                            <input type="text" id="typed-initials" name="typed_initials"
+                                                   placeholder="e.g., JDS" maxlength="10" required>
+                                        </div>
                                     </div>
-                                    
-                                    <div class="consent-checkbox">
-                                        <label>
-                                            <input type="checkbox" id="terms-consent" required>
-                                            <span>
-                                                <strong>Terms & Conditions Acceptance:</strong><br>
-                                                I confirm that I have read, understood, and agree to all terms and conditions of this 
-                                                <?php echo esc_html($subscription_months); ?>-month subscription agreement with a 
-                                                total value of <?php echo esc_html($currency); ?> 
-                                                <?php echo esc_html(number_format((float)$total_contract_value, 2)); ?>
-                                            </span>
-                                        </label>
+                                </div>
+
+                                <div class="sign-card">
+                                    <label class="sign-card-label">Your Signature</label>
+                                    <div class="signature-pad-container">
+                                        <canvas id="signature-pad" height="180"></canvas>
+                                        <div class="signature-controls">
+                                            <button id="clear-signature" type="button" class="btn-secondary">Clear</button>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
                         </div>
 
-                        <!-- STEP 3: Signature Section -->
-                        <div class="signature-section">
-                            <h2>Step 3: Digital Signature</h2>
-                            <p>By signing below, you confirm all information above is correct and authorize monthly automatic payments for the subscription period.</p>
-                            
-                            <div class="signature-pad-container">
-                                <canvas id="signature-pad" width="600" height="200"></canvas>
-                                <div class="signature-controls">
-                                    <button id="clear-signature" type="button" class="button secondary">Clear Signature</button>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- FIXED: Action Buttons now INSIDE step-2-3-container -->
+                        <!-- Action Buttons -->
                         <div class="contract-actions">
-                            <a href="<?php echo esc_url(wc_get_checkout_url()); ?>" class="button secondary">
-                                ← Back to Checkout
-                            </a>
-                            
-                            <button id="sign-agreement" class="button primary" disabled>
-                                Sign Agreement & Continue to Payment →
+                            <button type="button" id="cancel-order-button" class="btn-secondary"
+                                    data-reference-id="<?php echo esc_attr($token_data['reference_id']); ?>">
+                                Cancel Order
+                            </button>
+
+                            <button id="sign-agreement" class="btn-primary" disabled>
+                                Sign & Continue to Payment
                             </button>
                         </div>
 
@@ -1132,7 +1156,9 @@ class Subzz_Contract_Integration {
         window.subzzNonce = '<?php echo wp_create_nonce('subzz_signature'); ?>';
         window.subzzCurrency = '<?php echo esc_js($currency); ?>';
         window.subzzMonthlyAmount = <?php echo (float)$monthly_amount; ?>;
-        
+        window.subzzInitialPayment = <?php echo (float)$initial_payment; ?>;
+        window.subzzSubscriptionMonths = <?php echo (int)$subscription_months; ?>;
+
         <?php if ($variant_info): ?>
         window.subzzVariantInfo = <?php echo json_encode($variant_info); ?>;
         <?php endif; ?>
@@ -1266,8 +1292,8 @@ class Subzz_Contract_Integration {
             $order->add_meta_data('_subzz_contract_signed', 'yes');
             
             if ($billing_day_of_month) {
-                $order->add_meta_data('_subzz_billing_day', $billing_day_of_month);
-                error_log("SUBZZ ORDER UPDATE: Stored billing day {$billing_day_of_month} in order meta");
+                $order->update_meta_data('_subzz_billing_day', $billing_day_of_month);
+                error_log("SUBZZ ORDER UPDATE: Updated billing day {$billing_day_of_month} in order meta");
             }
             
             if ($variant_info) {
@@ -1298,12 +1324,23 @@ class Subzz_Contract_Integration {
             error_log('SUBZZ API SUCCESS: Order status updated to signature_completed');
         }
         
+        // Get initial payment and term info from order meta (reliable source, set during checkout)
+        $initial_payment_amount = 0;
+        $subscription_months = 12;
+        if (!empty($orders)) {
+            $ip = $orders[0]->get_meta('_subzz_initial_payment_amount');
+            if ($ip) $initial_payment_amount = floatval($ip);
+            $sm = $orders[0]->get_meta('_subzz_selected_term_months');
+            if ($sm) $subscription_months = intval($sm);
+        }
+
         // Generate return URL to payment page
         $return_url = add_query_arg(array(
             'reference_id' => $reference_id,
             'signature_confirmed' => 'yes',
             'billing_day' => $billing_day_of_month,
-            'subscription_months' => $variant_info['subscription_duration_months'] ?? 12
+            'subscription_months' => $subscription_months,
+            'initial_payment' => $initial_payment_amount
         ), home_url('/subscription-payment/'));
 
         error_log('SUBZZ SIGNATURE SUCCESS: Complete workflow finished (HYBRID architecture)');
@@ -1315,6 +1352,103 @@ class Subzz_Contract_Integration {
             'reference_id' => $reference_id,
             'billing_day' => $billing_day_of_month,
             'variant_info' => $variant_info
+        ));
+    }
+    /**
+     * Handle order cancellation and cart restoration
+     */
+    public function handle_order_cancellation() {
+        error_log('=== SUBZZ ORDER CANCELLATION: Request received ===');
+        
+        // Verify nonce
+        if (!isset($_POST['nonce']) || !wp_verify_nonce($_POST['nonce'], 'subzz_signature')) {
+            error_log('SUBZZ CANCELLATION ERROR: Nonce verification failed');
+            wp_send_json_error(array('message' => 'Security check failed'));
+            return;
+        }
+        
+        $reference_id = isset($_POST['reference_id']) ? sanitize_text_field($_POST['reference_id']) : '';
+        
+        if (empty($reference_id)) {
+            error_log('SUBZZ CANCELLATION ERROR: No reference ID provided');
+            wp_send_json_error(array('message' => 'Invalid request'));
+            return;
+        }
+        
+        error_log('SUBZZ CANCELLATION: Processing for Reference ID: ' . $reference_id);
+        
+        // Find WooCommerce order by reference ID
+        $orders = wc_get_orders(array(
+            'meta_key' => '_subzz_reference_id',
+            'meta_value' => $reference_id,
+            'limit' => 1
+        ));
+        
+        if (empty($orders)) {
+            error_log('SUBZZ CANCELLATION ERROR: Order not found for reference: ' . $reference_id);
+            wp_send_json_error(array('message' => 'Order not found'));
+            return;
+        }
+        
+        $order = $orders[0];
+        $order_id = $order->get_id();
+        
+        error_log('SUBZZ CANCELLATION: Found WooCommerce Order ID: ' . $order_id);
+        
+        // Store order items before cancellation
+        $order_items = array();
+        foreach ($order->get_items() as $item_id => $item) {
+            $product_id = $item->get_product_id();
+            $variation_id = $item->get_variation_id();
+            $quantity = $item->get_quantity();
+            
+            $order_items[] = array(
+                'product_id' => $product_id,
+                'variation_id' => $variation_id,
+                'quantity' => $quantity
+            );
+            
+            error_log("SUBZZ CANCELLATION: Stored item - Product: {$product_id}, Qty: {$quantity}");
+        }
+        
+        // Cancel the order
+        $order->update_status('cancelled', 'Order cancelled by customer during signature process');
+        error_log('SUBZZ CANCELLATION: Order status updated to cancelled');
+        
+        // Update order metadata
+        $order->update_meta_data('_subzz_cancellation_reason', 'customer_cancelled_at_signature');
+        $order->update_meta_data('_subzz_cancelled_at', current_time('mysql'));
+        $order->save();
+        
+        // Notify Azure backend about cancellation
+        $this->azure_client->update_order_status($reference_id, 'cancelled');
+        error_log('SUBZZ CANCELLATION: Azure backend notified');
+        
+        // Clear any existing cart
+        WC()->cart->empty_cart();
+        error_log('SUBZZ CANCELLATION: Cart cleared');
+        
+        // Restore products to cart
+        foreach ($order_items as $item) {
+            if ($item['variation_id']) {
+                WC()->cart->add_to_cart($item['product_id'], $item['quantity'], $item['variation_id']);
+            } else {
+                WC()->cart->add_to_cart($item['product_id'], $item['quantity']);
+            }
+        }
+        
+        // Clear session data
+        WC()->session->set('subzz_reference_id', null);
+        WC()->session->set('subzz_jwt_token', null);
+        error_log('SUBZZ CANCELLATION: Session data cleared');
+        
+        $cart_count = WC()->cart->get_cart_contents_count();
+        error_log("SUBZZ CANCELLATION SUCCESS: Cart restored with {$cart_count} items");
+        
+        wp_send_json_success(array(
+            'message' => 'Order cancelled successfully',
+            'cart_url' => wc_get_cart_url(),
+            'cart_items_restored' => count($order_items)
         ));
     }
 }

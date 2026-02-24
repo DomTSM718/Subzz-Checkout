@@ -19,11 +19,32 @@ class Subzz_Azure_API_Client {
     private $api_timeout;
     
     public function __construct() {
-        // Local development setup matching your backend
-        $this->azure_base_url = 'http://localhost:5000/api';
+        // Configurable Azure URL — set SUBZZ_AZURE_API_URL in wp-config.php for production
+        $this->azure_base_url = defined('SUBZZ_AZURE_API_URL')
+            ? SUBZZ_AZURE_API_URL
+            : 'http://localhost:5000/api';
         $this->api_timeout = 30;
-        
+
         error_log('=== SUBZZ AZURE CLIENT: Initialized with URL: ' . $this->azure_base_url . ' ===');
+    }
+
+    /**
+     * Get default headers for Azure API requests.
+     * Includes Content-Type and API key authentication (CHK-002 fix).
+     * API key is read from SUBZZ_AZURE_API_KEY constant defined in wp-config.php.
+     */
+    private function get_default_headers() {
+        $headers = array(
+            'Content-Type' => 'application/json',
+        );
+
+        if (defined('SUBZZ_AZURE_API_KEY') && !empty(SUBZZ_AZURE_API_KEY)) {
+            $headers['X-Subzz-API-Key'] = SUBZZ_AZURE_API_KEY;
+        } else {
+            error_log('SUBZZ SECURITY WARNING: SUBZZ_AZURE_API_KEY not defined in wp-config.php');
+        }
+
+        return $headers;
     }
     
     /**
@@ -37,7 +58,7 @@ class Subzz_Azure_API_Client {
         // Test with minimal request to check if server is running
         $response = wp_remote_post($test_endpoint, array(
             'timeout' => 5,
-            'headers' => array('Content-Type' => 'application/json'),
+            'headers' => $this->get_default_headers(),
             'body' => wp_json_encode(array()) // Empty body to test connection only
         ));
         
@@ -64,6 +85,95 @@ class Subzz_Azure_API_Client {
         return $connection_ok;
     }
     
+    /**
+     * Get customer affordability data.
+     * Returns maxAffordableSubscription, isVerified, etc.
+     *
+     * @param string $email Customer email
+     * @return array|false Affordability data or false on failure
+     */
+    public function get_affordability($email) {
+        error_log('=== SUBZZ AZURE API: GET AFFORDABILITY REQUEST ===');
+
+        $endpoint = $this->azure_base_url . '/customer/lead/affordability?' . http_build_query(array('email' => $email));
+        error_log('SUBZZ AZURE REQUEST: GET ' . $endpoint);
+
+        $response = wp_remote_get($endpoint, array(
+            'timeout' => $this->api_timeout,
+            'headers' => $this->get_default_headers()
+        ));
+
+        if (is_wp_error($response)) {
+            error_log('SUBZZ AZURE ERROR: Affordability request failed - ' . $response->get_error_message());
+            return false;
+        }
+
+        $response_code = wp_remote_retrieve_response_code($response);
+        $response_body = wp_remote_retrieve_body($response);
+
+        error_log('SUBZZ AZURE RESPONSE: HTTP ' . $response_code);
+
+        if ($response_code === 200) {
+            $data = json_decode($response_body, true);
+            if ($data === null) {
+                error_log('SUBZZ AZURE ERROR: Affordability JSON decode failed');
+                return false;
+            }
+            error_log('SUBZZ AZURE SUCCESS: Affordability data retrieved');
+            return $data['data'] ?? $data;
+        }
+
+        error_log('SUBZZ AZURE ERROR: Affordability failed with HTTP ' . $response_code . ' - ' . $response_body);
+        return false;
+    }
+
+    /**
+     * Get plan cards for a product price and customer.
+     * Returns array of plan card options (12/18/24 month).
+     *
+     * @param string $email Customer email
+     * @param float $price Product price incl VAT
+     * @return array|false Plan cards data or false on failure
+     */
+    public function get_plan_cards($email, $price) {
+        error_log('=== SUBZZ AZURE API: GET PLAN CARDS REQUEST ===');
+
+        $endpoint = $this->azure_base_url . '/customer/lead/affordability/plan-cards?' . http_build_query(array(
+            'email' => $email,
+            'productPriceInclVat' => $price
+        ));
+        error_log('SUBZZ AZURE REQUEST: GET ' . $endpoint);
+
+        $response = wp_remote_get($endpoint, array(
+            'timeout' => $this->api_timeout,
+            'headers' => $this->get_default_headers()
+        ));
+
+        if (is_wp_error($response)) {
+            error_log('SUBZZ AZURE ERROR: Plan cards request failed - ' . $response->get_error_message());
+            return false;
+        }
+
+        $response_code = wp_remote_retrieve_response_code($response);
+        $response_body = wp_remote_retrieve_body($response);
+
+        error_log('SUBZZ AZURE RESPONSE: HTTP ' . $response_code);
+
+        if ($response_code === 200) {
+            $data = json_decode($response_body, true);
+            if ($data === null) {
+                error_log('SUBZZ AZURE ERROR: Plan cards JSON decode failed');
+                return false;
+            }
+            $inner = $data['data'] ?? $data;
+            error_log('SUBZZ AZURE SUCCESS: Plan cards retrieved - ' . count($inner['planCards']['cards'] ?? []) . ' cards');
+            return $inner;
+        }
+
+        error_log('SUBZZ AZURE ERROR: Plan cards failed with HTTP ' . $response_code . ' - ' . $response_body);
+        return false;
+    }
+
     /**
      * Store order data - COMPREHENSIVE REQUEST/RESPONSE LOGGING
      */
@@ -105,17 +215,15 @@ class Subzz_Azure_API_Client {
         
         $response = wp_remote_post($endpoint, array(
             'timeout' => $this->api_timeout,
-            'headers' => array(
-                'Content-Type' => 'application/json',
-            ),
+            'headers' => $this->get_default_headers(),
             'body' => $json_payload
         ));
-        
+
         $end_time = microtime(true);
         $request_duration = round(($end_time - $start_time) * 1000, 2); // Convert to milliseconds
-        
+
         error_log('SUBZZ AZURE API: Request completed in ' . $request_duration . 'ms');
-        
+
         // Handle request errors
         if (is_wp_error($response)) {
             error_log('SUBZZ AZURE ERROR: HTTP request failed');
@@ -179,7 +287,8 @@ class Subzz_Azure_API_Client {
         error_log('SUBZZ AZURE API: Retrieving order data from Azure backend...');
         
         $response = wp_remote_get($endpoint, array(
-            'timeout' => $this->api_timeout
+            'timeout' => $this->api_timeout,
+            'headers' => $this->get_default_headers()
         ));
         
         $end_time = microtime(true);
@@ -337,8 +446,8 @@ class Subzz_Azure_API_Client {
         
         // BILLING DATE ENHANCEMENT: Add billing day to payload
         if ($billing_day !== null) {
-            $payload['billingDayOfMonth'] = $billing_day;
-            error_log('SUBZZ AZURE REQUEST: Including billingDayOfMonth in payload: ' . $billing_day);
+            $payload['billing_day_of_month'] = $billing_day;
+            error_log('SUBZZ AZURE REQUEST: Including billing_day_of_month in payload: ' . $billing_day);
         }
         
         // Add individual address fields if found
@@ -357,12 +466,10 @@ class Subzz_Azure_API_Client {
         // Make API request
         $start_time = microtime(true);
         error_log('SUBZZ AZURE API: Generating contract via Azure backend...');
-        
+
         $response = wp_remote_post($endpoint, array(
             'timeout' => $this->api_timeout,
-            'headers' => array(
-                'Content-Type' => 'application/json',
-            ),
+            'headers' => $this->get_default_headers(),
             'body' => $json_payload
         ));
         
@@ -483,7 +590,7 @@ class Subzz_Azure_API_Client {
         // Prepare request payload
         $payload = array(
             'customerEmail' => $customer_email,
-            'signatureData' => $signature_data,
+            'signatureDataBase64' => $signature_data,
             'orderReferenceId' => $order_reference_id,
             'metadata' => $metadata
         );
@@ -499,12 +606,10 @@ class Subzz_Azure_API_Client {
         // Make API request
         $start_time = microtime(true);
         error_log('SUBZZ AZURE API: Storing signature via Azure backend...');
-        
+
         $response = wp_remote_post($endpoint, array(
             'timeout' => $this->api_timeout,
-            'headers' => array(
-                'Content-Type' => 'application/json',
-            ),
+            'headers' => $this->get_default_headers(),
             'body' => $json_payload
         ));
         
@@ -570,12 +675,10 @@ class Subzz_Azure_API_Client {
         // Make API request
         $start_time = microtime(true);
         error_log('SUBZZ AZURE API: Consuming order data via Azure backend...');
-        
+
         $response = wp_remote_post($endpoint, array(
             'timeout' => $this->api_timeout,
-            'headers' => array(
-                'Content-Type' => 'application/json',
-            )
+            'headers' => $this->get_default_headers()
         ));
         
         $end_time = microtime(true);
@@ -610,6 +713,150 @@ class Subzz_Azure_API_Client {
         return $success;
     }
     
+    // ==========================================
+    // CUSTOMER PORTAL METHODS (v2.0.0)
+    // ==========================================
+
+    /**
+     * Get customer subscription overview for the portal.
+     *
+     * @param string $email Customer email
+     * @return array|false Subscription data or false on failure
+     */
+    public function get_customer_subscription($email) {
+        $endpoint = $this->azure_base_url . '/portal/subscription?' . http_build_query(array('email' => $email));
+
+        $response = wp_remote_get($endpoint, array(
+            'timeout' => $this->api_timeout,
+            'headers' => $this->get_default_headers()
+        ));
+
+        if (is_wp_error($response)) {
+            error_log('SUBZZ PORTAL: Subscription request failed - ' . $response->get_error_message());
+            return false;
+        }
+
+        $response_code = wp_remote_retrieve_response_code($response);
+        $response_body = wp_remote_retrieve_body($response);
+
+        if ($response_code === 200) {
+            $data = json_decode($response_body, true);
+            return ($data && isset($data['success']) && $data['success']) ? $data['data'] : false;
+        }
+
+        if ($response_code === 404) {
+            return false; // No subscription found — not an error
+        }
+
+        error_log('SUBZZ PORTAL: Subscription failed HTTP ' . $response_code . ' - ' . $response_body);
+        return false;
+    }
+
+    /**
+     * Get paginated invoice list for a customer.
+     *
+     * @param string $email Customer email
+     * @param int $page Page number (default 1)
+     * @param int $page_size Items per page (default 10)
+     * @return array|false Invoice list data or false on failure
+     */
+    public function get_customer_invoices($email, $page = 1, $page_size = 10) {
+        $endpoint = $this->azure_base_url . '/portal/invoices?' . http_build_query(array(
+            'email' => $email,
+            'page' => $page,
+            'pageSize' => $page_size
+        ));
+
+        $response = wp_remote_get($endpoint, array(
+            'timeout' => $this->api_timeout,
+            'headers' => $this->get_default_headers()
+        ));
+
+        if (is_wp_error($response)) {
+            error_log('SUBZZ PORTAL: Invoices request failed - ' . $response->get_error_message());
+            return false;
+        }
+
+        $response_code = wp_remote_retrieve_response_code($response);
+        $response_body = wp_remote_retrieve_body($response);
+
+        if ($response_code === 200) {
+            $data = json_decode($response_body, true);
+            return ($data && isset($data['success']) && $data['success']) ? $data['data'] : false;
+        }
+
+        error_log('SUBZZ PORTAL: Invoices failed HTTP ' . $response_code);
+        return false;
+    }
+
+    /**
+     * Get invoice PDF download URL (SAS token).
+     *
+     * @param string $invoice_id Invoice GUID
+     * @param string $email Customer email (for ownership validation)
+     * @return array|false Download data with URL or false on failure
+     */
+    public function get_invoice_pdf_url($invoice_id, $email) {
+        $endpoint = $this->azure_base_url . '/portal/invoices/' . urlencode($invoice_id) . '/pdf?'
+            . http_build_query(array('email' => $email));
+
+        $response = wp_remote_get($endpoint, array(
+            'timeout' => $this->api_timeout,
+            'headers' => $this->get_default_headers()
+        ));
+
+        if (is_wp_error($response)) {
+            error_log('SUBZZ PORTAL: Invoice PDF request failed - ' . $response->get_error_message());
+            return false;
+        }
+
+        $response_code = wp_remote_retrieve_response_code($response);
+        $response_body = wp_remote_retrieve_body($response);
+
+        if ($response_code === 200) {
+            $data = json_decode($response_body, true);
+            return ($data && isset($data['success']) && $data['success']) ? $data['data'] : false;
+        }
+
+        error_log('SUBZZ PORTAL: Invoice PDF failed HTTP ' . $response_code);
+        return false;
+    }
+
+    /**
+     * Get contract PDF download URL (SAS token).
+     *
+     * @param string $email Customer email
+     * @return array|false Download data with URL or false on failure
+     */
+    public function get_contract_download_url($email) {
+        $endpoint = $this->azure_base_url . '/portal/contract?' . http_build_query(array('email' => $email));
+
+        $response = wp_remote_get($endpoint, array(
+            'timeout' => $this->api_timeout,
+            'headers' => $this->get_default_headers()
+        ));
+
+        if (is_wp_error($response)) {
+            error_log('SUBZZ PORTAL: Contract download request failed - ' . $response->get_error_message());
+            return false;
+        }
+
+        $response_code = wp_remote_retrieve_response_code($response);
+        $response_body = wp_remote_retrieve_body($response);
+
+        if ($response_code === 200) {
+            $data = json_decode($response_body, true);
+            return ($data && isset($data['success']) && $data['success']) ? $data['data'] : false;
+        }
+
+        if ($response_code === 404) {
+            return false; // No contract found
+        }
+
+        error_log('SUBZZ PORTAL: Contract download failed HTTP ' . $response_code);
+        return false;
+    }
+
     /**
      * Update order status - FIXED for camelCase response validation
      */
@@ -635,12 +882,10 @@ class Subzz_Azure_API_Client {
         // Make API request
         $start_time = microtime(true);
         error_log('SUBZZ AZURE API: Updating order status via Azure backend...');
-        
+
         $response = wp_remote_post($endpoint, array(
             'timeout' => $this->api_timeout,
-            'headers' => array(
-                'Content-Type' => 'application/json',
-            ),
+            'headers' => $this->get_default_headers(),
             'body' => $json_payload
         ));
         
@@ -718,6 +963,123 @@ class Subzz_Azure_API_Client {
                 error_log('SUBZZ AZURE ERROR: Structured error message: ' . $error_data['error']);
             }
             
+            return false;
+        }
+    }
+    /**
+     * Create LekkaPay payment session - COMPREHENSIVE LOGGING
+     */
+    public function create_lekkapay_session($session_data) {
+        error_log('=== SUBZZ AZURE API: CREATE LEKKAPAY SESSION REQUEST ===');
+        
+        // Log request details
+        $endpoint = $this->azure_base_url . '/payment/create-session';
+        error_log('SUBZZ AZURE REQUEST: POST ' . $endpoint);
+        error_log('SUBZZ AZURE REQUEST: Timeout: ' . $this->api_timeout . ' seconds');
+        
+        // Validate required fields
+        $required_fields = ['orderReferenceId', 'customerEmail', 'customerName', 'amount'];
+        foreach ($required_fields as $field) {
+            if (!isset($session_data[$field])) {
+                error_log('SUBZZ AZURE ERROR: Missing required field: ' . $field);
+                return false;
+            }
+        }
+        
+        // Log session data
+        error_log('SUBZZ AZURE REQUEST DATA: Order Reference: ' . $session_data['orderReferenceId']);
+        error_log('SUBZZ AZURE REQUEST DATA: Customer Email: ' . $session_data['customerEmail']);
+        error_log('SUBZZ AZURE REQUEST DATA: Customer Name: ' . $session_data['customerName']);
+        error_log('SUBZZ AZURE REQUEST DATA: Amount: ' . ($session_data['currency'] ?? 'ZAR') . ' ' . $session_data['amount']);
+        
+        // Prepare payload following Azure API structure
+        // LekkaPay requires HTTPS for return/cancel URLs — force upgrade from http://
+        $return_url = set_url_scheme(home_url('/payment-success/'), 'https');
+        $cancel_url = set_url_scheme(home_url('/payment-cancelled/'), 'https');
+        $webhook_url = $this->azure_base_url . '/webhook/payment';
+
+        error_log('SUBZZ LEKKAPAY: Return URL: ' . $return_url);
+        error_log('SUBZZ LEKKAPAY: Cancel URL: ' . $cancel_url);
+
+        $payload = array(
+            'orderReferenceId' => $session_data['orderReferenceId'],
+            'customerEmail' => $session_data['customerEmail'],
+            'customerName' => $session_data['customerName'],
+            'amount' => floatval($session_data['amount']),
+            'currency' => $session_data['currency'] ?? 'ZAR',
+            'returnUrl' => $return_url,
+            'cancelUrl' => $cancel_url,
+            'webhookUrl' => $webhook_url
+        );
+        
+        // Add optional signature ID if provided
+        if (isset($session_data['signatureId'])) {
+            $payload['signatureId'] = $session_data['signatureId'];
+            error_log('SUBZZ AZURE REQUEST DATA: Signature ID: ' . $session_data['signatureId']);
+        }
+        
+        $json_payload = wp_json_encode($payload);
+        error_log('SUBZZ AZURE REQUEST DATA: JSON payload size: ' . strlen($json_payload) . ' bytes');
+        
+        // Make API request
+        $start_time = microtime(true);
+        error_log('SUBZZ AZURE API: Sending LekkaPay session creation request...');
+
+        $response = wp_remote_post($endpoint, array(
+            'timeout' => $this->api_timeout,
+            'headers' => $this->get_default_headers(),
+            'body' => $json_payload
+        ));
+        
+        $end_time = microtime(true);
+        $request_duration = round(($end_time - $start_time) * 1000, 2);
+        
+        error_log('SUBZZ AZURE API: Request completed in ' . $request_duration . 'ms');
+        
+        // Handle request errors
+        if (is_wp_error($response)) {
+            error_log('SUBZZ AZURE ERROR: HTTP request failed');
+            error_log('SUBZZ AZURE ERROR: Error code: ' . $response->get_error_code());
+            error_log('SUBZZ AZURE ERROR: Error message: ' . $response->get_error_message());
+            error_log('SUBZZ AZURE ERROR: Is Azure backend running on localhost:5000?');
+            return false;
+        }
+        
+        // Log response details
+        $response_code = wp_remote_retrieve_response_code($response);
+        $response_message = wp_remote_retrieve_response_message($response);
+        $response_body = wp_remote_retrieve_body($response);
+        
+        error_log('SUBZZ AZURE RESPONSE: HTTP ' . $response_code . ' (' . $response_message . ')');
+        error_log('SUBZZ AZURE RESPONSE: Body length: ' . strlen($response_body) . ' bytes');
+        error_log('SUBZZ AZURE RESPONSE: Body content: ' . $response_body);
+        
+        // Process successful response
+        if ($response_code === 200) {
+            $response_data = json_decode($response_body, true);
+            
+            if ($response_data === null) {
+                error_log('SUBZZ AZURE ERROR: Response JSON decode failed - ' . json_last_error_msg());
+                return false;
+            }
+            
+            error_log('SUBZZ AZURE RESPONSE: Decoded data keys: ' . implode(', ', array_keys($response_data)));
+            
+            // Validate response structure
+            if (!isset($response_data['sessionId']) || !isset($response_data['checkoutUrl'])) {
+                error_log('SUBZZ AZURE ERROR: Response missing required fields (sessionId or checkoutUrl)');
+                return false;
+            }
+            
+            error_log('SUBZZ AZURE SUCCESS: LekkaPay session created successfully');
+            error_log('SUBZZ AZURE SUCCESS: Session ID: ' . $response_data['sessionId']);
+            error_log('SUBZZ AZURE SUCCESS: Checkout URL: ' . $response_data['checkoutUrl']);
+            error_log('SUBZZ AZURE SUCCESS: Total processing time: ' . $request_duration . 'ms');
+            
+            return $response_data;
+        } else {
+            error_log('SUBZZ AZURE ERROR: Create LekkaPay session failed with HTTP ' . $response_code);
+            error_log('SUBZZ AZURE ERROR: Response body: ' . $response_body);
             return false;
         }
     }

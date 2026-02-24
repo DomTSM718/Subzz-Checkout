@@ -1,0 +1,662 @@
+/**
+ * Subzz Checkout Plans — Styles
+ * Single-page subscription checkout: plan cards, customise panel, address form, billing date.
+ * Matches existing design language from contract-styles.css (blue #3498db, 12px radius).
+ */
+
+/* ── Base layout ─────────────────────────────────────────────────── */
+.subzz-checkout-page {
+    max-width: 900px;
+    margin: 30px auto;
+    padding: 0 20px;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+    color: #333;
+}
+
+.checkout-container {
+    background: #fff;
+    border-radius: 12px;
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+    padding: 40px;
+}
+
+@media (max-width: 600px) {
+    .checkout-container { padding: 20px 16px; }
+}
+
+/* ── Progress indicator ──────────────────────────────────────────── */
+.checkout-progress {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0;
+    margin-bottom: 36px;
+}
+
+.progress-step {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+}
+
+.step-dot {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: #dee2e6;
+    color: #fff;
+    font-weight: 700;
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.3s;
+}
+
+.progress-step.active .step-dot {
+    background: #3498db;
+}
+
+.step-label {
+    font-size: 12px;
+    color: #6c757d;
+    font-weight: 500;
+}
+
+.progress-step.active .step-label {
+    color: #3498db;
+    font-weight: 600;
+}
+
+.progress-line {
+    width: 48px;
+    height: 3px;
+    background: #dee2e6;
+    margin: 0 4px;
+    margin-bottom: 20px;
+}
+
+/* ── Product summary ─────────────────────────────────────────────── */
+.product-summary {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    padding: 20px;
+    background: #f8f9fa;
+    border-radius: 12px;
+    margin-bottom: 32px;
+}
+
+.product-image img {
+    width: 100px;
+    height: 100px;
+    object-fit: cover;
+    border-radius: 8px;
+    border: 1px solid #dee2e6;
+}
+
+.product-info h2 {
+    margin: 0 0 6px;
+    font-size: 20px;
+    color: #2c3e50;
+}
+
+.product-rrp {
+    margin: 0;
+    font-size: 15px;
+    color: #6c757d;
+}
+
+.product-rrp strong {
+    color: #2c3e50;
+    font-size: 18px;
+}
+
+/* ── Plan cards ──────────────────────────────────────────────────── */
+.plan-cards-section h2 {
+    font-size: 22px;
+    margin-bottom: 20px;
+    color: #2c3e50;
+}
+
+.plan-cards-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+    margin-bottom: 24px;
+}
+
+@media (max-width: 700px) {
+    .plan-cards-grid { grid-template-columns: 1fr; }
+}
+
+.plan-card {
+    position: relative;
+    background: #fff;
+    border: 2px solid #dee2e6;
+    border-radius: 12px;
+    padding: 24px 20px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.plan-card:hover {
+    border-color: #3498db;
+    box-shadow: 0 4px 12px rgba(52, 152, 219, 0.15);
+    transform: translateY(-2px);
+}
+
+.plan-card.selected {
+    border-color: #3498db;
+    background: #eaf4fd;
+    box-shadow: 0 4px 16px rgba(52, 152, 219, 0.2);
+}
+
+.plan-card.recommended {
+    border-color: #27ae60;
+}
+
+.plan-card.recommended.selected {
+    border-color: #27ae60;
+    background: #eafaf1;
+}
+
+.card-badge {
+    position: absolute;
+    top: -12px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #27ae60;
+    color: #fff;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    padding: 4px 14px;
+    border-radius: 12px;
+    letter-spacing: 0.5px;
+}
+
+.card-term {
+    font-size: 18px;
+    font-weight: 700;
+    color: #2c3e50;
+    margin: 8px 0 12px;
+}
+
+.card-price {
+    font-size: 28px;
+    font-weight: 700;
+    color: #3498db;
+    margin-bottom: 12px;
+}
+
+.card-price span {
+    font-size: 14px;
+    font-weight: 400;
+    color: #6c757d;
+}
+
+.card-detail {
+    font-size: 13px;
+    color: #6c757d;
+    margin-bottom: 6px;
+}
+
+.card-detail strong {
+    color: #2c3e50;
+}
+
+.card-savings {
+    color: #27ae60;
+    font-weight: 600;
+}
+
+/* ── Skeleton loading ────────────────────────────────────────────── */
+.plan-card.skeleton {
+    cursor: default;
+    pointer-events: none;
+}
+
+.skeleton-badge,
+.skeleton-title,
+.skeleton-price,
+.skeleton-detail {
+    background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+    background-size: 200% 100%;
+    animation: shimmer 1.5s infinite;
+    border-radius: 6px;
+    margin: 0 auto;
+}
+
+.skeleton-badge { width: 80px; height: 14px; margin-bottom: 12px; }
+.skeleton-title { width: 100px; height: 20px; margin-bottom: 16px; }
+.skeleton-price { width: 120px; height: 32px; margin-bottom: 12px; }
+.skeleton-detail { width: 140px; height: 14px; margin-bottom: 8px; }
+
+@keyframes shimmer {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+}
+
+/* ── Errors ──────────────────────────────────────────────────────── */
+.plan-error,
+.not-verified {
+    text-align: center;
+    padding: 30px 20px;
+    background: #fff3cd;
+    border: 1px solid #ffeaa7;
+    border-radius: 12px;
+}
+
+.not-verified {
+    background: #fef4e8;
+    border-color: #f0c36d;
+}
+
+.not-verified h3 { margin-top: 0; color: #856404; }
+
+.no-plans {
+    text-align: center;
+    padding: 30px;
+    color: #6c757d;
+    grid-column: 1 / -1;
+}
+
+/* ── Customise panel ─────────────────────────────────────────────── */
+.customise-section {
+    margin-bottom: 28px;
+}
+
+.customise-toggle {
+    width: 100%;
+    padding: 14px 20px;
+    background: #f8f9fa;
+    border: 2px solid #dee2e6;
+    border-radius: 12px;
+    cursor: pointer;
+    font-size: 15px;
+    font-weight: 600;
+    color: #3498db;
+    text-align: left;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: background 0.2s;
+}
+
+.customise-toggle:hover {
+    background: #eaf4fd;
+    border-color: #3498db;
+}
+
+.toggle-icon {
+    font-size: 18px;
+    font-weight: 700;
+    width: 24px;
+    text-align: center;
+}
+
+.customise-panel {
+    padding: 24px 20px;
+    border: 2px solid #dee2e6;
+    border-top: none;
+    border-radius: 0 0 12px 12px;
+    background: #fafbfc;
+}
+
+.term-toggle {
+    margin-bottom: 24px;
+}
+
+.term-toggle label {
+    display: block;
+    font-weight: 600;
+    margin-bottom: 10px;
+    color: #2c3e50;
+}
+
+.term-buttons {
+    display: flex;
+    gap: 10px;
+}
+
+.term-btn {
+    flex: 1;
+    padding: 10px 16px;
+    border: 2px solid #dee2e6;
+    border-radius: 8px;
+    background: #fff;
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 14px;
+    color: #6c757d;
+    transition: all 0.2s;
+}
+
+.term-btn:hover {
+    border-color: #3498db;
+    color: #3498db;
+}
+
+.term-btn.active {
+    background: #3498db;
+    border-color: #3498db;
+    color: #fff;
+}
+
+.initial-payment-slider {
+    margin-bottom: 16px;
+}
+
+.initial-payment-slider label {
+    display: block;
+    font-weight: 600;
+    margin-bottom: 10px;
+    color: #2c3e50;
+}
+
+.initial-payment-slider input[type="range"] {
+    width: 100%;
+    height: 8px;
+    -webkit-appearance: none;
+    appearance: none;
+    background: #dee2e6;
+    border-radius: 4px;
+    outline: none;
+}
+
+.initial-payment-slider input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 22px;
+    height: 22px;
+    background: #3498db;
+    border-radius: 50%;
+    cursor: pointer;
+    border: 3px solid #fff;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
+}
+
+.slider-range {
+    display: flex;
+    justify-content: space-between;
+    font-size: 12px;
+    color: #6c757d;
+    margin-top: 4px;
+}
+
+.monthly-preview {
+    background: #eaf4fd;
+    padding: 12px 16px;
+    border-radius: 8px;
+    text-align: center;
+    font-size: 15px;
+}
+
+.monthly-preview strong {
+    color: #3498db;
+    font-size: 18px;
+}
+
+/* ── Address form ────────────────────────────────────────────────── */
+.address-section {
+    margin-bottom: 28px;
+}
+
+.address-section h2 {
+    font-size: 20px;
+    margin-bottom: 16px;
+    color: #2c3e50;
+}
+
+.address-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+}
+
+.address-grid .full-width {
+    grid-column: 1 / -1;
+}
+
+@media (max-width: 600px) {
+    .address-grid { grid-template-columns: 1fr; }
+}
+
+.form-field label {
+    display: block;
+    font-weight: 600;
+    margin-bottom: 6px;
+    font-size: 14px;
+    color: #2c3e50;
+}
+
+.form-field input,
+.form-field select {
+    width: 100%;
+    padding: 10px 14px;
+    border: 2px solid #dee2e6;
+    border-radius: 8px;
+    font-size: 15px;
+    transition: border-color 0.2s;
+    box-sizing: border-box;
+}
+
+
+.form-field input:focus,
+.form-field select:focus {
+    outline: none;
+    border-color: #3498db;
+    box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.1);
+}
+
+/* ── Billing date ────────────────────────────────────────────────── */
+.billing-date-section {
+    margin-bottom: 28px;
+}
+
+.billing-date-section h2 {
+    font-size: 20px;
+    margin-bottom: 8px;
+    color: #2c3e50;
+}
+
+.section-hint {
+    font-size: 14px;
+    color: #6c757d;
+    margin-bottom: 16px;
+}
+
+.billing-date-options {
+    display: flex;
+    gap: 12px;
+}
+
+.billing-date-option {
+    flex: 1;
+    cursor: pointer;
+}
+
+.billing-date-option input[type="radio"] {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+}
+
+.date-label {
+    display: block;
+    text-align: center;
+    padding: 14px 8px;
+    border: 2px solid #dee2e6;
+    border-radius: 10px;
+    font-size: 18px;
+    font-weight: 700;
+    color: #6c757d;
+    transition: all 0.2s;
+}
+
+.billing-date-option:hover .date-label {
+    border-color: #3498db;
+    color: #3498db;
+}
+
+.billing-date-option input:checked + .date-label,
+.billing-date-option.selected .date-label {
+    border-color: #3498db;
+    background: #eaf4fd;
+    color: #3498db;
+}
+
+/* ── Province radio buttons ─────────────────────────────────────── */
+.province-options {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+}
+
+@media (max-width: 600px) {
+    .province-options { grid-template-columns: repeat(2, 1fr); }
+}
+
+.province-option {
+    cursor: pointer;
+}
+
+.province-option input {
+    display: none;
+}
+
+.province-option span {
+    display: block;
+    text-align: center;
+    padding: 10px 6px;
+    border: 2px solid #dee2e6;
+    border-radius: 8px;
+    font-size: 13px;
+    color: #6c757d;
+    transition: all 0.2s;
+}
+
+.province-option:hover span {
+    border-color: #3498db;
+    color: #3498db;
+}
+
+.province-option input:checked + span {
+    border-color: #3498db;
+    background: #eaf4fd;
+    color: #3498db;
+    font-weight: 600;
+}
+
+/* ── Continue section ────────────────────────────────────────────── */
+.continue-section {
+    margin-top: 8px;
+}
+
+.order-summary-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 14px 20px;
+    background: #f8f9fa;
+    border-radius: 10px;
+    margin-bottom: 16px;
+}
+
+.summary-left {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+#summary-product {
+    font-weight: 600;
+    color: #2c3e50;
+}
+
+.summary-plan {
+    font-size: 13px;
+    color: #6c757d;
+    background: #e9ecef;
+    padding: 2px 10px;
+    border-radius: 10px;
+}
+
+.summary-monthly {
+    font-weight: 700;
+    color: #3498db;
+    font-size: 16px;
+}
+
+.continue-hint {
+    text-align: center;
+    font-size: 13px;
+    color: #6c757d;
+    margin-top: 10px;
+}
+
+/* ── Buttons ─────────────────────────────────────────────────────── */
+.btn-primary {
+    display: inline-block;
+    width: 100%;
+    padding: 16px 32px;
+    background: linear-gradient(135deg, #3498db 0%, #2980b9 100%);
+    color: #fff;
+    border: none;
+    border-radius: 12px;
+    font-size: 16px;
+    font-weight: 700;
+    cursor: pointer;
+    text-align: center;
+    text-decoration: none;
+    transition: all 0.2s;
+}
+
+.btn-primary:hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(52, 152, 219, 0.3);
+}
+
+.btn-primary:disabled {
+    background: #adb5bd;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+}
+
+.btn-secondary {
+    display: inline-block;
+    padding: 10px 20px;
+    background: #fff;
+    color: #3498db;
+    border: 2px solid #3498db;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    text-decoration: none;
+}
+
+.btn-secondary:hover {
+    background: #3498db;
+    color: #fff;
+}
+
+/* ── Back link ───────────────────────────────────────────────────── */
+.back-link {
+    text-align: center;
+    margin-top: 24px;
+}
+
+.back-link a {
+    color: #6c757d;
+    text-decoration: none;
+    font-size: 14px;
+}
+
+.back-link a:hover {
+    color: #3498db;
+}

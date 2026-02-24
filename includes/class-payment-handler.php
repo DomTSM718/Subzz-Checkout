@@ -537,14 +537,17 @@ class Subzz_Payment_Handler {
      * Initialize WooCommerce hooks - SERVER-SIDE REDIRECT CONTROL
      */
     private function init_hooks() {
+        // PHASE 5 CHECKOUT: Redirect WooCommerce checkout to custom checkout for subscriptions
+        add_action('template_redirect', [$this, 'redirect_subscription_to_custom_checkout'], 1);
+
         // PRIMARY METHOD: Block Checkout Store API (PRESERVED - WORKING)
         add_action('woocommerce_store_api_checkout_update_order_from_request', [$this, 'block_checkout_server_interception'], 1, 2);
-        
+
         // SERVER-SIDE REDIRECT CONTROL: Override WooCommerce's natural redirect behavior
         add_action('woocommerce_checkout_order_processed', [$this, 'handle_subscription_order_redirect'], 5, 3);
         add_filter('woocommerce_get_checkout_order_received_url', [$this, 'override_thank_you_page_redirect'], 10, 2);
         add_action('template_redirect', [$this, 'catch_and_redirect_order_received'], 5);
-        
+
         // PRESERVED: All AJAX handlers for backwards compatibility and debugging
         add_action('wp_ajax_subzz_check_subscription_cart', [$this, 'ajax_check_subscription_cart']);
         add_action('wp_ajax_nopriv_subzz_check_subscription_cart', [$this, 'ajax_check_subscription_cart']);
@@ -552,17 +555,20 @@ class Subzz_Payment_Handler {
         add_action('wp_ajax_nopriv_subzz_check_redirect_requirement', [$this, 'ajax_check_redirect_requirement']);
         add_action('wp_ajax_subzz_check_order_redirect_requirement', [$this, 'ajax_check_order_redirect_requirement']);
         add_action('wp_ajax_nopriv_subzz_check_order_redirect_requirement', [$this, 'ajax_check_order_redirect_requirement']);
-        
-        // PHASE 5A: Mock payment update handler
+
+        // PHASE 5A: Mock payment update handler (logged-in only — no nopriv to prevent unauthenticated order status changes)
         add_action('wp_ajax_subzz_mock_payment_update', [$this, 'ajax_mock_payment_update']);
-        add_action('wp_ajax_nopriv_subzz_mock_payment_update', [$this, 'ajax_mock_payment_update']);
-        
+
+        // PHASE 5: Checkout subscription AJAX handlers (logged-in only — checkout page requires login)
+        add_action('wp_ajax_subzz_get_plan_cards', [$this, 'ajax_get_plan_cards']);
+        add_action('wp_ajax_subzz_store_checkout_order', [$this, 'ajax_store_checkout_order']);
+
         // PRESERVED: Traditional checkout process fallback
         add_action('woocommerce_checkout_process', [$this, 'traditional_checkout_fallback'], 1);
-        
+
         // OPTIONAL: Debugging scripts (can be enabled for testing)
         add_action('wp_enqueue_scripts', [$this, 'enqueue_debugging_scripts']);
-        
+
         error_log('SUBZZ HOOKS: Server-side redirect control hooks registered with backwards compatibility');
     }
 
@@ -619,6 +625,218 @@ class Subzz_Payment_Handler {
         }
     }
     
+    /**
+     * PHASE 5: Redirect WooCommerce checkout to custom subscription checkout
+     * if cart contains a subscription product.
+     */
+    public function redirect_subscription_to_custom_checkout() {
+        if (!function_exists('is_checkout') || !is_checkout()) {
+            return;
+        }
+        // Don't redirect on order-received endpoint
+        if (is_wc_endpoint_url('order-received')) {
+            return;
+        }
+        if (!WC()->cart || WC()->cart->is_empty()) {
+            return;
+        }
+
+        foreach (WC()->cart->get_cart() as $cart_item) {
+            $subscription_enabled = get_post_meta($cart_item['product_id'], '_subzz_subscription_enabled', true);
+            if ($subscription_enabled === 'yes') {
+                error_log('SUBZZ CHECKOUT REDIRECT: Subscription product in cart — redirecting to /checkout-subscription/');
+                wp_redirect(home_url('/checkout-subscription/'));
+                exit;
+            }
+        }
+    }
+
+    /**
+     * PHASE 5 AJAX: Proxy plan cards request to Azure API
+     */
+    public function ajax_get_plan_cards() {
+        if (!wp_verify_nonce($_POST['nonce'] ?? '', 'subzz_checkout_subscription')) {
+            wp_send_json_error(array('message' => 'Security check failed'));
+            return;
+        }
+
+        $email = sanitize_email($_POST['email'] ?? '');
+        $price = floatval($_POST['product_price_incl_vat'] ?? 0);
+
+        if (empty($email) || $price <= 0) {
+            wp_send_json_error(array('message' => 'Missing email or product price'));
+            return;
+        }
+
+        error_log('SUBZZ CHECKOUT AJAX: Fetching plan cards for ' . $email . ' price=' . $price);
+
+        $azure_client = new Subzz_Azure_API_Client();
+        $result = $azure_client->get_plan_cards($email, $price);
+
+        if ($result) {
+            wp_send_json_success($result);
+        } else {
+            wp_send_json_error(array('message' => 'Unable to load plan cards from backend'));
+        }
+    }
+
+    /**
+     * PHASE 5 AJAX: Store checkout order in Azure, create WooCommerce order, return JWT
+     */
+    public function ajax_store_checkout_order() {
+        if (!wp_verify_nonce($_POST['nonce'] ?? '', 'subzz_checkout_subscription')) {
+            wp_send_json_error(array('message' => 'Security check failed'));
+            return;
+        }
+
+        $customer_email = sanitize_email($_POST['customer_email'] ?? '');
+        $product_id = intval($_POST['product_id'] ?? 0);
+        $variation_id = intval($_POST['variation_id'] ?? 0);
+        $product_name = sanitize_text_field($_POST['product_name'] ?? '');
+        $product_price = floatval($_POST['product_price_incl_vat'] ?? 0);
+        $selected_term = intval($_POST['selected_term_months'] ?? 18);
+        $standard_monthly = floatval($_POST['standard_monthly_amount'] ?? 0);
+        $initial_payment = floatval($_POST['initial_payment_amount'] ?? 0);
+        $reduced_monthly = floatval($_POST['reduced_monthly_amount'] ?? 0);
+        $total_sub_value = floatval($_POST['total_subscription_value'] ?? 0);
+        $billing_day = intval($_POST['billing_day'] ?? 1);
+        $address_street = sanitize_text_field($_POST['address_street'] ?? '');
+        $address_city = sanitize_text_field($_POST['address_city'] ?? '');
+        $address_province = sanitize_text_field($_POST['address_province'] ?? '');
+        $address_postal = sanitize_text_field($_POST['address_postal'] ?? '');
+
+        if (empty($customer_email) || $product_id <= 0) {
+            wp_send_json_error(array('message' => 'Missing required order data'));
+            return;
+        }
+
+        error_log('SUBZZ CHECKOUT AJAX: Storing order — email=' . $customer_email . ' term=' . $selected_term . ' initial=' . $initial_payment);
+
+        // Get current user for name
+        $user = get_user_by('email', $customer_email);
+        $first_name = $user ? $user->first_name : '';
+        $last_name = $user ? $user->last_name : '';
+
+        // Create WooCommerce order programmatically
+        $wc_order = wc_create_order(array('status' => 'pending'));
+        $product = wc_get_product($variation_id ?: $product_id);
+
+        if ($product) {
+            $wc_order->add_product($product, 1);
+        }
+
+        $wc_order->set_billing_email($customer_email);
+        $wc_order->set_billing_first_name($first_name);
+        $wc_order->set_billing_last_name($last_name);
+        $wc_order->set_billing_address_1($address_street);
+        $wc_order->set_billing_city($address_city);
+        $wc_order->set_billing_state($address_province);
+        $wc_order->set_billing_postcode($address_postal);
+        $wc_order->set_billing_country('ZA');
+
+        // Set the actual payment amount (initial or monthly)
+        $payment_amount = $initial_payment > 0 ? $initial_payment : $standard_monthly;
+        $wc_order->set_total($payment_amount);
+        $wc_order->calculate_totals();
+
+        // Store subscription meta
+        $wc_order->add_meta_data('_subzz_subscription_enabled', 'yes');
+        $wc_order->add_meta_data('_subzz_selected_term_months', $selected_term);
+        $wc_order->add_meta_data('_subzz_standard_monthly_amount', $standard_monthly);
+        $wc_order->add_meta_data('_subzz_initial_payment_amount', $initial_payment);
+        $wc_order->add_meta_data('_subzz_reduced_monthly_amount', $reduced_monthly);
+        $wc_order->add_meta_data('_subzz_total_subscription_value', $total_sub_value);
+        $wc_order->add_meta_data('_subzz_billing_day', $billing_day);
+        $wc_order->add_meta_data('_subzz_contract_required', 'yes');
+        $wc_order->save();
+
+        $wc_order_id = $wc_order->get_id();
+        error_log('SUBZZ CHECKOUT AJAX: WooCommerce order created — ID=' . $wc_order_id);
+
+        // Prepare Azure order data
+        $order_data = array(
+            'woocommerce_order_id' => $wc_order_id,
+            'customer_email' => $customer_email,
+            'customer_data' => array(
+                'first_name' => $first_name,
+                'last_name' => $last_name,
+                'email' => $customer_email
+            ),
+            'billing_address' => array(
+                'address_1' => $address_street,
+                'city' => $address_city,
+                'state' => $address_province,
+                'postcode' => $address_postal,
+                'country' => 'ZA'
+            ),
+            'order_items' => array(
+                array(
+                    'product_id' => $product_id,
+                    'name' => $product_name,
+                    'quantity' => 1,
+                    'price' => $product_price,
+                    'is_subscription' => true
+                )
+            ),
+            'order_totals' => array(
+                'subtotal' => $product_price,
+                'total' => strval($payment_amount),
+                'currency' => 'ZAR'
+            ),
+            'initial_payment_amount' => $initial_payment,
+            'standard_monthly_amount' => $standard_monthly,
+            'reduced_monthly_amount' => $reduced_monthly,
+            'selected_term_months' => $selected_term,
+            'total_subscription_value' => $total_sub_value,
+            'billing_day_of_month' => $billing_day,
+            'created_at' => current_time('mysql'),
+            'wordpress_site' => home_url(),
+            'order_status' => 'pending'
+        );
+
+        // Store in Azure
+        $azure_client = new Subzz_Azure_API_Client();
+        $reference_id = $azure_client->store_order_data($order_data);
+
+        if (!$reference_id) {
+            error_log('SUBZZ CHECKOUT AJAX ERROR: Azure store failed');
+            $wc_order->add_order_note('SUBZZ: Azure order storage failed');
+            wp_send_json_error(array('message' => 'Unable to process order. Please try again.'));
+            return;
+        }
+
+        error_log('SUBZZ CHECKOUT AJAX: Azure reference=' . $reference_id);
+
+        // Update WC order with reference
+        $wc_order->add_meta_data('_subzz_reference_id', $reference_id);
+        $wc_order->add_meta_data('_subzz_azure_stored', 'yes');
+        $wc_order->add_order_note('SUBZZ: Order stored in Azure, Reference ID: ' . $reference_id);
+        $wc_order->save();
+
+        // Generate JWT token for contract signature page
+        $jwt_token = $this->generate_jwt_token($reference_id, $customer_email);
+        $signature_url = home_url('/contract-signature/?token=' . $jwt_token);
+
+        // Store session data in WC session (not PHP session — A14)
+        if (WC()->session) {
+            WC()->session->set('subzz_reference_id', $reference_id);
+            WC()->session->set('subzz_jwt_token', $jwt_token);
+        }
+
+        // Clear cart after order is successfully created — prevents stale products
+        // appearing when customer starts a new checkout later
+        if (WC()->cart) {
+            WC()->cart->empty_cart();
+            error_log('SUBZZ CHECKOUT AJAX: Cart cleared after successful order creation');
+        }
+
+        wp_send_json_success(array(
+            'reference_id' => $reference_id,
+            'wc_order_id' => $wc_order_id,
+            'signature_url' => $signature_url
+        ));
+    }
+
     /**
      * PRIMARY METHOD: Block Checkout Store API interception - PRESERVED WITH ENHANCED REDIRECT SETUP
      */
@@ -746,17 +964,16 @@ class Subzz_Payment_Handler {
             
             error_log("SUBZZ REDIRECT PREP: Order {$order_id} marked for redirect preparation");
             
-            // Store in a way that our redirect filters can access
-            if (!session_id()) {
-                session_start();
+            // Store in WC session for redirect filter access (not PHP session — A14)
+            if (WC()->session) {
+                WC()->session->set('subzz_pending_redirect', array(
+                    'order_id' => $order_id,
+                    'signature_url' => $signature_url,
+                    'timestamp' => time()
+                ));
             }
-            $_SESSION['subzz_pending_redirect'] = [
-                'order_id' => $order_id,
-                'signature_url' => $signature_url,
-                'timestamp' => time()
-            ];
-            
-            error_log("SUBZZ REDIRECT PREP: Redirect data stored in session for filter access");
+
+            error_log("SUBZZ REDIRECT PREP: Redirect data stored in WC session for filter access");
         }
     }
     
@@ -825,16 +1042,14 @@ class Subzz_Payment_Handler {
             }
         }
         
-        // Method 3: Check session for pending redirect
-        if (!$order && !session_id()) {
-            session_start();
-        }
-        
-        if (!$order && isset($_SESSION['subzz_pending_redirect'])) {
-            $redirect_data = $_SESSION['subzz_pending_redirect'];
-            $order_id = $redirect_data['order_id'];
-            $order = wc_get_order($order_id);
-            error_log("SUBZZ TEMPLATE REDIRECT: Found order via session data: {$order_id}");
+        // Method 3: Check WC session for pending redirect
+        if (!$order && WC()->session) {
+            $redirect_data = WC()->session->get('subzz_pending_redirect');
+            if ($redirect_data) {
+                $order_id = $redirect_data['order_id'];
+                $order = wc_get_order($order_id);
+                error_log("SUBZZ TEMPLATE REDIRECT: Found order via WC session data: {$order_id}");
+            }
         }
         
         if (!$order) {
@@ -862,10 +1077,10 @@ class Subzz_Payment_Handler {
             $order->update_meta_data('_subzz_redirect_method', 'template_redirect_backup');
             $order->save();
             
-            // Clear session data
-            if (isset($_SESSION['subzz_pending_redirect'])) {
-                unset($_SESSION['subzz_pending_redirect']);
-                error_log("SUBZZ TEMPLATE REDIRECT: Cleared session redirect data");
+            // Clear WC session data
+            if (WC()->session) {
+                WC()->session->set('subzz_pending_redirect', null);
+                error_log("SUBZZ TEMPLATE REDIRECT: Cleared WC session redirect data");
             }
             
             // Execute redirect
@@ -964,36 +1179,176 @@ class Subzz_Payment_Handler {
     }
     
     /**
-     * Generate JWT token with detailed logging - PRESERVED UNCHANGED
+     * Generate HMAC-SHA256 signed JWT token (CHK-001 fix).
+     * Uses firebase/php-jwt library vendored in includes/vendor/.
+     * Secret key from SUBZZ_CHECKOUT_JWT_SECRET in wp-config.php,
+     * falls back to WordPress auth salt if not defined.
      */
-    private function generate_jwt_token($reference_id, $customer_email) {
-        error_log('SUBZZ JWT GENERATION: Creating token for Reference ID: ' . $reference_id);
-        
+    public function generate_jwt_token($reference_id, $customer_email) {
+        error_log('SUBZZ JWT GENERATION: Creating signed token for Reference ID: ' . $reference_id);
+
+        // Load vendored JWT library
+        require_once dirname(__FILE__) . '/vendor/firebase/php-jwt/src/JWT.php';
+
+        $secret_key = defined('SUBZZ_CHECKOUT_JWT_SECRET') ? SUBZZ_CHECKOUT_JWT_SECRET : wp_salt('auth');
+
+        if (!defined('SUBZZ_CHECKOUT_JWT_SECRET')) {
+            error_log('SUBZZ JWT WARNING: SUBZZ_CHECKOUT_JWT_SECRET not defined, falling back to wp_salt');
+        }
+
         $issued_at = time();
         $expires_at = $issued_at + (30 * 60); // 30 minutes
-        
-        // JWT payload
+
         $payload = array(
+            'iss' => home_url(),
+            'iat' => $issued_at,
+            'exp' => $expires_at,
             'reference_id' => $reference_id,
             'customer_email' => $customer_email,
-            'issued_at' => $issued_at,
-            'expires_at' => $expires_at,
-            'site' => home_url(),
             'purpose' => 'contract_signature'
         );
-        
+
         error_log('SUBZZ JWT GENERATION: Payload created - Ref ID: ' . $reference_id . ', Email: ' . $customer_email . ', Expires: ' . date('Y-m-d H:i:s', $expires_at));
-        
-        // Simple base64 encoding (matching decode method in contract integration)
-        $json_payload = wp_json_encode($payload);
-        $token = base64_encode($json_payload);
-        
-        error_log('SUBZZ JWT GENERATION: Token encoded - Length: ' . strlen($token) . ' characters');
-        error_log('SUBZZ JWT GENERATION: Token preview: ' . substr($token, 0, 30) . '...');
-        
+
+        $token = \Firebase\JWT\JWT::encode($payload, $secret_key, 'HS256');
+
+        error_log('SUBZZ JWT GENERATION: Signed token created - Length: ' . strlen($token) . ' characters');
+
         return $token;
     }
-    
+
+    /**
+     * Handle abandoned cart resume link from recovery email.
+     * Decodes JWT resume token, validates purpose, checks order status,
+     * and routes customer to the appropriate checkout step.
+     *
+     * @param string $resume_token JWT token from ?resume= query parameter
+     */
+    public function handle_checkout_resume($resume_token) {
+        error_log('=== SUBZZ CART RESUME: Processing resume token ===');
+
+        // Load vendored JWT library
+        require_once dirname(__FILE__) . '/vendor/firebase/php-jwt/src/JWT.php';
+        require_once dirname(__FILE__) . '/vendor/firebase/php-jwt/src/Key.php';
+
+        $secret_key = defined('SUBZZ_CHECKOUT_JWT_SECRET') ? SUBZZ_CHECKOUT_JWT_SECRET : wp_salt('auth');
+
+        if (!defined('SUBZZ_CHECKOUT_JWT_SECRET')) {
+            error_log('SUBZZ CART RESUME WARNING: SUBZZ_CHECKOUT_JWT_SECRET not defined, falling back to wp_salt');
+        }
+
+        try {
+            // Decode and validate the resume token
+            $decoded = \Firebase\JWT\JWT::decode(
+                $resume_token,
+                new \Firebase\JWT\Key($secret_key, 'HS256')
+            );
+
+            // Validate purpose claim
+            if (!isset($decoded->purpose) || $decoded->purpose !== 'cart_recovery') {
+                error_log('SUBZZ CART RESUME ERROR: Invalid token purpose: ' . ($decoded->purpose ?? 'none'));
+                wp_die(
+                    '<h2>Invalid Resume Link</h2><p>This link is not a valid cart recovery link. Please check your email for the correct link.</p>',
+                    'Invalid Link',
+                    array('response' => 400)
+                );
+                return;
+            }
+
+            $reference_id = $decoded->reference_id ?? null;
+            $customer_email = $decoded->customer_email ?? null;
+
+            if (empty($reference_id) || empty($customer_email)) {
+                error_log('SUBZZ CART RESUME ERROR: Missing reference_id or customer_email in token');
+                wp_die(
+                    '<h2>Invalid Resume Link</h2><p>This resume link is missing required information. Please contact support.</p>',
+                    'Invalid Link',
+                    array('response' => 400)
+                );
+                return;
+            }
+
+            error_log('SUBZZ CART RESUME: Token valid - Ref: ' . $reference_id . ', Email: ' . $customer_email);
+
+            // Retrieve order data from Azure API
+            require_once dirname(__FILE__) . '/class-azure-api-client.php';
+            $azure_client = new Subzz_Azure_API_Client();
+            $order_data = $azure_client->retrieve_order_data($reference_id);
+
+            if (!$order_data || isset($order_data['error'])) {
+                error_log('SUBZZ CART RESUME ERROR: Order not found or expired for reference: ' . $reference_id);
+                wp_die(
+                    '<h2>Order Not Found</h2><p>Your checkout session may have expired. Please visit our <a href="' . esc_url(home_url('/shop/')) . '">shop</a> to start a new subscription.</p>',
+                    'Order Expired',
+                    array('response' => 404)
+                );
+                return;
+            }
+
+            $order_status = $order_data['order_status'] ?? $order_data['OrderStatus'] ?? 'unknown';
+            error_log('SUBZZ CART RESUME: Order status: ' . $order_status . ' for reference: ' . $reference_id);
+
+            // Route based on order status
+            switch ($order_status) {
+                case 'created':
+                case 'signature_pending':
+                    // Customer needs to sign contract — generate contract JWT and redirect
+                    $contract_token = $this->generate_jwt_token($reference_id, $customer_email);
+                    $redirect_url = home_url('/contract-signature/?token=' . $contract_token);
+                    error_log('SUBZZ CART RESUME: Redirecting to contract signature: ' . $redirect_url);
+                    wp_redirect($redirect_url);
+                    exit;
+
+                case 'signature_completed':
+                case 'payment_pending':
+                case 'payment_failed':
+                    // Customer needs to complete payment
+                    $redirect_url = home_url('/subscription-payment/?reference_id=' . urlencode($reference_id));
+                    error_log('SUBZZ CART RESUME: Redirecting to payment: ' . $redirect_url);
+                    wp_redirect($redirect_url);
+                    exit;
+
+                case 'payment_completed':
+                    // Order already completed
+                    $redirect_url = home_url('/payment-success/');
+                    error_log('SUBZZ CART RESUME: Order already completed, redirecting to success');
+                    wp_redirect($redirect_url);
+                    exit;
+
+                default:
+                    error_log('SUBZZ CART RESUME ERROR: Unknown order status: ' . $order_status);
+                    wp_die(
+                        '<h2>Unable to Resume</h2><p>We couldn\'t determine the status of your order. Please contact <a href="mailto:support@subzz.co.za">support@subzz.co.za</a> for assistance.</p>',
+                        'Resume Error',
+                        array('response' => 400)
+                    );
+                    return;
+            }
+
+        } catch (\Firebase\JWT\ExpiredException $e) {
+            error_log('SUBZZ CART RESUME ERROR: Token expired - ' . $e->getMessage());
+            wp_die(
+                '<h2>Link Expired</h2><p>This resume link has expired. Please visit our <a href="' . esc_url(home_url('/shop/')) . '">shop</a> to start a new subscription.</p>',
+                'Link Expired',
+                array('response' => 410)
+            );
+        } catch (\Firebase\JWT\SignatureInvalidException $e) {
+            error_log('SUBZZ CART RESUME ERROR: Invalid signature - ' . $e->getMessage());
+            wp_die(
+                '<h2>Invalid Link</h2><p>This resume link is invalid. Please check your email for the correct link.</p>',
+                'Invalid Link',
+                array('response' => 400)
+            );
+        } catch (\Exception $e) {
+            error_log('SUBZZ CART RESUME ERROR: Token decode failed - ' . $e->getMessage());
+            wp_die(
+                '<h2>Error</h2><p>Something went wrong processing your resume link. Please contact <a href="mailto:support@subzz.co.za">support@subzz.co.za</a>.</p>',
+                'Error',
+                array('response' => 500)
+            );
+        }
+    }
+
     /**
      * AJAX handler for subscription cart checking - PRESERVED FOR TESTING
      */

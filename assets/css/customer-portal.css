@@ -1,0 +1,529 @@
+/**
+ * Subzz Customer Portal — Styles
+ * My Subscription tab + Payment Update page.
+ * Matches checkout design language (blue #3498db, 12px radius, 0 2px 12px shadow).
+ *
+ * @since 2.0.0
+ */
+
+/* ── Base ──────────────────────────────────────────────────────── */
+.subzz-portal,
+.subzz-payment-update {
+    max-width: 800px;
+    margin: 0 auto;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+    color: #333;
+}
+
+/* ── Tabs ──────────────────────────────────────────────────────── */
+.portal-tabs {
+    display: flex;
+    gap: 0;
+    border-bottom: 2px solid #e9ecef;
+    margin-bottom: 24px;
+}
+
+.portal-tab {
+    padding: 12px 24px;
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -2px;
+    font-size: 15px;
+    font-weight: 500;
+    color: #6c757d;
+    cursor: pointer;
+    transition: color 0.2s, border-color 0.2s;
+}
+
+.portal-tab:hover {
+    color: #3498db;
+}
+
+.portal-tab.active {
+    color: #3498db;
+    border-bottom-color: #3498db;
+}
+
+.portal-tab-content {
+    display: none;
+}
+
+.portal-tab-content.active {
+    display: block;
+}
+
+/* ── Status badges ─────────────────────────────────────────────── */
+.portal-status-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 20px;
+}
+
+.portal-status-badge {
+    display: inline-block;
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 13px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.portal-status-active {
+    background: #d4edda;
+    color: #155724;
+}
+
+.portal-status-suspended {
+    background: #fff3cd;
+    color: #856404;
+}
+
+.portal-status-completed {
+    background: #e2e3e5;
+    color: #383d41;
+}
+
+.portal-customer-name {
+    font-size: 16px;
+    font-weight: 500;
+    color: #495057;
+}
+
+/* ── Detail card ───────────────────────────────────────────────── */
+.portal-detail-card {
+    background: #fff;
+    border: 1px solid #e9ecef;
+    border-radius: 12px;
+    padding: 24px;
+    margin-bottom: 24px;
+}
+
+.portal-detail-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+}
+
+.portal-detail-item {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.portal-detail-label {
+    font-size: 13px;
+    color: #6c757d;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+
+.portal-detail-value {
+    font-size: 16px;
+    font-weight: 600;
+    color: #212529;
+}
+
+.portal-initial-payment-info {
+    margin-top: 16px;
+    padding-top: 16px;
+    border-top: 1px solid #e9ecef;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+/* ── Progress bar ──────────────────────────────────────────────── */
+.portal-progress-section {
+    margin-bottom: 24px;
+}
+
+.portal-progress-header,
+.portal-progress-footer {
+    display: flex;
+    justify-content: space-between;
+    font-size: 14px;
+    color: #6c757d;
+}
+
+.portal-progress-header {
+    margin-bottom: 8px;
+    font-weight: 500;
+}
+
+.portal-progress-footer {
+    margin-top: 8px;
+    font-size: 13px;
+}
+
+.portal-progress-bar {
+    width: 100%;
+    height: 10px;
+    background: #e9ecef;
+    border-radius: 5px;
+    overflow: hidden;
+}
+
+.portal-progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, #3498db, #2980b9);
+    border-radius: 5px;
+    transition: width 0.3s ease;
+}
+
+/* ── Contract section ──────────────────────────────────────────── */
+.portal-contract-section {
+    margin-top: 8px;
+}
+
+/* ── Invoice table ─────────────────────────────────────────────── */
+.portal-invoice-table-wrapper {
+    overflow-x: auto;
+}
+
+.portal-invoice-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.portal-invoice-table th {
+    padding: 12px 16px;
+    text-align: left;
+    font-size: 13px;
+    font-weight: 600;
+    color: #6c757d;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    border-bottom: 2px solid #e9ecef;
+}
+
+.portal-invoice-table td {
+    padding: 12px 16px;
+    font-size: 14px;
+    border-bottom: 1px solid #f1f3f5;
+    vertical-align: middle;
+}
+
+.portal-invoice-table tbody tr:hover {
+    background: #f8f9fa;
+}
+
+.portal-table-empty {
+    text-align: center;
+    color: #6c757d;
+    padding: 40px 16px !important;
+}
+
+/* ── Pagination ────────────────────────────────────────────────── */
+.portal-pagination {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    margin-top: 20px;
+}
+
+.portal-pagination-info {
+    font-size: 14px;
+    color: #6c757d;
+}
+
+/* ── Card display ──────────────────────────────────────────────── */
+.portal-card-display {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    background: #f8f9fa;
+    border: 1px solid #e9ecef;
+    border-radius: 12px;
+    padding: 20px 24px;
+    margin-bottom: 24px;
+}
+
+.portal-card-icon {
+    font-size: 14px;
+    font-weight: 700;
+    color: #3498db;
+    background: #e7f3ff;
+    padding: 8px 12px;
+    border-radius: 8px;
+    text-transform: uppercase;
+}
+
+.portal-card-details {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.portal-card-number {
+    font-size: 16px;
+    font-weight: 500;
+    letter-spacing: 2px;
+    color: #212529;
+}
+
+.portal-card-brand {
+    font-size: 13px;
+    color: #6c757d;
+}
+
+/* ── Payment actions ───────────────────────────────────────────── */
+.portal-payment-actions {
+    text-align: center;
+}
+
+.portal-help-text {
+    font-size: 13px;
+    color: #6c757d;
+    margin-top: 12px;
+}
+
+/* ── Buttons ───────────────────────────────────────────────────── */
+.portal-btn {
+    display: inline-block;
+    padding: 10px 20px;
+    font-size: 14px;
+    font-weight: 600;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    text-decoration: none;
+    transition: background 0.2s, transform 0.1s;
+    line-height: 1.4;
+}
+
+.portal-btn:active {
+    transform: scale(0.98);
+}
+
+.portal-btn-primary {
+    background: #3498db;
+    color: #fff;
+}
+
+.portal-btn-primary:hover {
+    background: #2980b9;
+}
+
+.portal-btn-primary:disabled {
+    background: #93c5e8;
+    cursor: not-allowed;
+}
+
+.portal-btn-secondary {
+    background: #f8f9fa;
+    color: #3498db;
+    border: 1px solid #3498db;
+}
+
+.portal-btn-secondary:hover {
+    background: #e7f3ff;
+}
+
+.portal-btn-sm {
+    padding: 6px 12px;
+    font-size: 13px;
+}
+
+/* ── Alerts ────────────────────────────────────────────────────── */
+.portal-alert {
+    padding: 16px 20px;
+    border-radius: 12px;
+    margin-bottom: 20px;
+}
+
+.portal-alert strong {
+    display: block;
+    margin-bottom: 6px;
+}
+
+.portal-alert p {
+    margin: 4px 0;
+    font-size: 14px;
+}
+
+.portal-alert-warning {
+    background: #fff3cd;
+    border: 1px solid #ffc107;
+    color: #856404;
+}
+
+.portal-alert-success {
+    background: #d4edda;
+    border: 1px solid #28a745;
+    color: #155724;
+}
+
+.portal-alert-error {
+    background: #f8d7da;
+    border: 1px solid #dc3545;
+    color: #721c24;
+}
+
+/* ── Empty state ───────────────────────────────────────────────── */
+.portal-empty-state {
+    text-align: center;
+    padding: 48px 20px;
+    color: #6c757d;
+}
+
+.portal-empty-state h3 {
+    font-size: 18px;
+    color: #495057;
+    margin-bottom: 8px;
+}
+
+.portal-empty-state p {
+    margin-bottom: 20px;
+}
+
+/* ── Text utilities ────────────────────────────────────────────── */
+.portal-text-muted {
+    color: #adb5bd;
+    font-size: 13px;
+}
+
+/* ── Payment Update page ───────────────────────────────────────── */
+.payment-update-container {
+    background: #fff;
+    border-radius: 12px;
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+    padding: 40px;
+    max-width: 600px;
+    margin: 40px auto;
+}
+
+.payment-update-container h2 {
+    font-size: 22px;
+    margin-bottom: 24px;
+    color: #212529;
+}
+
+.payment-update-summary {
+    background: #f8f9fa;
+    border: 1px solid #e9ecef;
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 24px;
+}
+
+.payment-update-summary .summary-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 6px 0;
+    font-size: 14px;
+}
+
+.payment-update-summary .summary-label {
+    color: #6c757d;
+}
+
+.payment-update-summary .summary-value {
+    font-weight: 600;
+    color: #212529;
+}
+
+.payment-update-form {
+    margin-top: 24px;
+}
+
+#payment-card-form {
+    min-height: 100px;
+    border: 1px solid #e9ecef;
+    border-radius: 8px;
+    padding: 16px;
+    margin-bottom: 20px;
+}
+
+.payment-update-result {
+    display: none;
+    margin-top: 16px;
+}
+
+.payment-update-back {
+    display: block;
+    text-align: center;
+    margin-top: 20px;
+    font-size: 14px;
+    color: #3498db;
+    text-decoration: none;
+}
+
+.payment-update-back:hover {
+    text-decoration: underline;
+}
+
+.payment-update-error {
+    text-align: center;
+    padding: 60px 20px;
+}
+
+.payment-update-error h2 {
+    color: #dc3545;
+    margin-bottom: 12px;
+}
+
+.payment-update-error p {
+    color: #6c757d;
+    font-size: 15px;
+}
+
+/* ── Loading spinner ───────────────────────────────────────────── */
+.portal-loading {
+    display: inline-block;
+    width: 16px;
+    height: 16px;
+    border: 2px solid #fff;
+    border-top-color: transparent;
+    border-radius: 50%;
+    animation: portal-spin 0.6s linear infinite;
+    vertical-align: middle;
+    margin-right: 6px;
+}
+
+@keyframes portal-spin {
+    to { transform: rotate(360deg); }
+}
+
+/* ── Responsive ────────────────────────────────────────────────── */
+@media (max-width: 600px) {
+    .portal-detail-grid {
+        grid-template-columns: 1fr;
+        gap: 12px;
+    }
+
+    .portal-tabs {
+        overflow-x: auto;
+    }
+
+    .portal-tab {
+        padding: 10px 16px;
+        font-size: 14px;
+        white-space: nowrap;
+    }
+
+    .portal-card-display {
+        flex-direction: column;
+        text-align: center;
+    }
+
+    .portal-invoice-table th,
+    .portal-invoice-table td {
+        padding: 8px 10px;
+        font-size: 13px;
+    }
+
+    .payment-update-container {
+        padding: 24px 16px;
+        margin: 20px 10px;
+    }
+
+    .payment-update-summary .summary-row {
+        flex-direction: column;
+        gap: 2px;
+    }
+}

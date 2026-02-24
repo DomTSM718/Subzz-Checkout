@@ -156,10 +156,9 @@ function initializeSignatureHandler() {
         const value = $(this).val().trim();
         console.log('SUBZZ SIGNATURE: Typed full name changed:', value);
         
-        // Basic validation for full name (should have at least first and last name)
-        if (value.length > 0 && value.split(' ').length < 2) {
+        // Validation: name must be at least 2 characters (single names accepted)
+        if (value.length > 0 && value.length < 2) {
             $(this).addClass('field-warning');
-            console.log('SUBZZ SIGNATURE: Warning - full name should include first and last name');
         } else {
             $(this).removeClass('field-warning');
         }
@@ -279,9 +278,10 @@ function initializeSignatureHandler() {
             return;
         }
         
-        if (typedFullName.split(' ').length < 2) {
-            console.warn('SUBZZ SIGNATURE: Validation failed - full name incomplete');
-            alert('Please enter your full name (first and last name).');
+        // Accept single names (some customers legally have one name)
+        if (typedFullName.length < 2) {
+            console.warn('SUBZZ SIGNATURE: Validation failed - name too short');
+            alert('Please enter your legal name (minimum 2 characters).');
             $('#typed-full-name').focus();
             return;
         }

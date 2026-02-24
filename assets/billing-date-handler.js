@@ -52,16 +52,38 @@
         console.log('SUBZZ BILLING DATE: Global variables validated');
         console.log('SUBZZ BILLING DATE: Reference ID:', window.subzzReferenceId);
         console.log('SUBZZ BILLING DATE: Customer Email:', window.subzzCustomerEmail);
-        
+
+        // Check if billing_day was passed from checkout page (skip Step 1)
+        var urlParams = new URLSearchParams(window.location.search);
+        var preselectedDay = urlParams.get('billing_day');
+
+        if (preselectedDay && [1, 8, 15, 22].indexOf(parseInt(preselectedDay)) !== -1) {
+            console.log('SUBZZ BILLING DATE: Pre-selected from checkout page:', preselectedDay);
+            window.SubzzContract.selectedBillingDay = parseInt(preselectedDay);
+
+            // Hide Step 1 immediately (no flash) then auto-generate contract
+            $('#step-1-billing-date').hide();
+            generateContractWithBillingDate(parseInt(preselectedDay));
+
+            // Still initialize handlers so "Change" link works as fallback
+            initializeBillingDateSelection();
+            initializeContinueButton();
+            initializeChangeBillingDate();
+
+            // Pre-check the matching radio button for "Change" flow
+            $('input[name="billing_day"][value="' + preselectedDay + '"]').prop('checked', true);
+            return;
+        }
+
         // Initialize billing date selection
         initializeBillingDateSelection();
-        
+
         // Initialize contract generation button
         initializeContinueButton();
-        
+
         // Initialize change billing date link
         initializeChangeBillingDate();
-        
+
         console.log('SUBZZ BILLING DATE: Handler initialization complete');
     });
     
@@ -288,6 +310,11 @@
         window.SubzzContract.billingInfo = data.billing_info;
         window.SubzzContract.contractGenerated = true;
         window.SubzzContract.billingDay = billingDay;
+
+        // Update variant info from AJAX response so signature handler has it
+        if (data.variant_info) {
+            window.subzzVariantInfo = data.variant_info;
+        }
         
         // Insert contract HTML
         $('#contract-text-container').html(data.contract_html);

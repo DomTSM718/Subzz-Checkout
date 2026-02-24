@@ -2,8 +2,13 @@
 /**
  * Plugin Name: Subzz Subscription Payments
  * Description: Custom subscription payment processing with contract signatures and Azure backend integration
- * Version: 1.4.0 (HYBRID Architecture Update)
+ * Version: 2.0.0 (Customer Portal + Payment Update)
  * Author: Subzz Team
+ * 
+ * LEKKAPAY INTEGRATION UPDATE (Oct 29, 2025):
+ * - Added payment success page routing (/payment-success/)
+ * - Added payment cancelled page routing (/payment-cancelled/)
+ * - Complete LekkaPay return URL support
  * 
  * HYBRID ARCHITECTURE UPDATE (Oct 19, 2025):
  * - Added billing-date-handler.js loading
@@ -21,24 +26,11 @@ register_activation_hook(__FILE__, 'subzz_activate_plugin');
 
 function subzz_activate_plugin() {
     error_log('SUBZZ DEBUG: Plugin activation started');
-    
-    // Create custom rewrite rules for contract signature page
-    add_rewrite_rule(
-        '^contract-signature/?$',
-        'index.php?subzz_contract_page=1',
-        'top'
-    );
-    
-    // Add rewrite rule for payment page
-    add_rewrite_rule(
-        '^subscription-payment/?$',
-        'index.php?subzz_payment_page=1',
-        'top'
-    );
-    
-    // Flush rewrite rules to make new URLs work
+
+    // Register all rewrite rules before flushing
+    subzz_add_rewrite_rules();
     flush_rewrite_rules();
-    
+
     error_log('SUBZZ DEBUG: Plugin activated - rewrite rules flushed');
 }
 
@@ -67,21 +59,13 @@ function subzz_init_plugin() {
     require_once plugin_dir_path(__FILE__) . 'includes/class-azure-api-client.php';
     require_once plugin_dir_path(__FILE__) . 'includes/class-payment-handler.php';
     require_once plugin_dir_path(__FILE__) . 'includes/class-contract-integration.php';
-    
+    require_once plugin_dir_path(__FILE__) . 'includes/class-customer-portal.php';
+
     // Initialize classes
     new Subzz_Payment_Handler();
     new Subzz_Contract_Integration();
-    
-    // Test Azure connection on initialization
-    error_log('SUBZZ DEBUG: Testing Azure backend connection...');
-    $azure_client = new Subzz_Azure_API_Client();
-    $connection_test = $azure_client->test_connection();
-    error_log('SUBZZ DEBUG: Azure connection test result: ' . ($connection_test ? 'SUCCESS' : 'FAILED'));
-    
-    if (!$connection_test) {
-        error_log('SUBZZ WARNING: Azure backend connection failed - signature workflow may not work');
-    }
-    
+    new Subzz_Customer_Portal();
+
     error_log('SUBZZ DEBUG: Plugin initialized successfully with Azure integration');
 }
 
@@ -89,40 +73,38 @@ function subzz_woocommerce_missing_notice() {
     echo '<div class="notice notice-error"><p><strong>Subzz Subscription Payments:</strong> WooCommerce is required and must be active.</p></div>';
 }
 
-// Add custom query vars and rewrite rules - CRITICAL FOR SIGNATURE AND PAYMENT PAGES
+// Add custom query vars and rewrite rules - CRITICAL FOR ALL PAGES
 add_action('init', 'subzz_add_rewrite_rules');
 function subzz_add_rewrite_rules() {
-    // Add rewrite rule for contract signature page
-    add_rewrite_rule(
-        '^contract-signature/?$',
-        'index.php?subzz_contract_page=1',
-        'top'
-    );
-    
-    // Add rewrite rule for payment page
-    add_rewrite_rule(
-        '^subscription-payment/?$',
-        'index.php?subzz_payment_page=1',
-        'top'
-    );
-    
-    error_log('SUBZZ DEBUG: Rewrite rules added for contract-signature and subscription-payment URLs');
+    add_rewrite_rule('^contract-signature/?$', 'index.php?subzz_contract_page=1', 'top');
+    add_rewrite_rule('^subscription-payment/?$', 'index.php?subzz_payment_page=1', 'top');
+    add_rewrite_rule('^payment-success/?$', 'index.php?subzz_payment_success=1', 'top');
+    add_rewrite_rule('^payment-cancelled/?$', 'index.php?subzz_payment_cancelled=1', 'top');
+    add_rewrite_rule('^checkout-subscription/?$', 'index.php?subzz_checkout_subscription=1', 'top');
+    add_rewrite_rule('^payment-update/?$', 'index.php?subzz_payment_update=1', 'top');
 }
 
 add_filter('query_vars', 'subzz_custom_query_vars');
 function subzz_custom_query_vars($vars) {
     $vars[] = 'subzz_contract_page';
     $vars[] = 'subzz_payment_page';
+    $vars[] = 'subzz_payment_success';
+    $vars[] = 'subzz_payment_cancelled';
+    $vars[] = 'subzz_checkout_subscription';
+    $vars[] = 'subzz_payment_update';
     return $vars;
 }
 
-// Force rewrite rules refresh for contract signature and payment pages
+// Force rewrite rules refresh for all custom pages
 add_action('init', 'subzz_ensure_rewrite_rules', 999);
 function subzz_ensure_rewrite_rules() {
-    // Check if our rules exist
     $rules = get_option('rewrite_rules');
-    if (!isset($rules['^contract-signature/?$']) || !isset($rules['^subscription-payment/?$'])) {
-        error_log('SUBZZ DEBUG: Rewrite rules missing - flushing...');
+    if (!isset($rules['^contract-signature/?$']) ||
+        !isset($rules['^subscription-payment/?$']) ||
+        !isset($rules['^payment-success/?$']) ||
+        !isset($rules['^payment-cancelled/?$']) ||
+        !isset($rules['^checkout-subscription/?$']) ||
+        !isset($rules['^payment-update/?$'])) {
         flush_rewrite_rules(false);
     }
 }
@@ -149,6 +131,216 @@ function subzz_handle_payment_page() {
         error_log('SUBZZ PAYMENT PAGE ERROR: Template file not found at ' . $template_path);
         wp_die('Payment page template not found. Please contact support.');
     }
+}
+
+// Handle payment success page routing (LekkaPay return URL)
+add_action('template_redirect', 'subzz_handle_success_page');
+function subzz_handle_success_page() {
+    global $wp;
+    
+    // Check if this is the payment success URL
+    if (!isset($wp->request) || $wp->request !== 'payment-success') {
+        return;
+    }
+    
+    error_log('=== SUBZZ PAYMENT SUCCESS PAGE: Request received ===');
+    
+    // Log any parameters received from LekkaPay
+    if (!empty($_GET)) {
+        error_log('SUBZZ PAYMENT SUCCESS: URL parameters: ' . print_r($_GET, true));
+    }
+    
+    // Load the payment success template
+    $template_path = plugin_dir_path(__FILE__) . 'templates/payment-success.php';
+    
+    if (file_exists($template_path)) {
+        include $template_path;
+        exit;
+    } else {
+        error_log('SUBZZ PAYMENT SUCCESS ERROR: Template file not found at ' . $template_path);
+        wp_die('Payment success page template not found. Please contact support.');
+    }
+}
+
+// Handle payment cancelled page routing (LekkaPay cancel URL)
+add_action('template_redirect', 'subzz_handle_cancelled_page');
+function subzz_handle_cancelled_page() {
+    global $wp;
+    
+    // Check if this is the payment cancelled URL
+    if (!isset($wp->request) || $wp->request !== 'payment-cancelled') {
+        return;
+    }
+    
+    error_log('=== SUBZZ PAYMENT CANCELLED PAGE: Request received ===');
+    
+    // Log any parameters received from LekkaPay
+    if (!empty($_GET)) {
+        error_log('SUBZZ PAYMENT CANCELLED: URL parameters: ' . print_r($_GET, true));
+    }
+    
+    // Load the payment cancelled template
+    $template_path = plugin_dir_path(__FILE__) . 'templates/payment-cancelled.php';
+    
+    if (file_exists($template_path)) {
+        include $template_path;
+        exit;
+    } else {
+        error_log('SUBZZ PAYMENT CANCELLED ERROR: Template file not found at ' . $template_path);
+        wp_die('Payment cancelled page template not found. Please contact support.');
+    }
+}
+
+// Handle checkout subscription page routing
+add_action('template_redirect', 'subzz_handle_checkout_subscription_page');
+function subzz_handle_checkout_subscription_page() {
+    global $wp;
+
+    if (!isset($wp->request) || $wp->request !== 'checkout-subscription') {
+        return;
+    }
+
+    error_log('=== SUBZZ CHECKOUT SUBSCRIPTION: Request received ===');
+
+    // Require login
+    if (!is_user_logged_in()) {
+        error_log('SUBZZ CHECKOUT SUBSCRIPTION: User not logged in - redirecting to login');
+        wp_redirect(wp_login_url(home_url('/checkout-subscription/')));
+        exit;
+    }
+
+    // Require WooCommerce cart with subscription product
+    if (!class_exists('WooCommerce') || !WC()->cart || WC()->cart->is_empty()) {
+        error_log('SUBZZ CHECKOUT SUBSCRIPTION: Cart empty - redirecting to cart');
+        wp_redirect(wc_get_cart_url());
+        exit;
+    }
+
+    // Check for subscription product in cart
+    $has_subscription = false;
+    foreach (WC()->cart->get_cart() as $cart_item) {
+        $subscription_enabled = get_post_meta($cart_item['product_id'], '_subzz_subscription_enabled', true);
+        if ($subscription_enabled === 'yes') {
+            $has_subscription = true;
+            break;
+        }
+    }
+
+    if (!$has_subscription) {
+        error_log('SUBZZ CHECKOUT SUBSCRIPTION: No subscription product in cart - redirecting to normal checkout');
+        wp_redirect(wc_get_checkout_url());
+        exit;
+    }
+
+    // Enqueue checkout subscription assets
+    add_action('wp_enqueue_scripts', 'subzz_enqueue_checkout_subscription_assets', 1);
+
+    $template_path = plugin_dir_path(__FILE__) . 'templates/checkout-subscription.php';
+    if (file_exists($template_path)) {
+        include $template_path;
+        exit;
+    } else {
+        error_log('SUBZZ CHECKOUT SUBSCRIPTION ERROR: Template not found');
+        wp_die('Checkout page template not found. Please contact support.');
+    }
+}
+
+// Handle payment update page routing (standalone page, no login required)
+add_action('template_redirect', 'subzz_handle_payment_update_page');
+function subzz_handle_payment_update_page() {
+    global $wp;
+
+    if (!isset($wp->request) || $wp->request !== 'payment-update') {
+        return;
+    }
+
+    error_log('=== SUBZZ PAYMENT UPDATE: Request received ===');
+
+    // Enqueue payment update assets
+    add_action('wp_enqueue_scripts', 'subzz_enqueue_payment_update_assets', 1);
+
+    $template_path = plugin_dir_path(__FILE__) . 'templates/payment-update.php';
+    if (file_exists($template_path)) {
+        include $template_path;
+        exit;
+    } else {
+        error_log('SUBZZ PAYMENT UPDATE ERROR: Template not found');
+        wp_die('Payment update page template not found. Please contact support.');
+    }
+}
+
+function subzz_enqueue_payment_update_assets() {
+    $plugin_url = plugin_dir_url(__FILE__);
+
+    wp_enqueue_style(
+        'subzz-customer-portal',
+        $plugin_url . 'assets/css/customer-portal.css',
+        array(),
+        '2.0.0'
+    );
+
+    wp_enqueue_script(
+        'subzz-payment-update',
+        $plugin_url . 'assets/js/payment-update.js',
+        array('jquery'),
+        '2.0.0',
+        true
+    );
+
+    wp_localize_script('subzz-payment-update', 'subzzPaymentUpdate', array(
+        'apiUrl' => defined('SUBZZ_AZURE_API_URL') ? SUBZZ_AZURE_API_URL : 'http://localhost:5000/api',
+    ));
+}
+
+// Enqueue portal assets on My Account pages
+add_action('wp_enqueue_scripts', 'subzz_enqueue_portal_assets');
+function subzz_enqueue_portal_assets() {
+    // Only load on My Account pages
+    if (!is_account_page()) {
+        return;
+    }
+
+    $plugin_url = plugin_dir_url(__FILE__);
+
+    wp_enqueue_style(
+        'subzz-customer-portal',
+        $plugin_url . 'assets/css/customer-portal.css',
+        array(),
+        '2.0.0'
+    );
+
+    wp_enqueue_script(
+        'subzz-customer-portal',
+        $plugin_url . 'assets/js/customer-portal.js',
+        array('jquery'),
+        '2.0.0',
+        true
+    );
+
+    wp_localize_script('subzz-customer-portal', 'subzzPortal', array(
+        'ajaxurl' => admin_url('admin-ajax.php'),
+        'nonce' => wp_create_nonce('subzz_portal_nonce'),
+        'paymentUpdateUrl' => home_url('/payment-update/'),
+    ));
+}
+
+function subzz_enqueue_checkout_subscription_assets() {
+    $plugin_url = plugin_dir_url(dirname(__FILE__) . '/../subzz-subscription-payments.php');
+
+    wp_enqueue_style(
+        'subzz-checkout-plans',
+        $plugin_url . 'assets/css/checkout-plans.css',
+        array(),
+        '2.0.0'
+    );
+
+    wp_enqueue_script(
+        'subzz-checkout-plans',
+        $plugin_url . 'assets/js/checkout-plans.js',
+        array('jquery'),
+        '2.0.0',
+        true
+    );
 }
 
 // UPDATED: Force load signature assets EARLY - before wp_die() can interrupt
@@ -187,256 +379,76 @@ function subzz_force_load_signature_assets_early() {
     // Force enqueue the assets immediately
     add_action('wp_enqueue_scripts', 'subzz_enqueue_signature_assets_now', 1);
     
-    // Also load them right now for wp_die() scenarios
-    subzz_enqueue_signature_assets_now();
-}
-
-// ========================================================================
-// HYBRID ARCHITECTURE UPDATE: Asset loading function
-// Updated to load billing-date-handler.js before signature-handler.js
-// ========================================================================
-function subzz_enqueue_signature_assets_now() {
-    error_log('SUBZZ DEBUG: Actually enqueuing signature assets now (HYBRID architecture)');
-    
-    // Check if signature-pad.min.js file exists
-    $signature_pad_path = plugin_dir_path(__FILE__) . 'assets/signature-pad.min.js';
-    if (!file_exists($signature_pad_path)) {
-        error_log('SUBZZ WARNING: signature-pad.min.js not found at: ' . $signature_pad_path);
-    }
-    
-    // ========================================================================
-    // STEP 1: Load signature pad library
-    // ========================================================================
-    if (file_exists($signature_pad_path)) {
+    function subzz_enqueue_signature_assets_now() {
+        error_log('SUBZZ DEBUG: Enqueuing signature assets NOW (HYBRID: billing-date-handler.js + signature-handler.js)');
+        
+        $plugin_url = plugin_dir_url(__FILE__);
+        
+        // Enqueue contract styles
+        wp_enqueue_style(
+            'subzz-contract-styles',
+            $plugin_url . 'assets/contract-styles.css',
+            array(),
+            '1.4.0'
+        );
+        error_log('SUBZZ DEBUG: contract-styles.css enqueued');
+        
+        // Step 1: Billing date selection (HYBRID architecture)
         wp_enqueue_script(
-            'signature-pad', 
-            plugin_dir_url(__FILE__) . 'assets/signature-pad.min.js', 
-            array(), 
-            '4.1.7', 
+            'subzz-billing-date-handler',
+            $plugin_url . 'assets/billing-date-handler.js',
+            array('jquery'),
+            '1.4.0',
             true
         );
-        error_log('SUBZZ DEBUG: Loading signature-pad from local file');
-    } else {
-        // Fallback to CDN
+        error_log('SUBZZ DEBUG: billing-date-handler.js enqueued (HYBRID Step 1)');
+        
+        // Step 2 & 3: Signature handling (depends on billing date completion)
         wp_enqueue_script(
-            'signature-pad', 
-            'https://cdn.jsdelivr.net/npm/signature_pad@4.1.7/dist/signature_pad.umd.min.js', 
-            array(), 
-            '4.1.7', 
+            'subzz-signature-handler',
+            $plugin_url . 'assets/signature-handler.js',
+            array('jquery', 'subzz-billing-date-handler'), // CRITICAL: Depends on billing handler
+            '1.4.0',
             true
         );
-        error_log('SUBZZ DEBUG: Using CDN for signature-pad.min.js');
-    }
-    
-    // ========================================================================
-    // STEP 2: Load billing date handler (HYBRID ARCHITECTURE - NEW)
-    // This must load BEFORE signature-handler.js
-    // ========================================================================
-    wp_enqueue_script(
-        'subzz-billing-date', 
-        plugin_dir_url(__FILE__) . 'assets/billing-date-handler.js', 
-        array('jquery'),  // Only depends on jQuery
-        '1.0.0', 
-        true
-    );
-    error_log('SUBZZ DEBUG: Loading billing-date-handler.js (HYBRID architecture - Step 1)');
-    
-    // ========================================================================
-    // STEP 3: Load signature handler (depends on billing date handler)
-    // HYBRID ARCHITECTURE UPDATE: Added 'subzz-billing-date' dependency
-    // ========================================================================
-    wp_enqueue_script(
-        'subzz-signature', 
-        plugin_dir_url(__FILE__) . 'assets/signature-handler.js', 
-        array('signature-pad', 'jquery', 'subzz-billing-date'),  // Added billing-date dependency
-        '1.0.2',  // Version bump to indicate HYBRID architecture update
-        true
-    );
-    error_log('SUBZZ DEBUG: Loading signature-handler.js with billing-date dependency (HYBRID architecture - Steps 2 & 3)');
-    
-    // ========================================================================
-    // STEP 4: Load CSS
-    // ========================================================================
-    wp_enqueue_style(
-        'subzz-contract', 
-        plugin_dir_url(__FILE__) . 'assets/contract-styles.css', 
-        array(), 
-        '1.0.1'
-    );
-    
-    error_log('SUBZZ DEBUG: All signature page assets enqueued successfully (HYBRID architecture)');
-    error_log('SUBZZ DEBUG: Load order: signature-pad → billing-date-handler → signature-handler → CSS');
-    
-    // Debug file paths
-    error_log('SUBZZ DEBUG: CSS file URL: ' . plugin_dir_url(__FILE__) . 'assets/contract-styles.css');
-    error_log('SUBZZ DEBUG: Billing date JS URL: ' . plugin_dir_url(__FILE__) . 'assets/billing-date-handler.js');
-    error_log('SUBZZ DEBUG: Signature JS URL: ' . plugin_dir_url(__FILE__) . 'assets/signature-handler.js');
-}
-
-// Handle checkout return with signature completion - NEW FUNCTIONALITY
-add_action('template_redirect', 'subzz_handle_signature_return');
-function subzz_handle_signature_return() {
-    // Check if this is a return from signature page
-    if (!isset($_GET['subzz_signature_complete']) || !is_checkout()) {
-        return;
-    }
-    
-    $reference_id = sanitize_text_field($_GET['reference_id'] ?? '');
-    $signature_confirmed = sanitize_text_field($_GET['signature_confirmed'] ?? '');
-    
-    if ($reference_id && $signature_confirmed === 'yes') {
-        error_log('SUBZZ DEBUG: Customer returned from signature page - Reference ID: ' . $reference_id);
+        error_log('SUBZZ DEBUG: signature-handler.js enqueued (HYBRID Steps 2 & 3, depends on billing handler)');
         
-        // Add success notice to checkout
-        wc_add_notice(
-            'Contract signed successfully! Please complete your payment below to activate your subscription.',
-            'success'
-        );
-        
-        // Store signature completion in session for potential LekkaPay integration
-        if (!session_id()) {
-            session_start();
+        // Signature Pad library
+        $signature_pad_path = plugin_dir_path(__FILE__) . 'assets/signature-pad.min.js';
+        if (file_exists($signature_pad_path)) {
+            wp_enqueue_script(
+                'signature-pad',
+                $plugin_url . 'assets/signature-pad.min.js',
+                array(),
+                '4.1.7',
+                true
+            );
+            error_log('SUBZZ DEBUG: signature-pad.min.js enqueued from local file');
+        } else {
+            wp_enqueue_script(
+                'signature-pad',
+                'https://cdn.jsdelivr.net/npm/signature_pad@4.1.7/dist/signature_pad.umd.min.js',
+                array(),
+                '4.1.7',
+                true
+            );
+            error_log('SUBZZ DEBUG: signature-pad.min.js enqueued from CDN (local file not found)');
         }
-        $_SESSION['subzz_signature_completed'] = true;
-        $_SESSION['subzz_reference_id'] = $reference_id;
         
-        error_log('SUBZZ DEBUG: Signature completion confirmed - ready for payment processing');
+        // Localize script with AJAX URL
+        wp_localize_script('subzz-signature-handler', 'subzzAjax', array(
+            'ajaxurl' => admin_url('admin-ajax.php'),
+            'nonce' => wp_create_nonce('subzz_signature_nonce')
+        ));
+        error_log('SUBZZ DEBUG: AJAX configuration localized for signature handler');
     }
 }
 
-// ENHANCED: Add custom checkout fields for comprehensive data collection
-add_action('woocommerce_after_checkout_billing_form', 'add_subzz_checkout_fields');
-function add_subzz_checkout_fields($checkout) {
-    echo '<div id="subzz_additional_fields"><h3>' . __('Additional Information') . '</h3>';
+// NOTE: Contract signature page is handled by Subzz_Contract_Integration class
+// See includes/class-contract-integration.php -> handle_contract_signature_page()
 
-    // ID Number field for South African customers
-    woocommerce_form_field('billing_id_number', array(
-        'type' => 'text',
-        'class' => array('form-row-wide'),
-        'label' => __('South African ID Number'),
-        'placeholder' => __('13-digit ID number (optional)'),
-        'required' => false, // Optional - can be filled during contract signing
-        'custom_attributes' => array(
-            'pattern' => '[0-9]{13}',
-            'maxlength' => '13'
-        )
-    ), $checkout->get_value('billing_id_number'));
-
-    echo '</div>';
-
-    // Add some styling to make it look professional
-    echo '<style>
-        #subzz_additional_fields {
-            margin-top: 20px;
-            padding-top: 20px;
-            border-top: 1px solid #e0e0e0;
-        }
-        #subzz_additional_fields h3 {
-            margin-bottom: 15px;
-            color: #333;
-            font-size: 18px;
-        }
-        #billing_id_number_field {
-            margin-bottom: 15px;
-        }
-        #billing_id_number_field label {
-            font-weight: 500;
-        }
-        #billing_id_number {
-            font-family: monospace;
-            letter-spacing: 1px;
-        }
-    </style>';
-}
-
-// ENHANCED: Save custom checkout fields
-add_action('woocommerce_checkout_update_order_meta', 'save_subzz_checkout_fields');
-function save_subzz_checkout_fields($order_id) {
-    if (!empty($_POST['billing_id_number'])) {
-        update_post_meta($order_id, '_billing_id_number', sanitize_text_field($_POST['billing_id_number']));
-        error_log('SUBZZ CHECKOUT: Saved ID number for order ' . $order_id);
-    }
-}
-
-// ENHANCED: Display custom fields in admin order page
-add_action('woocommerce_admin_order_data_after_billing_address', 'display_subzz_admin_order_meta', 10, 1);
-function display_subzz_admin_order_meta($order) {
-    $id_number = $order->get_meta('_billing_id_number');
-    if ($id_number) {
-        echo '<p><strong>' . __('ID Number') . ':</strong> ' . esc_html($id_number) . '</p>';
-    }
-}
-
-// ENHANCED: Extract comprehensive customer data from WooCommerce order
-function extract_customer_data_from_wc_order($order) {
-    error_log('SUBZZ CONTRACT: Extracting customer data from WooCommerce order');
-    
-    $customer_data = array(
-        'email' => $order->get_billing_email(),
-        'first_name' => $order->get_billing_first_name(),
-        'last_name' => $order->get_billing_last_name(),
-        'phone_number' => $order->get_billing_phone(),
-        'id_number' => '', // Will be filled from meta or during signature
-        
-        // Billing address
-        'billing_address' => trim($order->get_billing_address_1() . (!empty($order->get_billing_address_2()) ? ', ' . $order->get_billing_address_2() : '')),
-        'city' => $order->get_billing_city(),
-        'province' => $order->get_billing_state(),
-        'postal_code' => $order->get_billing_postcode(),
-        
-        // Delivery address (formatted)
-        'delivery_address' => format_delivery_address($order),
-        
-        // Additional fields for contract
-        'country' => $order->get_billing_country() ?: 'South Africa',
-        'company' => $order->get_billing_company() ?: ''
-    );
-
-    // Try to get ID number from custom checkout fields if available
-    $id_number_meta = $order->get_meta('_billing_id_number');
-    if (!empty($id_number_meta)) {
-        $customer_data['id_number'] = $id_number_meta;
-        error_log('SUBZZ CONTRACT: Found ID number in order meta: ' . $id_number_meta);
-    }
-
-    error_log('SUBZZ CONTRACT: Customer data extracted - Name: ' . $customer_data['first_name'] . ' ' . $customer_data['last_name']);
-    error_log('SUBZZ CONTRACT: Customer email: ' . $customer_data['email']);
-    error_log('SUBZZ CONTRACT: Customer phone: ' . $customer_data['phone_number']);
-
-    return $customer_data;
-}
-
-// ENHANCED: Format delivery address for contract
-function format_delivery_address($order) {
-    $address_parts = array();
-    
-    // Use shipping address if different from billing
-    if ($order->get_shipping_address_1()) {
-        $address_parts[] = $order->get_shipping_address_1();
-        if ($order->get_shipping_address_2()) {
-            $address_parts[] = $order->get_shipping_address_2();
-        }
-        $address_parts[] = $order->get_shipping_city();
-        $address_parts[] = $order->get_shipping_state();
-        $address_parts[] = $order->get_shipping_postcode();
-    } else {
-        // Fallback to billing address
-        $address_parts[] = $order->get_billing_address_1();
-        if ($order->get_billing_address_2()) {
-            $address_parts[] = $order->get_billing_address_2();
-        }
-        $address_parts[] = $order->get_billing_city();
-        $address_parts[] = $order->get_billing_state();
-        $address_parts[] = $order->get_billing_postcode();
-    }
-    
-    // Filter out empty parts and join
-    $address_parts = array_filter($address_parts);
-    return implode(', ', $address_parts);
-}
-
-// Debug function to check if our URLs are working
-add_action('wp', 'subzz_debug_url_handling');
+// Debug URL handling
+add_action('template_redirect', 'subzz_debug_url_handling');
 function subzz_debug_url_handling() {
     global $wp;
     
@@ -448,12 +460,28 @@ function subzz_debug_url_handling() {
         error_log('SUBZZ DEBUG: Subscription payment URL matched - WordPress routing working');
     }
     
+    if (isset($wp->request) && $wp->request === 'payment-success') {
+        error_log('SUBZZ DEBUG: Payment success URL matched - WordPress routing working');
+    }
+    
+    if (isset($wp->request) && $wp->request === 'payment-cancelled') {
+        error_log('SUBZZ DEBUG: Payment cancelled URL matched - WordPress routing working');
+    }
+    
     if (get_query_var('subzz_contract_page')) {
         error_log('SUBZZ DEBUG: Contract page query var detected - rewrite rules working');
     }
     
     if (get_query_var('subzz_payment_page')) {
         error_log('SUBZZ DEBUG: Payment page query var detected - rewrite rules working');
+    }
+    
+    if (get_query_var('subzz_payment_success')) {
+        error_log('SUBZZ DEBUG: Payment success query var detected - rewrite rules working');
+    }
+    
+    if (get_query_var('subzz_payment_cancelled')) {
+        error_log('SUBZZ DEBUG: Payment cancelled query var detected - rewrite rules working');
     }
 }
 
@@ -510,9 +538,35 @@ function subzz_settings_page() {
         echo '</p></div>';
     }
     
+    if (isset($_POST['test_lekkapay_pages'])) {
+        // Check if LekkaPay return page templates exist
+        $plugin_path = plugin_dir_path(__FILE__);
+        $success_exists = file_exists($plugin_path . 'templates/payment-success.php');
+        $cancelled_exists = file_exists($plugin_path . 'templates/payment-cancelled.php');
+        
+        echo '<div class="notice notice-info"><p>';
+        echo '<strong>LekkaPay Return Pages Check:</strong><br>';
+        echo 'payment-success.php template: ' . ($success_exists ? '✅ Found' : '❌ Missing') . '<br>';
+        echo 'payment-cancelled.php template: ' . ($cancelled_exists ? '✅ Found' : '❌ Missing') . '<br>';
+        echo '</p></div>';
+    }
+    
     ?>
     <div class="wrap">
         <h1>Subzz Subscription Settings</h1>
+        
+        <h2>LekkaPay Integration Status</h2>
+        <div style="background: #d4edda; border-left: 4px solid #28a745; padding: 15px; margin: 20px 0;">
+            <p><strong>✅ LekkaPay Integration Complete</strong></p>
+            <p>Version 1.5.0 with full payment success/cancel page routing.</p>
+            <ul style="margin-left: 20px;">
+                <li>✅ Payment session creation via Azure API</li>
+                <li>✅ Redirect to LekkaPay hosted checkout</li>
+                <li>✅ Success page routing (/payment-success/)</li>
+                <li>✅ Cancel page routing (/payment-cancelled/)</li>
+                <li>✅ Retry payment functionality</li>
+            </ul>
+        </div>
         
         <h2>HYBRID Architecture Status</h2>
         <div style="background: #e7f3ff; border-left: 4px solid #007bff; padding: 15px; margin: 20px 0;">
@@ -530,11 +584,17 @@ function subzz_settings_page() {
             <p>Test if pages and assets are properly set up:</p>
             <input type="submit" name="test_signature_page" value="Check Signature Page Assets" class="button-primary">
             <input type="submit" name="test_payment_page" value="Check Payment Page Template" class="button-primary">
+            <input type="submit" name="test_lekkapay_pages" value="Check LekkaPay Return Pages" class="button-primary">
         </form>
         
-        <p>Contract signature page URL: <a href="<?php echo home_url('/contract-signature/'); ?>" target="_blank"><?php echo home_url('/contract-signature/'); ?></a></p>
-        <p>Payment page URL: <a href="<?php echo home_url('/subscription-payment/'); ?>" target="_blank"><?php echo home_url('/subscription-payment/'); ?></a></p>
-        <p><small>Note: Pages should show "Missing contract token" or "Missing required parameters" error with proper styling if working correctly</small></p>
+        <h3>Page URLs (Click to Test)</h3>
+        <ul style="margin-left: 20px;">
+            <li>Contract signature page: <a href="<?php echo home_url('/contract-signature/'); ?>" target="_blank"><?php echo home_url('/contract-signature/'); ?></a></li>
+            <li>Payment page: <a href="<?php echo home_url('/subscription-payment/'); ?>" target="_blank"><?php echo home_url('/subscription-payment/'); ?></a></li>
+            <li><strong>Payment success page: <a href="<?php echo home_url('/payment-success/'); ?>" target="_blank"><?php echo home_url('/payment-success/'); ?></a></strong> (NEW)</li>
+            <li><strong>Payment cancelled page: <a href="<?php echo home_url('/payment-cancelled/'); ?>" target="_blank"><?php echo home_url('/payment-cancelled/'); ?></a></strong> (NEW)</li>
+        </ul>
+        <p><small>Note: Signature/payment pages should show appropriate error messages with styling if working correctly. Success/cancel pages should display properly formatted pages.</small></p>
         
         <h2>URL Testing & Fixes</h2>
         <form method="post">
@@ -563,6 +623,7 @@ function subzz_settings_page() {
             <li>✅ Contract Generation: Enhanced with checkout data</li>
             <li>✅ Signature Processing: Enhanced with customer email lookup</li>
             <li>✅ HYBRID Architecture: Active (Separated billing date and signature logic)</li>
+            <li>✅ LekkaPay Integration: Complete (Payment processing with return URLs)</li>
         </ul>
         
         <?php
@@ -570,18 +631,37 @@ function subzz_settings_page() {
         $rules = get_option('rewrite_rules');
         $signature_rule_active = isset($rules['^contract-signature/?$']);
         $payment_rule_active = isset($rules['^subscription-payment/?$']);
+        $success_rule_active = isset($rules['^payment-success/?$']);
+        $cancelled_rule_active = isset($rules['^payment-cancelled/?$']);
+        
+        echo '<h2>Rewrite Rules Status</h2>';
+        echo '<ul>';
         
         if ($signature_rule_active) {
-            echo '<p style="color: green;">✅ Contract signature URL rule is active</p>';
+            echo '<li style="color: green;">✅ Contract signature URL rule is active</li>';
         } else {
-            echo '<p style="color: red;">❌ Contract signature URL rule is missing - click "Fix Page URLs" above</p>';
+            echo '<li style="color: red;">❌ Contract signature URL rule is missing - click "Fix Page URLs" above</li>';
         }
         
         if ($payment_rule_active) {
-            echo '<p style="color: green;">✅ Payment page URL rule is active</p>';
+            echo '<li style="color: green;">✅ Payment page URL rule is active</li>';
         } else {
-            echo '<p style="color: red;">❌ Payment page URL rule is missing - click "Fix Page URLs" above</p>';
+            echo '<li style="color: red;">❌ Payment page URL rule is missing - click "Fix Page URLs" above</li>';
         }
+        
+        if ($success_rule_active) {
+            echo '<li style="color: green;">✅ Payment success URL rule is active</li>';
+        } else {
+            echo '<li style="color: red;">❌ Payment success URL rule is missing - click "Fix Page URLs" above</li>';
+        }
+        
+        if ($cancelled_rule_active) {
+            echo '<li style="color: green;">✅ Payment cancelled URL rule is active</li>';
+        } else {
+            echo '<li style="color: red;">❌ Payment cancelled URL rule is missing - click "Fix Page URLs" above</li>';
+        }
+        
+        echo '</ul>';
         
         // Show plugin directory information
         echo '<h2>Plugin Directory Information</h2>';
@@ -589,7 +669,7 @@ function subzz_settings_page() {
         echo '<p><strong>Plugin URL:</strong> ' . plugin_dir_url(__FILE__) . '</p>';
         echo '<p><strong>Assets Directory:</strong> ' . plugin_dir_path(__FILE__) . 'assets/</p>';
         echo '<p><strong>Templates Directory:</strong> ' . plugin_dir_path(__FILE__) . 'templates/</p>';
-        echo '<p><strong>Version:</strong> 1.4.0 (HYBRID Architecture - Enhanced with separated billing date selection)</p>';
+        echo '<p><strong>Version:</strong> 1.5.0 (LekkaPay Integration Complete with HYBRID Architecture)</p>';
         ?>
     </div>
     <?php

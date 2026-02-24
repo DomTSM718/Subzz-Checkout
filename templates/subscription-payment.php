@@ -115,58 +115,67 @@ if (empty($error_message) && $azure_client && $order_data) {
     }
 }
 
-// PHASE 5A INTEGRATION: Create mock payment session that redirects to our mock gateway
+// LEKKAPAY INTEGRATION: Create real payment session via Azure API
 $payment_session_data = null;
 if (empty($error_message) && $signature_verified && $order_data) {
-    error_log('SUBZZ PAYMENT PAGE: Creating mock payment session for testing');
-    
-    // Extract order total
+    error_log('SUBZZ PAYMENT PAGE: Creating LekkaPay payment session');
+
+    // Determine payment amount: initial payment if present, otherwise monthly
+    $initial_payment = isset($_GET['initial_payment']) ? floatval($_GET['initial_payment']) : 0;
+    if ($initial_payment <= 0 && isset($order_data['initial_payment_amount'])) {
+        $initial_payment = floatval($order_data['initial_payment_amount']);
+    }
+
     $total_amount = $order_data['order_totals']['total'] ?? '0';
     $currency = $order_data['order_totals']['currency'] ?? 'ZAR';
-    
-    // ENHANCED: Use comprehensive customer data
-    error_log('SUBZZ PAYMENT PAGE: Using customer email for payment session: ' . $customer_data['email']);
-    
-    // PHASE 5A INTEGRATION: Create mock payment session that redirects to our mock gateway
-    // Instead of calling Azure API, create mock session data locally
-    $mock_session_id = 'mock_session_' . substr(md5($reference_id . time()), 0, 16);
-    
-    error_log('SUBZZ MOCK INTEGRATION: Creating mock payment session locally');
-    error_log('SUBZZ MOCK INTEGRATION: Session ID: ' . $mock_session_id);
-    error_log('SUBZZ MOCK INTEGRATION: Reference ID: ' . $reference_id);
-    error_log('SUBZZ MOCK INTEGRATION: Amount: ' . $currency . ' ' . $total_amount);
-    
-    // FIXED: Build URL properly using http_build_query to avoid encoding issues
-    $mock_checkout_url = home_url('/mock-gateway/') . '?' . http_build_query(array(
-        'session' => $mock_session_id,              // FIXED: 'session' (not 'session_id')
-        'amount' => $total_amount,                  // CORRECT: 'amount'
-        'customer' => $customer_data['full_name'],  // FIXED: 'customer' (not 'customer_name')
-        'reference_id' => $reference_id,            // CORRECT: 'reference_id'
-        'currency' => $currency                     // CORRECT: 'currency'
+
+    // If initial payment > 0, charge that amount first (not the monthly)
+    $payment_amount = ($initial_payment > 0) ? $initial_payment : $total_amount;
+
+    error_log('SUBZZ PAYMENT PAGE: Customer email: ' . $customer_data['email']);
+    error_log('SUBZZ PAYMENT PAGE: Customer name: ' . $customer_data['full_name']);
+    error_log('SUBZZ PAYMENT PAGE: Payment amount: ' . $currency . ' ' . $payment_amount . ' (initial_payment=' . $initial_payment . ', order_total=' . $total_amount . ')');
+    error_log('SUBZZ PAYMENT PAGE: Reference ID: ' . $reference_id);
+
+    // Call Azure API to create LekkaPay session
+    $lekkapay_response = $azure_client->create_lekkapay_session(array(
+        'orderReferenceId' => $reference_id,
+        'customerEmail' => $customer_data['email'],
+        'customerName' => $customer_data['full_name'],
+        'amount' => $payment_amount,
+        'currency' => $currency
     ));
     
-    $payment_session_data = array(
-        'success' => true,
-        'sessionId' => $mock_session_id,
-        'checkoutUrl' => $mock_checkout_url,  // Store the raw URL
-        'amount' => $total_amount,
-        'currency' => $currency,
-        'expiresAt' => date('Y-m-d H:i:s', strtotime('+1 hour'))
-    );
-    
-    error_log('SUBZZ MOCK INTEGRATION: Mock session created successfully');
-    error_log('SUBZZ MOCK INTEGRATION: Updated Checkout URL: ' . $payment_session_data['checkoutUrl']);
-    
-    // Store session info in WooCommerce order meta (same as before)
-    if (isset($order_data['woocommerce_order_id'])) {
-        $wc_order = wc_get_order($order_data['woocommerce_order_id']);
-        if ($wc_order) {
-            $wc_order->update_meta_data('_subzz_payment_session_id', $payment_session_data['sessionId']);
-            $wc_order->update_meta_data('_subzz_payment_status', 'pending');
-            $wc_order->update_meta_data('_subzz_order_status', 'payment_pending');
-            $wc_order->save();
-            error_log('SUBZZ MOCK INTEGRATION: Updated WooCommerce order with mock payment session');
+    if ($lekkapay_response && isset($lekkapay_response['sessionId'])) {
+        error_log('SUBZZ LEKKAPAY SUCCESS: Session created successfully');
+        error_log('SUBZZ LEKKAPAY SUCCESS: Session ID: ' . $lekkapay_response['sessionId']);
+        error_log('SUBZZ LEKKAPAY SUCCESS: Checkout URL: ' . $lekkapay_response['checkoutUrl']);
+        
+        $payment_session_data = array(
+            'success' => true,
+            'sessionId' => $lekkapay_response['sessionId'],
+            'checkoutUrl' => $lekkapay_response['checkoutUrl'],
+            'amount' => $total_amount,
+            'currency' => $currency,
+            'expiresAt' => $lekkapay_response['expiresAt'] ?? date('Y-m-d H:i:s', strtotime('+1 hour'))
+        );
+        
+        // Store session info in WooCommerce order meta
+        if (isset($order_data['woocommerce_order_id'])) {
+            $wc_order = wc_get_order($order_data['woocommerce_order_id']);
+            if ($wc_order) {
+                $wc_order->update_meta_data('_subzz_payment_session_id', $payment_session_data['sessionId']);
+                $wc_order->update_meta_data('_subzz_payment_status', 'pending');
+                $wc_order->update_meta_data('_subzz_payment_provider', 'lekkapay');
+                $wc_order->update_meta_data('_subzz_order_status', 'payment_pending');
+                $wc_order->save();
+                error_log('SUBZZ LEKKAPAY: Updated WooCommerce order with LekkaPay session');
+            }
         }
+    } else {
+        error_log('SUBZZ LEKKAPAY ERROR: Failed to create payment session');
+        $error_message = 'Unable to create payment session. Please try again or contact support.';
+        $payment_session_data = null;
     }
 }
 
@@ -229,174 +238,307 @@ function extract_customer_data_from_order($order_data) {
 ?>
 
 <style>
-/* Reuse styles from contract signature page */
+/* ── Subzz Payment Page — Matches checkout & contract design system ─── */
+/* Uses .btn-primary/.btn-secondary to avoid WordPress theme conflicts */
 .subzz-payment-page {
-    max-width: 800px;
+    max-width: 900px;
     margin: 40px auto;
     padding: 0 20px;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+    color: #2d3748;
 }
 
+/* ── Progress indicator (shared with checkout & contract) ── */
+.checkout-progress {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0;
+    margin-bottom: 36px;
+}
+
+.progress-step {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+}
+
+.step-dot {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: #dee2e6;
+    color: #fff;
+    font-weight: 700;
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.3s;
+}
+
+.progress-step.active .step-dot {
+    background: #3498db;
+}
+
+.progress-step.done .step-dot {
+    background: #27ae60;
+}
+
+.step-label {
+    font-size: 12px;
+    color: #6c757d;
+    font-weight: 500;
+}
+
+.progress-step.active .step-label {
+    color: #3498db;
+    font-weight: 600;
+}
+
+.progress-step.done .step-label {
+    color: #27ae60;
+    font-weight: 600;
+}
+
+.progress-line {
+    width: 48px;
+    height: 3px;
+    background: #dee2e6;
+    margin: 0 4px;
+    margin-bottom: 20px;
+}
+
+.progress-line.done {
+    background: #27ae60;
+}
+
+/* ── Page header ── */
 .payment-header {
     text-align: center;
-    margin-bottom: 40px;
+    margin-bottom: 32px;
 }
 
-.progress-indicator {
-    margin-top: 20px;
-    color: #666;
-    font-size: 14px;
+.payment-header h1 {
+    font-size: 28px;
+    font-weight: 700;
+    color: #1a202c;
+    margin-bottom: 24px;
 }
 
+/* ── Content card ── */
 .payment-content {
     background: white;
-    border-radius: 8px;
-    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-    padding: 30px;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    padding: 32px;
 }
 
+/* ── Order summary ── */
 .order-summary {
-    margin-bottom: 30px;
+    margin-bottom: 24px;
 }
 
 .order-summary h2 {
-    color: #333;
-    margin-bottom: 20px;
-    font-size: 24px;
+    color: #1a202c;
+    margin-bottom: 16px;
+    font-size: 20px;
+    font-weight: 600;
 }
 
 .order-details {
-    background: #f9f9f9;
-    border-radius: 6px;
+    background: #fafbfc;
+    border: 1px solid #eee;
+    border-radius: 8px;
     padding: 20px;
-    margin-bottom: 20px;
 }
 
 .order-item {
     display: flex;
     justify-content: space-between;
-    margin-bottom: 10px;
-    padding-bottom: 10px;
-    border-bottom: 1px solid #e0e0e0;
+    align-items: center;
+    padding: 10px 0;
+    border-bottom: 1px solid #eee;
+    font-size: 15px;
 }
 
 .order-item:last-child {
     border-bottom: none;
-    margin-bottom: 0;
+}
+
+.order-item span {
+    color: #4a5568;
+}
+
+.order-item strong {
+    color: #1a202c;
 }
 
 .order-total {
-    font-size: 20px;
-    font-weight: bold;
-    color: #333;
-    margin-top: 20px;
-    padding-top: 20px;
-    border-top: 2px solid #333;
+    font-size: 18px;
+    font-weight: 700;
+    color: #1a202c;
+    border-top: 2px solid #dee2e6;
+    padding-top: 12px;
+    margin-top: 4px;
 }
 
+/* ── Buttons (theme-safe) ── */
+.btn-primary {
+    display: inline-block;
+    padding: 14px 28px;
+    font-size: 16px;
+    font-weight: 700;
+    text-align: center;
+    text-decoration: none;
+    border: none;
+    border-radius: 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+    background: linear-gradient(135deg, #3498db 0%, #2980b9 100%);
+    color: #fff;
+}
+
+.btn-primary:hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(52, 152, 219, 0.3);
+}
+
+.btn-secondary {
+    display: inline-block;
+    padding: 10px 20px;
+    font-size: 14px;
+    font-weight: 600;
+    text-align: center;
+    text-decoration: none;
+    border: 2px solid #3498db;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s;
+    background: #fff;
+    color: #3498db;
+}
+
+.btn-secondary:hover {
+    background: #3498db;
+    color: #fff;
+}
+
+/* ── Action area ── */
 .payment-action {
     text-align: center;
-    margin-top: 30px;
+    margin-top: 28px;
 }
 
-.button {
-    display: inline-block;
-    padding: 12px 30px;
-    text-decoration: none;
-    border-radius: 5px;
-    font-weight: 500;
-    transition: all 0.3s;
-    border: none;
-    cursor: pointer;
-    font-size: 16px;
+.payment-action .btn-primary,
+.payment-action .btn-secondary {
+    margin: 6px 8px;
 }
 
-.button.primary {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    color: white;
-}
-
-.button.primary:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
-}
-
-.button.secondary {
-    background: #f0f0f0;
-    color: #333;
-    margin-right: 15px;
-}
-
+/* ── Spinner ── */
 .loading-spinner {
     display: inline-block;
-    width: 20px;
-    height: 20px;
-    border: 3px solid rgba(255,255,255,.3);
+    width: 24px;
+    height: 24px;
+    border: 3px solid #dee2e6;
     border-radius: 50%;
-    border-top-color: white;
-    animation: spin 1s ease-in-out infinite;
+    border-top-color: #3498db;
+    animation: spin 0.8s linear infinite;
+    margin: 12px auto;
 }
 
 @keyframes spin {
     to { transform: rotate(360deg); }
 }
 
+/* ── Alert boxes ── */
 .error-message {
-    background: #fee;
-    border: 1px solid #fcc;
-    border-radius: 6px;
-    padding: 20px;
+    background: #fff5f5;
+    border: 1px solid #fed7d7;
+    border-radius: 8px;
+    padding: 16px 20px;
     margin-bottom: 20px;
-    color: #c00;
+    color: #c53030;
+    font-size: 15px;
 }
 
 .success-message {
-    background: #efe;
-    border: 1px solid #cfc;
-    border-radius: 6px;
-    padding: 20px;
+    background: #f0fff4;
+    border: 1px solid #c6f6d5;
+    border-radius: 8px;
+    padding: 16px 20px;
     margin-bottom: 20px;
-    color: #060;
-}
-
-.security-info {
-    background: #f0f8ff;
-    border: 1px solid #b0d4ff;
-    border-radius: 6px;
-    padding: 15px;
-    margin-top: 20px;
-    font-size: 14px;
-    color: #666;
-}
-
-.security-info strong {
-    color: #333;
-}
-
-.status-info {
-    background: #f5f5f5;
-    border: 1px solid #ddd;
-    border-radius: 6px;
-    padding: 10px;
-    margin-bottom: 20px;
-    font-size: 12px;
-    color: #666;
+    color: #276749;
+    font-size: 15px;
 }
 
 .retry-message {
-    background: #fff3cd;
-    border: 1px solid #ffeaa7;
-    border-radius: 6px;
-    padding: 15px;
+    background: #fffbeb;
+    border: 1px solid #fef3c7;
+    border-radius: 8px;
+    padding: 16px 20px;
     margin-bottom: 20px;
-    color: #856404;
+    color: #92400e;
+    font-size: 15px;
+}
+
+.security-info {
+    background: #ebf8ff;
+    border: 1px solid #bee3f8;
+    border-radius: 8px;
+    padding: 16px 20px;
+    margin-top: 20px;
+    font-size: 14px;
+    color: #4a5568;
+}
+
+.security-info strong {
+    color: #1a202c;
+}
+
+.status-info {
+    background: #fafbfc;
+    border: 1px solid #eee;
+    border-radius: 8px;
+    padding: 10px 16px;
+    margin-bottom: 16px;
+    font-size: 12px;
+    color: #6c757d;
+}
+
+/* ── Responsive ── */
+@media (max-width: 600px) {
+    .subzz-payment-page { padding: 0 12px; }
+    .payment-content { padding: 20px 16px; }
+    .payment-header h1 { font-size: 22px; }
+    .order-item { flex-direction: column; gap: 4px; }
 }
 </style>
 
 <div class="subzz-payment-page">
     <div class="payment-header">
         <h1>Complete Your Payment</h1>
-        <div class="progress-indicator">
-            ✅ Order Details → ✅ Agreement Signed → ✅ Payment → ⭕ Complete
+        <div class="checkout-progress">
+            <div class="progress-step done">
+                <span class="step-dot">1</span>
+                <span class="step-label">Choose Plan</span>
+            </div>
+            <div class="progress-line done"></div>
+            <div class="progress-step done">
+                <span class="step-dot">2</span>
+                <span class="step-label">Contract</span>
+            </div>
+            <div class="progress-line done"></div>
+            <div class="progress-step active">
+                <span class="step-dot">3</span>
+                <span class="step-label">Payment</span>
+            </div>
+            <div class="progress-line"></div>
+            <div class="progress-step">
+                <span class="step-dot">4</span>
+                <span class="step-label">Complete</span>
+            </div>
         </div>
     </div>
 
@@ -412,11 +554,24 @@ function extract_customer_data_from_order($order_data) {
                 <strong>Error:</strong> <?php echo esc_html($error_message); ?>
             </div>
             <div class="payment-action">
-                <a href="<?php echo esc_url(wc_get_checkout_url()); ?>" class="button secondary">
+                <a href="<?php echo esc_url(wc_get_checkout_url()); ?>" class="btn-secondary">
                     ← Return to Checkout
                 </a>
                 <?php if (!empty($reference_id)): ?>
-                <a href="<?php echo esc_url(home_url('/contract-signature/?token=' . base64_encode(json_encode(['reference_id' => $reference_id, 'customer_email' => $customer_data['email'] ?? '', 'issued_at' => time(), 'expires_at' => time() + 1800])))); ?>" class="button primary">
+                <?php
+                // CHK-001: Use signed JWT for re-sign link (same as generate_jwt_token in payment handler)
+                require_once dirname(dirname(__FILE__)) . '/includes/vendor/firebase/php-jwt/src/JWT.php';
+                $resign_secret = defined('SUBZZ_CHECKOUT_JWT_SECRET') ? SUBZZ_CHECKOUT_JWT_SECRET : wp_salt('auth');
+                $resign_token = \Firebase\JWT\JWT::encode(array(
+                    'iss' => home_url(),
+                    'iat' => time(),
+                    'exp' => time() + 1800,
+                    'reference_id' => $reference_id,
+                    'customer_email' => $customer_data['email'] ?? '',
+                    'purpose' => 'contract_signature'
+                ), $resign_secret, 'HS256');
+                ?>
+                <a href="<?php echo esc_url(home_url('/contract-signature/?token=' . $resign_token)); ?>" class="btn-primary">
                     Re-sign Contract
                 </a>
                 <?php endif; ?>
@@ -424,7 +579,7 @@ function extract_customer_data_from_order($order_data) {
         <?php elseif ($payment_session_data && isset($payment_session_data['success']) && $payment_session_data['success']): ?>
             <!-- Payment session created successfully -->
             <div class="success-message">
-                <strong>✅ Your contract has been signed successfully!</strong>
+                <strong>Your contract has been signed successfully!</strong>
             </div>
             
             <?php if (isset($order_data['order_status'])): ?>
@@ -475,49 +630,79 @@ function extract_customer_data_from_order($order_data) {
                         </div>
                     <?php endforeach; ?>
                     
+                    <?php if ($initial_payment > 0): ?>
+                    <div class="order-item">
+                        <span><strong>Initial Payment (charged now):</strong></span>
+                        <strong><?php echo esc_html($currency); ?> <?php echo number_format($initial_payment, 2); ?></strong>
+                    </div>
+                    <?php
+                    $selected_term = isset($order_data['selected_term_months']) ? intval($order_data['selected_term_months']) : 0;
+                    $reduced = isset($order_data['reduced_monthly_amount']) ? floatval($order_data['reduced_monthly_amount']) : 0;
+                    if ($selected_term && $reduced): ?>
+                    <div class="order-item">
+                        <span>Then <?php echo $selected_term; ?> monthly payments of:</span>
+                        <strong><?php echo esc_html($currency); ?> <?php echo number_format($reduced, 2); ?></strong>
+                    </div>
+                    <?php endif; ?>
+                    <?php else: ?>
                     <div class="order-total order-item">
                         <span>Total Monthly Payment:</span>
-                        <strong><?php echo esc_html($order_data['order_totals']['currency'] ?? 'ZAR'); ?> <?php echo number_format((float)($order_data['order_totals']['total'] ?? 0), 2); ?></strong>
+                        <strong><?php echo esc_html($currency); ?> <?php echo number_format((float)($total_amount), 2); ?></strong>
                     </div>
+                    <?php endif; ?>
                 </div>
             </div>
             
             <div class="security-info">
-                🔒 <strong>Testing Payment Gateway:</strong> You will be redirected to our testing payment gateway where you can simulate payment success or failure for development purposes.
+                <strong>Secure Payment:</strong> You will be redirected to our secure payment provider to complete your payment.
             </div>
             
             <div class="payment-action" id="payment-redirect">
-                <p>Redirecting to testing payment gateway...</p>
+                <p>Redirecting to secure payment gateway...</p>
                 <div class="loading-spinner"></div>
                 
-                <?php 
+                <?php
                 // FIXED: Store the URL in a JavaScript variable to avoid encoding issues
                 $checkout_url_raw = $payment_session_data['checkoutUrl'] ?? '';
+
+                // CHK-003: Validate checkout URL domain against allowlist
+                $allowed_csv = defined('SUBZZ_LEKKAPAY_ALLOWED_DOMAINS') ? SUBZZ_LEKKAPAY_ALLOWED_DOMAINS : '';
+                $allowed_domains = array_filter(array_map('trim', explode(',', $allowed_csv)));
+                $parsed_checkout = parse_url($checkout_url_raw);
+                $checkout_domain = $parsed_checkout['host'] ?? '';
+
+                if (empty($allowed_domains) || !in_array($checkout_domain, $allowed_domains, true)) {
+                    error_log('SUBZZ SECURITY: Blocked redirect to untrusted domain: ' . $checkout_domain);
+                    ?>
+                    <div class="payment-error" style="color: #dc3545; padding: 20px; text-align: center;">
+                        <p><strong>Payment gateway error.</strong> Please contact support.</p>
+                    </div>
+                    <?php
+                } else {
                 ?>
                 <script>
                     // Auto-redirect after 2 seconds
                     (function() {
-                        // Store the raw URL in a JavaScript variable
                         var checkoutUrl = <?php echo json_encode($checkout_url_raw); ?>;
-                        
-                        console.log('SUBZZ PAYMENT: Redirecting to mock payment gateway');
-                        console.log('SUBZZ PAYMENT: Checkout URL:', checkoutUrl);
-                        
+
+                        console.log('SUBZZ PAYMENT: Redirecting to payment gateway');
+
                         setTimeout(function() {
                             window.location.href = checkoutUrl;
                         }, 2000);
                     })();
                 </script>
-                
+
                 <noscript>
-                    <a href="<?php echo esc_url($checkout_url_raw); ?>" class="button primary">
-                        Continue to Payment →
+                    <a href="<?php echo esc_url($checkout_url_raw); ?>" class="btn-primary">
+                        Continue to Payment &rarr;
                     </a>
                 </noscript>
+                <?php } ?>
                 
                 <!-- Manual trigger for testing -->
                 <div style="margin-top: 20px;">
-                    <a href="<?php echo esc_url($checkout_url_raw); ?>" class="button secondary">
+                    <a href="<?php echo esc_url($checkout_url_raw); ?>" class="btn-secondary">
                         Continue Manually →
                     </a>
                 </div>

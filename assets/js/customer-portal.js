@@ -10,6 +10,13 @@
 (function($) {
     'use strict';
 
+    // Guard against multiple initializations
+    if (window._subzzPortalInitialized) {
+        console.warn('SUBZZ PORTAL: Already initialized, skipping');
+        return;
+    }
+    window._subzzPortalInitialized = true;
+
     $(document).ready(function() {
         initTabs();
         initInvoicePagination();

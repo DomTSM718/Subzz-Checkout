@@ -25,6 +25,26 @@ if (!defined('ABSPATH')) exit;
         </div>
     <?php else : ?>
 
+        <?php if (count($subscriptions) > 1) : ?>
+            <!-- Subscription Selector -->
+            <div class="portal-subscription-selector">
+                <label for="subscription-select">Viewing subscription:</label>
+                <select id="subscription-select" onchange="window.location.href=this.value;">
+                    <?php foreach ($subscriptions as $sub) : ?>
+                        <option value="<?php echo esc_url(wc_get_account_endpoint_url('my-subscription') . '?sid=' . $sub['subscriptionId'] . '&tab=' . $active_tab); ?>"
+                            <?php echo ($sub['subscriptionId'] === $subscription['subscriptionId']) ? 'selected' : ''; ?>>
+                            <?php
+                                $label = !empty($sub['productName']) ? $sub['productName'] : 'Subscription';
+                                $label .= ' — ' . $sub['termLength'] . 'mo';
+                                $label .= ' (' . ucfirst($sub['status']) . ')';
+                                echo esc_html($label);
+                            ?>
+                        </option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+        <?php endif; ?>
+
         <!-- Tab Navigation -->
         <div class="portal-tabs">
             <button class="portal-tab <?php echo $active_tab === 'overview' ? 'active' : ''; ?>" data-tab="overview">Overview</button>
@@ -56,7 +76,7 @@ if (!defined('ABSPATH')) exit;
                 <div class="portal-detail-grid">
                     <div class="portal-detail-item">
                         <span class="portal-detail-label">Monthly Amount</span>
-                        <span class="portal-detail-value"><?php echo esc_html($subscription['currency']); ?> <?php echo number_format($subscription['monthlyAmount'], 2); ?></span>
+                        <span class="portal-detail-value"><?php echo esc_html($subscription['currency']); ?> <?php echo number_format(ceil($subscription['monthlyAmount']), 0); ?></span>
                     </div>
                     <div class="portal-detail-item">
                         <span class="portal-detail-label">Next Billing Date</span>
@@ -76,9 +96,9 @@ if (!defined('ABSPATH')) exit;
                     <div class="portal-initial-payment-info">
                         <span class="portal-detail-label">Initial Payment</span>
                         <span class="portal-detail-value">
-                            <?php echo esc_html($subscription['currency']); ?> <?php echo number_format($subscription['initialPaymentAmount'], 2); ?>
-                            (monthly reduced from <?php echo esc_html($subscription['currency']); ?> <?php echo number_format($subscription['standardMonthlyAmount'], 2); ?>
-                            to <?php echo esc_html($subscription['currency']); ?> <?php echo number_format($subscription['reducedMonthlyAmount'], 2); ?>)
+                            <?php echo esc_html($subscription['currency']); ?> <?php echo number_format(ceil($subscription['initialPaymentAmount']), 0); ?>
+                            (monthly reduced from <?php echo esc_html($subscription['currency']); ?> <?php echo number_format(ceil($subscription['standardMonthlyAmount']), 0); ?>
+                            to <?php echo esc_html($subscription['currency']); ?> <?php echo number_format(ceil($subscription['reducedMonthlyAmount']), 0); ?>)
                         </span>
                     </div>
                 <?php endif; ?>

@@ -25,7 +25,7 @@ class Subzz_Azure_API_Client {
             : 'http://localhost:5000/api';
         $this->api_timeout = 30;
 
-        error_log('=== SUBZZ AZURE CLIENT: Initialized with URL: ' . $this->azure_base_url . ' ===');
+        subzz_log('=== SUBZZ AZURE CLIENT: Initialized with URL: ' . $this->azure_base_url . ' ===');
     }
 
     /**
@@ -41,45 +41,60 @@ class Subzz_Azure_API_Client {
         if (defined('SUBZZ_AZURE_API_KEY') && !empty(SUBZZ_AZURE_API_KEY)) {
             $headers['X-Subzz-API-Key'] = SUBZZ_AZURE_API_KEY;
         } else {
-            error_log('SUBZZ SECURITY WARNING: SUBZZ_AZURE_API_KEY not defined in wp-config.php');
+            subzz_log('SUBZZ SECURITY WARNING: SUBZZ_AZURE_API_KEY not defined in wp-config.php');
         }
 
         return $headers;
+    }
+
+    /**
+     * Get default request args for wp_remote_get/post.
+     * Includes timeout, headers, and SSL bypass for LocalWP.
+     */
+    private function get_default_request_args($extra = array()) {
+        $args = array(
+            'timeout' => $this->api_timeout,
+            'headers' => $this->get_default_headers(),
+        );
+        // LocalWP cURL has SSL handshake issues — disable verification for local dev
+        if (defined('WP_LOCAL_DEV') && WP_LOCAL_DEV) {
+            $args['sslverify'] = false;
+        }
+        return array_merge($args, $extra);
     }
     
     /**
      * Test Azure backend connection - ENHANCED CONNECTION LOGGING
      */
     public function test_connection() {
-        error_log('SUBZZ AZURE TEST: Testing backend connection to ' . $this->azure_base_url);
+        subzz_log('SUBZZ AZURE TEST: Testing backend connection to ' . $this->azure_base_url);
         
         $test_endpoint = $this->azure_base_url . '/contract/generate';
         
         // Test with minimal request to check if server is running
-        $response = wp_remote_post($test_endpoint, array(
+        $response = wp_remote_post($test_endpoint, $this->get_default_request_args(array(
             'timeout' => 5,
-            'headers' => $this->get_default_headers(),
             'body' => wp_json_encode(array()) // Empty body to test connection only
-        ));
+        )));
         
         if (is_wp_error($response)) {
-            error_log('SUBZZ AZURE ERROR: Connection failed - ' . $response->get_error_message());
-            error_log('SUBZZ AZURE ERROR: Is your Azure backend running on localhost:5000?');
+            subzz_log('SUBZZ AZURE ERROR: Connection failed - ' . $response->get_error_message());
+            subzz_log('SUBZZ AZURE ERROR: Is your Azure backend running on localhost:5000?');
             return false;
         }
         
         $response_code = wp_remote_retrieve_response_code($response);
         $response_message = wp_remote_retrieve_response_message($response);
         
-        error_log('SUBZZ AZURE TEST: Response code: ' . $response_code . ' (' . $response_message . ')');
+        subzz_log('SUBZZ AZURE TEST: Response code: ' . $response_code . ' (' . $response_message . ')');
         
         // Any server response (200, 400, 500) means backend is running
         $connection_ok = in_array($response_code, [200, 400, 500]);
         
         if ($connection_ok) {
-            error_log('SUBZZ AZURE SUCCESS: Backend connection confirmed - server is running');
+            subzz_log('SUBZZ AZURE SUCCESS: Backend connection confirmed - server is running');
         } else {
-            error_log('SUBZZ AZURE ERROR: Unexpected response code - backend may not be running properly');
+            subzz_log('SUBZZ AZURE ERROR: Unexpected response code - backend may not be running properly');
         }
         
         return $connection_ok;
@@ -93,37 +108,34 @@ class Subzz_Azure_API_Client {
      * @return array|false Affordability data or false on failure
      */
     public function get_affordability($email) {
-        error_log('=== SUBZZ AZURE API: GET AFFORDABILITY REQUEST ===');
+        subzz_log('=== SUBZZ AZURE API: GET AFFORDABILITY REQUEST ===');
 
         $endpoint = $this->azure_base_url . '/customer/lead/affordability?' . http_build_query(array('email' => $email));
-        error_log('SUBZZ AZURE REQUEST: GET ' . $endpoint);
+        subzz_log('SUBZZ AZURE REQUEST: GET ' . $endpoint);
 
-        $response = wp_remote_get($endpoint, array(
-            'timeout' => $this->api_timeout,
-            'headers' => $this->get_default_headers()
-        ));
+        $response = wp_remote_get($endpoint, $this->get_default_request_args());
 
         if (is_wp_error($response)) {
-            error_log('SUBZZ AZURE ERROR: Affordability request failed - ' . $response->get_error_message());
+            subzz_log('SUBZZ AZURE ERROR: Affordability request failed - ' . $response->get_error_message());
             return false;
         }
 
         $response_code = wp_remote_retrieve_response_code($response);
         $response_body = wp_remote_retrieve_body($response);
 
-        error_log('SUBZZ AZURE RESPONSE: HTTP ' . $response_code);
+        subzz_log('SUBZZ AZURE RESPONSE: HTTP ' . $response_code);
 
         if ($response_code === 200) {
             $data = json_decode($response_body, true);
             if ($data === null) {
-                error_log('SUBZZ AZURE ERROR: Affordability JSON decode failed');
+                subzz_log('SUBZZ AZURE ERROR: Affordability JSON decode failed');
                 return false;
             }
-            error_log('SUBZZ AZURE SUCCESS: Affordability data retrieved');
+            subzz_log('SUBZZ AZURE SUCCESS: Affordability data retrieved');
             return $data['data'] ?? $data;
         }
 
-        error_log('SUBZZ AZURE ERROR: Affordability failed with HTTP ' . $response_code . ' - ' . $response_body);
+        subzz_log('SUBZZ AZURE ERROR: Affordability failed with HTTP ' . $response_code . ' - ' . $response_body);
         return false;
     }
 
@@ -136,41 +148,38 @@ class Subzz_Azure_API_Client {
      * @return array|false Plan cards data or false on failure
      */
     public function get_plan_cards($email, $price) {
-        error_log('=== SUBZZ AZURE API: GET PLAN CARDS REQUEST ===');
+        subzz_log('=== SUBZZ AZURE API: GET PLAN CARDS REQUEST ===');
 
         $endpoint = $this->azure_base_url . '/customer/lead/affordability/plan-cards?' . http_build_query(array(
             'email' => $email,
             'productPriceInclVat' => $price
         ));
-        error_log('SUBZZ AZURE REQUEST: GET ' . $endpoint);
+        subzz_log('SUBZZ AZURE REQUEST: GET ' . $endpoint);
 
-        $response = wp_remote_get($endpoint, array(
-            'timeout' => $this->api_timeout,
-            'headers' => $this->get_default_headers()
-        ));
+        $response = wp_remote_get($endpoint, $this->get_default_request_args());
 
         if (is_wp_error($response)) {
-            error_log('SUBZZ AZURE ERROR: Plan cards request failed - ' . $response->get_error_message());
+            subzz_log('SUBZZ AZURE ERROR: Plan cards request failed - ' . $response->get_error_message());
             return false;
         }
 
         $response_code = wp_remote_retrieve_response_code($response);
         $response_body = wp_remote_retrieve_body($response);
 
-        error_log('SUBZZ AZURE RESPONSE: HTTP ' . $response_code);
+        subzz_log('SUBZZ AZURE RESPONSE: HTTP ' . $response_code);
 
         if ($response_code === 200) {
             $data = json_decode($response_body, true);
             if ($data === null) {
-                error_log('SUBZZ AZURE ERROR: Plan cards JSON decode failed');
+                subzz_log('SUBZZ AZURE ERROR: Plan cards JSON decode failed');
                 return false;
             }
             $inner = $data['data'] ?? $data;
-            error_log('SUBZZ AZURE SUCCESS: Plan cards retrieved - ' . count($inner['planCards']['cards'] ?? []) . ' cards');
+            subzz_log('SUBZZ AZURE SUCCESS: Plan cards retrieved - ' . count($inner['planCards']['cards'] ?? []) . ' cards');
             return $inner;
         }
 
-        error_log('SUBZZ AZURE ERROR: Plan cards failed with HTTP ' . $response_code . ' - ' . $response_body);
+        subzz_log('SUBZZ AZURE ERROR: Plan cards failed with HTTP ' . $response_code . ' - ' . $response_body);
         return false;
     }
 
@@ -178,20 +187,20 @@ class Subzz_Azure_API_Client {
      * Store order data - COMPREHENSIVE REQUEST/RESPONSE LOGGING
      */
     public function store_order_data($order_data) {
-        error_log('=== SUBZZ AZURE API: STORE ORDER DATA REQUEST ===');
+        subzz_log('=== SUBZZ AZURE API: STORE ORDER DATA REQUEST ===');
         
         // Log request details
         $endpoint = $this->azure_base_url . '/order/store';
-        error_log('SUBZZ AZURE REQUEST: POST ' . $endpoint);
-        error_log('SUBZZ AZURE REQUEST: Timeout: ' . $this->api_timeout . ' seconds');
+        subzz_log('SUBZZ AZURE REQUEST: POST ' . $endpoint);
+        subzz_log('SUBZZ AZURE REQUEST: Timeout: ' . $this->api_timeout . ' seconds');
         
         // Log order data structure being sent
-        error_log('SUBZZ AZURE REQUEST DATA: Order structure keys: ' . implode(', ', array_keys($order_data)));
-        error_log('SUBZZ AZURE REQUEST DATA: WooCommerce Order ID: ' . ($order_data['woocommerce_order_id'] ?? 'missing'));
-        error_log('SUBZZ AZURE REQUEST DATA: Customer email: ' . ($order_data['customer_email'] ?? 'missing'));
-        error_log('SUBZZ AZURE REQUEST DATA: Customer name: ' . ($order_data['customer_data']['first_name'] ?? '') . ' ' . ($order_data['customer_data']['last_name'] ?? ''));
-        error_log('SUBZZ AZURE REQUEST DATA: Order total: ' . ($order_data['order_totals']['currency'] ?? '') . ' ' . ($order_data['order_totals']['total'] ?? ''));
-        error_log('SUBZZ AZURE REQUEST DATA: Items count: ' . (isset($order_data['order_items']) ? count($order_data['order_items']) : 0));
+        subzz_log('SUBZZ AZURE REQUEST DATA: Order structure keys: ' . implode(', ', array_keys($order_data)));
+        subzz_log('SUBZZ AZURE REQUEST DATA: WooCommerce Order ID: ' . ($order_data['woocommerce_order_id'] ?? 'missing'));
+        subzz_log('SUBZZ AZURE REQUEST DATA: Customer email: ' . ($order_data['customer_email'] ?? 'missing'));
+        subzz_log('SUBZZ AZURE REQUEST DATA: Customer name: ' . ($order_data['customer_data']['first_name'] ?? '') . ' ' . ($order_data['customer_data']['last_name'] ?? ''));
+        subzz_log('SUBZZ AZURE REQUEST DATA: Order total: ' . ($order_data['order_totals']['currency'] ?? '') . ' ' . ($order_data['order_totals']['total'] ?? ''));
+        subzz_log('SUBZZ AZURE REQUEST DATA: Items count: ' . (isset($order_data['order_items']) ? count($order_data['order_items']) : 0));
         
         // Count subscription vs regular items
         $subscription_items = 0;
@@ -199,37 +208,35 @@ class Subzz_Azure_API_Client {
             foreach ($order_data['order_items'] as $item) {
                 if (isset($item['is_subscription']) && $item['is_subscription']) {
                     $subscription_items++;
-                    error_log('SUBZZ AZURE REQUEST DATA: Subscription item - ' . $item['name'] . ' (ID: ' . $item['product_id'] . ')');
+                    subzz_log('SUBZZ AZURE REQUEST DATA: Subscription item - ' . $item['name'] . ' (ID: ' . $item['product_id'] . ')');
                 }
             }
         }
-        error_log('SUBZZ AZURE REQUEST DATA: Subscription items: ' . $subscription_items);
+        subzz_log('SUBZZ AZURE REQUEST DATA: Subscription items: ' . $subscription_items);
         
         // Log complete payload size
         $json_payload = wp_json_encode($order_data);
-        error_log('SUBZZ AZURE REQUEST DATA: JSON payload size: ' . strlen($json_payload) . ' bytes');
+        subzz_log('SUBZZ AZURE REQUEST DATA: JSON payload size: ' . strlen($json_payload) . ' bytes');
         
         // Make API request
         $start_time = microtime(true);
-        error_log('SUBZZ AZURE API: Sending request to Azure backend...');
+        subzz_log('SUBZZ AZURE API: Sending request to Azure backend...');
         
-        $response = wp_remote_post($endpoint, array(
-            'timeout' => $this->api_timeout,
-            'headers' => $this->get_default_headers(),
+        $response = wp_remote_post($endpoint, $this->get_default_request_args(array(
             'body' => $json_payload
-        ));
+        )));
 
         $end_time = microtime(true);
         $request_duration = round(($end_time - $start_time) * 1000, 2); // Convert to milliseconds
 
-        error_log('SUBZZ AZURE API: Request completed in ' . $request_duration . 'ms');
+        subzz_log('SUBZZ AZURE API: Request completed in ' . $request_duration . 'ms');
 
         // Handle request errors
         if (is_wp_error($response)) {
-            error_log('SUBZZ AZURE ERROR: HTTP request failed');
-            error_log('SUBZZ AZURE ERROR: Error code: ' . $response->get_error_code());
-            error_log('SUBZZ AZURE ERROR: Error message: ' . $response->get_error_message());
-            error_log('SUBZZ AZURE ERROR: Is Azure backend running on localhost:5000?');
+            subzz_log('SUBZZ AZURE ERROR: HTTP request failed');
+            subzz_log('SUBZZ AZURE ERROR: Error code: ' . $response->get_error_code());
+            subzz_log('SUBZZ AZURE ERROR: Error message: ' . $response->get_error_message());
+            subzz_log('SUBZZ AZURE ERROR: Is Azure backend running on localhost:5000?');
             return false;
         }
         
@@ -238,35 +245,35 @@ class Subzz_Azure_API_Client {
         $response_message = wp_remote_retrieve_response_message($response);
         $response_body = wp_remote_retrieve_body($response);
         
-        error_log('SUBZZ AZURE RESPONSE: HTTP ' . $response_code . ' (' . $response_message . ')');
-        error_log('SUBZZ AZURE RESPONSE: Body length: ' . strlen($response_body) . ' bytes');
-        error_log('SUBZZ AZURE RESPONSE: Body content: ' . $response_body);
+        subzz_log('SUBZZ AZURE RESPONSE: HTTP ' . $response_code . ' (' . $response_message . ')');
+        subzz_log('SUBZZ AZURE RESPONSE: Body length: ' . strlen($response_body) . ' bytes');
+        subzz_log('SUBZZ AZURE RESPONSE: Body content: ' . $response_body);
         
         // Process successful response
         if ($response_code === 200) {
             $response_data = json_decode($response_body, true);
             
             if ($response_data === null) {
-                error_log('SUBZZ AZURE ERROR: Response JSON decode failed - ' . json_last_error_msg());
+                subzz_log('SUBZZ AZURE ERROR: Response JSON decode failed - ' . json_last_error_msg());
                 return false;
             }
             
-            error_log('SUBZZ AZURE RESPONSE: Decoded data keys: ' . implode(', ', array_keys($response_data)));
+            subzz_log('SUBZZ AZURE RESPONSE: Decoded data keys: ' . implode(', ', array_keys($response_data)));
             
             $reference_id = $response_data['referenceId'] ?? false;
             
             if ($reference_id) {
-                error_log('SUBZZ AZURE SUCCESS: Order stored successfully');
-                error_log('SUBZZ AZURE SUCCESS: Reference ID: ' . $reference_id);
-                error_log('SUBZZ AZURE SUCCESS: Total processing time: ' . $request_duration . 'ms');
+                subzz_log('SUBZZ AZURE SUCCESS: Order stored successfully');
+                subzz_log('SUBZZ AZURE SUCCESS: Reference ID: ' . $reference_id);
+                subzz_log('SUBZZ AZURE SUCCESS: Total processing time: ' . $request_duration . 'ms');
                 return $reference_id;
             } else {
-                error_log('SUBZZ AZURE ERROR: Response missing referenceId field');
+                subzz_log('SUBZZ AZURE ERROR: Response missing referenceId field');
                 return false;
             }
         } else {
-            error_log('SUBZZ AZURE ERROR: Store order failed with HTTP ' . $response_code);
-            error_log('SUBZZ AZURE ERROR: Response body: ' . $response_body);
+            subzz_log('SUBZZ AZURE ERROR: Store order failed with HTTP ' . $response_code);
+            subzz_log('SUBZZ AZURE ERROR: Response body: ' . $response_body);
             return false;
         }
     }
@@ -275,31 +282,28 @@ class Subzz_Azure_API_Client {
      * Retrieve order data - COMPREHENSIVE REQUEST/RESPONSE LOGGING
      */
     public function retrieve_order_data($reference_id) {
-        error_log('=== SUBZZ AZURE API: RETRIEVE ORDER DATA REQUEST ===');
+        subzz_log('=== SUBZZ AZURE API: RETRIEVE ORDER DATA REQUEST ===');
         
         // Log request details
         $endpoint = $this->azure_base_url . '/order/' . urlencode($reference_id);
-        error_log('SUBZZ AZURE REQUEST: GET ' . $endpoint);
-        error_log('SUBZZ AZURE REQUEST: Reference ID: ' . $reference_id);
+        subzz_log('SUBZZ AZURE REQUEST: GET ' . $endpoint);
+        subzz_log('SUBZZ AZURE REQUEST: Reference ID: ' . $reference_id);
         
         // Make API request
         $start_time = microtime(true);
-        error_log('SUBZZ AZURE API: Retrieving order data from Azure backend...');
+        subzz_log('SUBZZ AZURE API: Retrieving order data from Azure backend...');
         
-        $response = wp_remote_get($endpoint, array(
-            'timeout' => $this->api_timeout,
-            'headers' => $this->get_default_headers()
-        ));
-        
+        $response = wp_remote_get($endpoint, $this->get_default_request_args());
+
         $end_time = microtime(true);
         $request_duration = round(($end_time - $start_time) * 1000, 2);
-        
-        error_log('SUBZZ AZURE API: Request completed in ' . $request_duration . 'ms');
-        
+
+        subzz_log('SUBZZ AZURE API: Request completed in ' . $request_duration . 'ms');
+
         // Handle request errors
         if (is_wp_error($response)) {
-            error_log('SUBZZ AZURE ERROR: HTTP request failed');
-            error_log('SUBZZ AZURE ERROR: Error message: ' . $response->get_error_message());
+            subzz_log('SUBZZ AZURE ERROR: HTTP request failed');
+            subzz_log('SUBZZ AZURE ERROR: Error message: ' . $response->get_error_message());
             return false;
         }
         
@@ -308,24 +312,24 @@ class Subzz_Azure_API_Client {
         $response_message = wp_remote_retrieve_response_message($response);
         $response_body = wp_remote_retrieve_body($response);
         
-        error_log('SUBZZ AZURE RESPONSE: HTTP ' . $response_code . ' (' . $response_message . ')');
-        error_log('SUBZZ AZURE RESPONSE: Body length: ' . strlen($response_body) . ' bytes');
+        subzz_log('SUBZZ AZURE RESPONSE: HTTP ' . $response_code . ' (' . $response_message . ')');
+        subzz_log('SUBZZ AZURE RESPONSE: Body length: ' . strlen($response_body) . ' bytes');
         
         // Process successful response
         if ($response_code === 200) {
             $order_data = json_decode($response_body, true);
             
             if ($order_data === null) {
-                error_log('SUBZZ AZURE ERROR: Response JSON decode failed - ' . json_last_error_msg());
+                subzz_log('SUBZZ AZURE ERROR: Response JSON decode failed - ' . json_last_error_msg());
                 return false;
             }
             
             // Log retrieved order data structure
-            error_log('SUBZZ AZURE RESPONSE: Order data keys: ' . implode(', ', array_keys($order_data)));
-            error_log('SUBZZ AZURE RESPONSE: WooCommerce Order ID: ' . ($order_data['woocommerce_order_id'] ?? 'missing'));
-            error_log('SUBZZ AZURE RESPONSE: Customer email: ' . ($order_data['customer_email'] ?? 'missing'));
-            error_log('SUBZZ AZURE RESPONSE: Customer name: ' . ($order_data['customer_data']['first_name'] ?? '') . ' ' . ($order_data['customer_data']['last_name'] ?? ''));
-            error_log('SUBZZ AZURE RESPONSE: Order total: ' . ($order_data['order_totals']['currency'] ?? '') . ' ' . ($order_data['order_totals']['total'] ?? ''));
+            subzz_log('SUBZZ AZURE RESPONSE: Order data keys: ' . implode(', ', array_keys($order_data)));
+            subzz_log('SUBZZ AZURE RESPONSE: WooCommerce Order ID: ' . ($order_data['woocommerce_order_id'] ?? 'missing'));
+            subzz_log('SUBZZ AZURE RESPONSE: Customer email: ' . ($order_data['customer_email'] ?? 'missing'));
+            subzz_log('SUBZZ AZURE RESPONSE: Customer name: ' . ($order_data['customer_data']['first_name'] ?? '') . ' ' . ($order_data['customer_data']['last_name'] ?? ''));
+            subzz_log('SUBZZ AZURE RESPONSE: Order total: ' . ($order_data['order_totals']['currency'] ?? '') . ' ' . ($order_data['order_totals']['total'] ?? ''));
             
             // Log subscription items in response
             if (isset($order_data['order_items']) && is_array($order_data['order_items'])) {
@@ -333,18 +337,18 @@ class Subzz_Azure_API_Client {
                 foreach ($order_data['order_items'] as $item) {
                     if (isset($item['is_subscription']) && $item['is_subscription']) {
                         $subscription_count++;
-                        error_log('SUBZZ AZURE RESPONSE: Subscription item - ' . $item['name'] . ' (Price: ' . $item['price'] . ')');
+                        subzz_log('SUBZZ AZURE RESPONSE: Subscription item - ' . $item['name'] . ' (Price: ' . $item['price'] . ')');
                     }
                 }
-                error_log('SUBZZ AZURE RESPONSE: Total subscription items: ' . $subscription_count);
+                subzz_log('SUBZZ AZURE RESPONSE: Total subscription items: ' . $subscription_count);
             }
             
-            error_log('SUBZZ AZURE SUCCESS: Order data retrieved successfully');
-            error_log('SUBZZ AZURE SUCCESS: Total processing time: ' . $request_duration . 'ms');
+            subzz_log('SUBZZ AZURE SUCCESS: Order data retrieved successfully');
+            subzz_log('SUBZZ AZURE SUCCESS: Total processing time: ' . $request_duration . 'ms');
             return $order_data;
         } else {
-            error_log('SUBZZ AZURE ERROR: Retrieve order failed with HTTP ' . $response_code);
-            error_log('SUBZZ AZURE ERROR: Response body: ' . $response_body);
+            subzz_log('SUBZZ AZURE ERROR: Retrieve order failed with HTTP ' . $response_code);
+            subzz_log('SUBZZ AZURE ERROR: Response body: ' . $response_body);
             return false;
         }
     }
@@ -363,42 +367,42 @@ class Subzz_Azure_API_Client {
      * @return array|false Full response array with contractHtml and billing info, or false on failure
      */
     public function generate_contract($customer_email, $order_data, $reference_id = null, $billing_day = null) {
-        error_log('=== SUBZZ AZURE API: GENERATE CONTRACT REQUEST ===');
+        subzz_log('=== SUBZZ AZURE API: GENERATE CONTRACT REQUEST ===');
         
         // Log request details
         $endpoint = $this->azure_base_url . '/contract/generate';
-        error_log('SUBZZ AZURE REQUEST: POST ' . $endpoint);
-        error_log('SUBZZ AZURE REQUEST: Customer email: ' . $customer_email);
-        error_log('SUBZZ AZURE REQUEST: Order data keys: ' . implode(', ', array_keys($order_data)));
+        subzz_log('SUBZZ AZURE REQUEST: POST ' . $endpoint);
+        subzz_log('SUBZZ AZURE REQUEST: Customer email: ' . $customer_email);
+        subzz_log('SUBZZ AZURE REQUEST: Order data keys: ' . implode(', ', array_keys($order_data)));
         
         // BILLING DATE ENHANCEMENT: Log billing day if provided
         if ($billing_day !== null) {
-            error_log('SUBZZ AZURE REQUEST: Billing day provided: ' . $billing_day);
+            subzz_log('SUBZZ AZURE REQUEST: Billing day provided: ' . $billing_day);
             
             // Validate billing day
             if (!in_array($billing_day, [1, 8, 15, 22])) {
-                error_log('SUBZZ AZURE ERROR: Invalid billing day: ' . $billing_day . ' (must be 1, 8, 15, or 22)');
+                subzz_log('SUBZZ AZURE ERROR: Invalid billing day: ' . $billing_day . ' (must be 1, 8, 15, or 22)');
                 return false;
             }
         }
         
         // Log if reference ID is being used
         if (!empty($reference_id)) {
-            error_log('SUBZZ AZURE REQUEST: Order Reference ID provided: ' . $reference_id);
-            error_log('SUBZZ AZURE REQUEST: Backend will retrieve order data from database');
+            subzz_log('SUBZZ AZURE REQUEST: Order Reference ID provided: ' . $reference_id);
+            subzz_log('SUBZZ AZURE REQUEST: Backend will retrieve order data from database');
         }
         
         // Log order data that will be used in contract
         if (isset($order_data['customer_data'])) {
             $customer_name = $order_data['customer_data']['first_name'] . ' ' . $order_data['customer_data']['last_name'];
-            error_log('SUBZZ AZURE REQUEST: Contract for customer: ' . $customer_name);
+            subzz_log('SUBZZ AZURE REQUEST: Contract for customer: ' . $customer_name);
         }
         
         if (isset($order_data['order_items'])) {
             $subscription_items = array_filter($order_data['order_items'], function($item) { 
                 return isset($item['is_subscription']) && $item['is_subscription']; 
             });
-            error_log('SUBZZ AZURE REQUEST: Subscription items for contract: ' . count($subscription_items));
+            subzz_log('SUBZZ AZURE REQUEST: Subscription items for contract: ' . count($subscription_items));
         }
         
         // Extract billing address fields from order data if available
@@ -426,10 +430,10 @@ class Subzz_Azure_API_Client {
             $province = isset($billing['state']) ? $billing['state'] : '';
             $postal_code = isset($billing['postcode']) ? $billing['postcode'] : '';
             
-            error_log('SUBZZ AZURE REQUEST: Billing address found - Street: ' . $billing_address);
-            error_log('SUBZZ AZURE REQUEST: City: ' . $city . ', Province: ' . $province . ', Postal: ' . $postal_code);
+            subzz_log('SUBZZ AZURE REQUEST: Billing address found - Street: ' . $billing_address);
+            subzz_log('SUBZZ AZURE REQUEST: City: ' . $city . ', Province: ' . $province . ', Postal: ' . $postal_code);
         } else {
-            error_log('SUBZZ AZURE REQUEST: No billing address found in order data');
+            subzz_log('SUBZZ AZURE REQUEST: No billing address found in order data');
         }
         
         // Prepare request payload
@@ -441,13 +445,13 @@ class Subzz_Azure_API_Client {
         // Add reference ID if available (for backend to retrieve stored order data)
         if (!empty($reference_id)) {
             $payload['orderReferenceId'] = $reference_id;
-            error_log('SUBZZ AZURE REQUEST: Including orderReferenceId for database retrieval: ' . $reference_id);
+            subzz_log('SUBZZ AZURE REQUEST: Including orderReferenceId for database retrieval: ' . $reference_id);
         }
         
         // BILLING DATE ENHANCEMENT: Add billing day to payload
         if ($billing_day !== null) {
             $payload['billing_day_of_month'] = $billing_day;
-            error_log('SUBZZ AZURE REQUEST: Including billing_day_of_month in payload: ' . $billing_day);
+            subzz_log('SUBZZ AZURE REQUEST: Including billing_day_of_month in payload: ' . $billing_day);
         }
         
         // Add individual address fields if found
@@ -456,32 +460,30 @@ class Subzz_Azure_API_Client {
             $payload['city'] = $city;
             $payload['province'] = $province;
             $payload['postalCode'] = $postal_code;
-            error_log('SUBZZ AZURE REQUEST: Including separate address fields in payload');
+            subzz_log('SUBZZ AZURE REQUEST: Including separate address fields in payload');
         }
         
         $json_payload = wp_json_encode($payload);
-        error_log('SUBZZ AZURE REQUEST: Payload size: ' . strlen($json_payload) . ' bytes');
-        error_log('SUBZZ AZURE REQUEST: Payload keys being sent: ' . implode(', ', array_keys($payload)));
+        subzz_log('SUBZZ AZURE REQUEST: Payload size: ' . strlen($json_payload) . ' bytes');
+        subzz_log('SUBZZ AZURE REQUEST: Payload keys being sent: ' . implode(', ', array_keys($payload)));
         
         // Make API request
         $start_time = microtime(true);
-        error_log('SUBZZ AZURE API: Generating contract via Azure backend...');
+        subzz_log('SUBZZ AZURE API: Generating contract via Azure backend...');
 
-        $response = wp_remote_post($endpoint, array(
-            'timeout' => $this->api_timeout,
-            'headers' => $this->get_default_headers(),
+        $response = wp_remote_post($endpoint, $this->get_default_request_args(array(
             'body' => $json_payload
-        ));
+        )));
         
         $end_time = microtime(true);
         $request_duration = round(($end_time - $start_time) * 1000, 2);
         
-        error_log('SUBZZ AZURE API: Request completed in ' . $request_duration . 'ms');
+        subzz_log('SUBZZ AZURE API: Request completed in ' . $request_duration . 'ms');
         
         // Handle request errors
         if (is_wp_error($response)) {
-            error_log('SUBZZ AZURE ERROR: HTTP request failed');
-            error_log('SUBZZ AZURE ERROR: Error message: ' . $response->get_error_message());
+            subzz_log('SUBZZ AZURE ERROR: HTTP request failed');
+            subzz_log('SUBZZ AZURE ERROR: Error message: ' . $response->get_error_message());
             return false;
         }
         
@@ -490,63 +492,63 @@ class Subzz_Azure_API_Client {
         $response_message = wp_remote_retrieve_response_message($response);
         $response_body = wp_remote_retrieve_body($response);
         
-        error_log('SUBZZ AZURE RESPONSE: HTTP ' . $response_code . ' (' . $response_message . ')');
-        error_log('SUBZZ AZURE RESPONSE: Body length: ' . strlen($response_body) . ' bytes');
+        subzz_log('SUBZZ AZURE RESPONSE: HTTP ' . $response_code . ' (' . $response_message . ')');
+        subzz_log('SUBZZ AZURE RESPONSE: Body length: ' . strlen($response_body) . ' bytes');
         
         // Process successful response
         if ($response_code === 200) {
             $response_data = json_decode($response_body, true);
             
             if ($response_data === null) {
-                error_log('SUBZZ AZURE ERROR: Response JSON decode failed - ' . json_last_error_msg());
+                subzz_log('SUBZZ AZURE ERROR: Response JSON decode failed - ' . json_last_error_msg());
                 return false;
             }
             
-            error_log('SUBZZ AZURE RESPONSE: Decoded data keys: ' . implode(', ', array_keys($response_data)));
+            subzz_log('SUBZZ AZURE RESPONSE: Decoded data keys: ' . implode(', ', array_keys($response_data)));
             
             // Return full response object
             if (isset($response_data['contractHtml'])) {
-                error_log('SUBZZ AZURE SUCCESS: Contract generated successfully');
-                error_log('SUBZZ AZURE SUCCESS: Contract HTML length: ' . strlen($response_data['contractHtml']) . ' characters');
+                subzz_log('SUBZZ AZURE SUCCESS: Contract generated successfully');
+                subzz_log('SUBZZ AZURE SUCCESS: Contract HTML length: ' . strlen($response_data['contractHtml']) . ' characters');
                 
                 // BILLING DATE ENHANCEMENT: Log billing date information from response
                 if (isset($response_data['billing_day_of_month'])) {
-                    error_log('SUBZZ AZURE SUCCESS: Billing day of month: ' . $response_data['billing_day_of_month']);
+                    subzz_log('SUBZZ AZURE SUCCESS: Billing day of month: ' . $response_data['billing_day_of_month']);
                 }
                 if (isset($response_data['billing_day_formatted'])) {
-                    error_log('SUBZZ AZURE SUCCESS: Billing day formatted: ' . $response_data['billing_day_formatted']);
+                    subzz_log('SUBZZ AZURE SUCCESS: Billing day formatted: ' . $response_data['billing_day_formatted']);
                 }
                 if (isset($response_data['next_billing_date'])) {
-                    error_log('SUBZZ AZURE SUCCESS: Next billing date: ' . $response_data['next_billing_date']);
+                    subzz_log('SUBZZ AZURE SUCCESS: Next billing date: ' . $response_data['next_billing_date']);
                 }
                 if (isset($response_data['days_of_coverage'])) {
-                    error_log('SUBZZ AZURE SUCCESS: Days of coverage: ' . $response_data['days_of_coverage']);
+                    subzz_log('SUBZZ AZURE SUCCESS: Days of coverage: ' . $response_data['days_of_coverage']);
                 }
                 
                 // Log variant info if present
                 if (isset($response_data['variant_info'])) {
-                    error_log('SUBZZ AZURE SUCCESS: Variant info received');
-                    error_log('SUBZZ AZURE SUCCESS: Variant duration: ' . ($response_data['variant_info']['subscription_duration_months'] ?? 'not set'));
-                    error_log('SUBZZ AZURE SUCCESS: Monthly amount: ' . ($response_data['variant_info']['monthly_amount'] ?? 'not set'));
-                    error_log('SUBZZ AZURE SUCCESS: Total contract value: ' . ($response_data['variant_info']['total_contract_value'] ?? 'not set'));
+                    subzz_log('SUBZZ AZURE SUCCESS: Variant info received');
+                    subzz_log('SUBZZ AZURE SUCCESS: Variant duration: ' . ($response_data['variant_info']['subscription_duration_months'] ?? 'not set'));
+                    subzz_log('SUBZZ AZURE SUCCESS: Monthly amount: ' . ($response_data['variant_info']['monthly_amount'] ?? 'not set'));
+                    subzz_log('SUBZZ AZURE SUCCESS: Total contract value: ' . ($response_data['variant_info']['total_contract_value'] ?? 'not set'));
                 }
                 
                 // Log other response fields
                 if (isset($response_data['agreementReference'])) {
-                    error_log('SUBZZ AZURE SUCCESS: Agreement reference: ' . $response_data['agreementReference']);
+                    subzz_log('SUBZZ AZURE SUCCESS: Agreement reference: ' . $response_data['agreementReference']);
                 }
                 
-                error_log('SUBZZ AZURE SUCCESS: Total processing time: ' . $request_duration . 'ms');
+                subzz_log('SUBZZ AZURE SUCCESS: Total processing time: ' . $request_duration . 'ms');
                 
                 // RETURN FULL RESPONSE OBJECT
                 return $response_data;
             } else {
-                error_log('SUBZZ AZURE ERROR: Response missing contractHtml field');
+                subzz_log('SUBZZ AZURE ERROR: Response missing contractHtml field');
                 return false;
             }
         } else {
-            error_log('SUBZZ AZURE ERROR: Generate contract failed with HTTP ' . $response_code);
-            error_log('SUBZZ AZURE ERROR: Response body: ' . $response_body);
+            subzz_log('SUBZZ AZURE ERROR: Generate contract failed with HTTP ' . $response_code);
+            subzz_log('SUBZZ AZURE ERROR: Response body: ' . $response_body);
             return false;
         }
     }
@@ -555,22 +557,22 @@ class Subzz_Azure_API_Client {
      * Store signature - ENHANCED FOR BILLING DAY SUPPORT
      */
     public function store_signature($customer_email, $signature_data, $order_reference_id, $additional_data = array()) {
-        error_log('=== SUBZZ AZURE API: STORE SIGNATURE REQUEST ===');
+        subzz_log('=== SUBZZ AZURE API: STORE SIGNATURE REQUEST ===');
         
         // Log request details
         $endpoint = $this->azure_base_url . '/contract/sign';
-        error_log('SUBZZ AZURE REQUEST: POST ' . $endpoint);
-        error_log('SUBZZ AZURE REQUEST: Customer email: ' . $customer_email);
-        error_log('SUBZZ AZURE REQUEST: Order reference ID: ' . $order_reference_id);
-        error_log('SUBZZ AZURE REQUEST: Signature data length: ' . strlen($signature_data) . ' characters');
+        subzz_log('SUBZZ AZURE REQUEST: POST ' . $endpoint);
+        subzz_log('SUBZZ AZURE REQUEST: Customer email: ' . $customer_email);
+        subzz_log('SUBZZ AZURE REQUEST: Order reference ID: ' . $order_reference_id);
+        subzz_log('SUBZZ AZURE REQUEST: Signature data length: ' . strlen($signature_data) . ' characters');
         
         // Log additional data if provided
         if (!empty($additional_data)) {
-            error_log('SUBZZ AZURE REQUEST: Additional data keys: ' . implode(', ', array_keys($additional_data)));
+            subzz_log('SUBZZ AZURE REQUEST: Additional data keys: ' . implode(', ', array_keys($additional_data)));
             
             // BILLING DATE ENHANCEMENT: Log billing day if present
             if (isset($additional_data['billing_day_of_month'])) {
-                error_log('SUBZZ AZURE REQUEST: Billing day of month: ' . $additional_data['billing_day_of_month']);
+                subzz_log('SUBZZ AZURE REQUEST: Billing day of month: ' . $additional_data['billing_day_of_month']);
             }
         }
         
@@ -583,9 +585,9 @@ class Subzz_Azure_API_Client {
             'request_uri' => $_SERVER['REQUEST_URI'] ?? 'unknown'
         );
         
-        error_log('SUBZZ AZURE REQUEST: Client IP: ' . $metadata['ip_address']);
-        error_log('SUBZZ AZURE REQUEST: User agent: ' . substr($metadata['user_agent'], 0, 100) . '...');
-        error_log('SUBZZ AZURE REQUEST: Timestamp: ' . $metadata['timestamp']);
+        subzz_log('SUBZZ AZURE REQUEST: Client IP: ' . $metadata['ip_address']);
+        subzz_log('SUBZZ AZURE REQUEST: User agent: ' . substr($metadata['user_agent'], 0, 100) . '...');
+        subzz_log('SUBZZ AZURE REQUEST: Timestamp: ' . $metadata['timestamp']);
         
         // Prepare request payload
         $payload = array(
@@ -601,27 +603,25 @@ class Subzz_Azure_API_Client {
         }
         
         $json_payload = wp_json_encode($payload);
-        error_log('SUBZZ AZURE REQUEST: Payload size: ' . strlen($json_payload) . ' bytes');
+        subzz_log('SUBZZ AZURE REQUEST: Payload size: ' . strlen($json_payload) . ' bytes');
         
         // Make API request
         $start_time = microtime(true);
-        error_log('SUBZZ AZURE API: Storing signature via Azure backend...');
+        subzz_log('SUBZZ AZURE API: Storing signature via Azure backend...');
 
-        $response = wp_remote_post($endpoint, array(
-            'timeout' => $this->api_timeout,
-            'headers' => $this->get_default_headers(),
+        $response = wp_remote_post($endpoint, $this->get_default_request_args(array(
             'body' => $json_payload
-        ));
+        )));
         
         $end_time = microtime(true);
         $request_duration = round(($end_time - $start_time) * 1000, 2);
         
-        error_log('SUBZZ AZURE API: Request completed in ' . $request_duration . 'ms');
+        subzz_log('SUBZZ AZURE API: Request completed in ' . $request_duration . 'ms');
         
         // Handle request errors
         if (is_wp_error($response)) {
-            error_log('SUBZZ AZURE ERROR: HTTP request failed');
-            error_log('SUBZZ AZURE ERROR: Error message: ' . $response->get_error_message());
+            subzz_log('SUBZZ AZURE ERROR: HTTP request failed');
+            subzz_log('SUBZZ AZURE ERROR: Error message: ' . $response->get_error_message());
             return false;
         }
         
@@ -630,33 +630,33 @@ class Subzz_Azure_API_Client {
         $response_message = wp_remote_retrieve_response_message($response);
         $response_body = wp_remote_retrieve_body($response);
         
-        error_log('SUBZZ AZURE RESPONSE: HTTP ' . $response_code . ' (' . $response_message . ')');
-        error_log('SUBZZ AZURE RESPONSE: Body length: ' . strlen($response_body) . ' bytes');
-        error_log('SUBZZ AZURE RESPONSE: Body content: ' . $response_body);
+        subzz_log('SUBZZ AZURE RESPONSE: HTTP ' . $response_code . ' (' . $response_message . ')');
+        subzz_log('SUBZZ AZURE RESPONSE: Body length: ' . strlen($response_body) . ' bytes');
+        subzz_log('SUBZZ AZURE RESPONSE: Body content: ' . $response_body);
         
         // Process successful response
         if ($response_code === 200) {
             $response_data = json_decode($response_body, true);
             
             if ($response_data === null) {
-                error_log('SUBZZ AZURE ERROR: Response JSON decode failed - ' . json_last_error_msg());
+                subzz_log('SUBZZ AZURE ERROR: Response JSON decode failed - ' . json_last_error_msg());
                 return false;
             }
             
-            error_log('SUBZZ AZURE RESPONSE: Decoded data keys: ' . implode(', ', array_keys($response_data)));
+            subzz_log('SUBZZ AZURE RESPONSE: Decoded data keys: ' . implode(', ', array_keys($response_data)));
             
             $signature_id = $response_data['signatureId'] ?? true;
             
-            error_log('SUBZZ AZURE SUCCESS: Signature stored successfully');
+            subzz_log('SUBZZ AZURE SUCCESS: Signature stored successfully');
             if ($signature_id && $signature_id !== true) {
-                error_log('SUBZZ AZURE SUCCESS: Signature ID: ' . $signature_id);
+                subzz_log('SUBZZ AZURE SUCCESS: Signature ID: ' . $signature_id);
             }
-            error_log('SUBZZ AZURE SUCCESS: Total processing time: ' . $request_duration . 'ms');
+            subzz_log('SUBZZ AZURE SUCCESS: Total processing time: ' . $request_duration . 'ms');
             
             return $signature_id;
         } else {
-            error_log('SUBZZ AZURE ERROR: Store signature failed with HTTP ' . $response_code);
-            error_log('SUBZZ AZURE ERROR: Response body: ' . $response_body);
+            subzz_log('SUBZZ AZURE ERROR: Store signature failed with HTTP ' . $response_code);
+            subzz_log('SUBZZ AZURE ERROR: Response body: ' . $response_body);
             return false;
         }
     }
@@ -665,31 +665,28 @@ class Subzz_Azure_API_Client {
      * Consume order data - ENHANCED LOGGING
      */
     public function consume_order_data($reference_id) {
-        error_log('=== SUBZZ AZURE API: CONSUME ORDER DATA REQUEST ===');
+        subzz_log('=== SUBZZ AZURE API: CONSUME ORDER DATA REQUEST ===');
         
         // Log request details
         $endpoint = $this->azure_base_url . '/order/' . urlencode($reference_id) . '/consume';
-        error_log('SUBZZ AZURE REQUEST: POST ' . $endpoint);
-        error_log('SUBZZ AZURE REQUEST: Reference ID: ' . $reference_id);
+        subzz_log('SUBZZ AZURE REQUEST: POST ' . $endpoint);
+        subzz_log('SUBZZ AZURE REQUEST: Reference ID: ' . $reference_id);
         
         // Make API request
         $start_time = microtime(true);
-        error_log('SUBZZ AZURE API: Consuming order data via Azure backend...');
+        subzz_log('SUBZZ AZURE API: Consuming order data via Azure backend...');
 
-        $response = wp_remote_post($endpoint, array(
-            'timeout' => $this->api_timeout,
-            'headers' => $this->get_default_headers()
-        ));
+        $response = wp_remote_post($endpoint, $this->get_default_request_args());
         
         $end_time = microtime(true);
         $request_duration = round(($end_time - $start_time) * 1000, 2);
         
-        error_log('SUBZZ AZURE API: Request completed in ' . $request_duration . 'ms');
+        subzz_log('SUBZZ AZURE API: Request completed in ' . $request_duration . 'ms');
         
         // Handle request errors
         if (is_wp_error($response)) {
-            error_log('SUBZZ AZURE ERROR: HTTP request failed');
-            error_log('SUBZZ AZURE ERROR: Error message: ' . $response->get_error_message());
+            subzz_log('SUBZZ AZURE ERROR: HTTP request failed');
+            subzz_log('SUBZZ AZURE ERROR: Error message: ' . $response->get_error_message());
             return false;
         }
         
@@ -698,16 +695,16 @@ class Subzz_Azure_API_Client {
         $response_message = wp_remote_retrieve_response_message($response);
         $response_body = wp_remote_retrieve_body($response);
         
-        error_log('SUBZZ AZURE RESPONSE: HTTP ' . $response_code . ' (' . $response_message . ')');
-        error_log('SUBZZ AZURE RESPONSE: Body content: ' . $response_body);
+        subzz_log('SUBZZ AZURE RESPONSE: HTTP ' . $response_code . ' (' . $response_message . ')');
+        subzz_log('SUBZZ AZURE RESPONSE: Body content: ' . $response_body);
         
         $success = ($response_code === 200);
         
         if ($success) {
-            error_log('SUBZZ AZURE SUCCESS: Order data consumed successfully');
-            error_log('SUBZZ AZURE SUCCESS: Total processing time: ' . $request_duration . 'ms');
+            subzz_log('SUBZZ AZURE SUCCESS: Order data consumed successfully');
+            subzz_log('SUBZZ AZURE SUCCESS: Total processing time: ' . $request_duration . 'ms');
         } else {
-            error_log('SUBZZ AZURE ERROR: Consume order failed with HTTP ' . $response_code);
+            subzz_log('SUBZZ AZURE ERROR: Consume order failed with HTTP ' . $response_code);
         }
         
         return $success;
@@ -726,13 +723,10 @@ class Subzz_Azure_API_Client {
     public function get_customer_subscription($email) {
         $endpoint = $this->azure_base_url . '/portal/subscription?' . http_build_query(array('email' => $email));
 
-        $response = wp_remote_get($endpoint, array(
-            'timeout' => $this->api_timeout,
-            'headers' => $this->get_default_headers()
-        ));
+        $response = wp_remote_get($endpoint, $this->get_default_request_args());
 
         if (is_wp_error($response)) {
-            error_log('SUBZZ PORTAL: Subscription request failed - ' . $response->get_error_message());
+            subzz_log('SUBZZ PORTAL: Subscription request failed - ' . $response->get_error_message());
             return false;
         }
 
@@ -748,8 +742,62 @@ class Subzz_Azure_API_Client {
             return false; // No subscription found — not an error
         }
 
-        error_log('SUBZZ PORTAL: Subscription failed HTTP ' . $response_code . ' - ' . $response_body);
+        subzz_log('SUBZZ PORTAL: Subscription failed HTTP ' . $response_code . ' - ' . $response_body);
         return false;
+    }
+
+    /**
+     * Get ALL subscriptions for a customer (active, suspended, completed).
+     * Returns array of subscription overviews, or empty array if none found.
+     *
+     * @param string $email Customer email
+     * @return array Array of subscription data (may be empty)
+     */
+    public function get_customer_subscriptions($email) {
+        $endpoint = $this->azure_base_url . '/portal/subscriptions?' . http_build_query(array('email' => $email));
+
+        $response = wp_remote_get($endpoint, $this->get_default_request_args());
+
+        if (is_wp_error($response)) {
+            subzz_log('SUBZZ PORTAL: Subscriptions request failed - ' . $response->get_error_message());
+            return array();
+        }
+
+        $response_code = wp_remote_retrieve_response_code($response);
+        $response_body = wp_remote_retrieve_body($response);
+
+        if ($response_code === 200) {
+            $data = json_decode($response_body, true);
+            return ($data && isset($data['success']) && $data['success']) ? $data['data'] : array();
+        }
+
+        subzz_log('SUBZZ PORTAL: Subscriptions failed HTTP ' . $response_code);
+        return array();
+    }
+
+    /**
+     * Log a payment event to Azure API for tracking/debugging.
+     * Fire-and-forget — failures are logged but don't block the page.
+     *
+     * @param array $data Event data (eventType, responseCode, responseMessage, etc.)
+     */
+    public function log_payment_event($data) {
+        $endpoint = $this->azure_base_url . '/payment/log-event';
+
+        $response = wp_remote_post($endpoint, $this->get_default_request_args(array(
+            'timeout' => 5,
+            'body'    => wp_json_encode($data)
+        )));
+
+        if (is_wp_error($response)) {
+            subzz_log('SUBZZ PAYMENT LOG: Failed to log event - ' . $response->get_error_message());
+            return;
+        }
+
+        $response_code = wp_remote_retrieve_response_code($response);
+        if ($response_code !== 200) {
+            subzz_log('SUBZZ PAYMENT LOG: Log event failed HTTP ' . $response_code);
+        }
     }
 
     /**
@@ -767,13 +815,10 @@ class Subzz_Azure_API_Client {
             'pageSize' => $page_size
         ));
 
-        $response = wp_remote_get($endpoint, array(
-            'timeout' => $this->api_timeout,
-            'headers' => $this->get_default_headers()
-        ));
+        $response = wp_remote_get($endpoint, $this->get_default_request_args());
 
         if (is_wp_error($response)) {
-            error_log('SUBZZ PORTAL: Invoices request failed - ' . $response->get_error_message());
+            subzz_log('SUBZZ PORTAL: Invoices request failed - ' . $response->get_error_message());
             return false;
         }
 
@@ -785,7 +830,7 @@ class Subzz_Azure_API_Client {
             return ($data && isset($data['success']) && $data['success']) ? $data['data'] : false;
         }
 
-        error_log('SUBZZ PORTAL: Invoices failed HTTP ' . $response_code);
+        subzz_log('SUBZZ PORTAL: Invoices failed HTTP ' . $response_code);
         return false;
     }
 
@@ -800,13 +845,10 @@ class Subzz_Azure_API_Client {
         $endpoint = $this->azure_base_url . '/portal/invoices/' . urlencode($invoice_id) . '/pdf?'
             . http_build_query(array('email' => $email));
 
-        $response = wp_remote_get($endpoint, array(
-            'timeout' => $this->api_timeout,
-            'headers' => $this->get_default_headers()
-        ));
+        $response = wp_remote_get($endpoint, $this->get_default_request_args());
 
         if (is_wp_error($response)) {
-            error_log('SUBZZ PORTAL: Invoice PDF request failed - ' . $response->get_error_message());
+            subzz_log('SUBZZ PORTAL: Invoice PDF request failed - ' . $response->get_error_message());
             return false;
         }
 
@@ -818,7 +860,7 @@ class Subzz_Azure_API_Client {
             return ($data && isset($data['success']) && $data['success']) ? $data['data'] : false;
         }
 
-        error_log('SUBZZ PORTAL: Invoice PDF failed HTTP ' . $response_code);
+        subzz_log('SUBZZ PORTAL: Invoice PDF failed HTTP ' . $response_code);
         return false;
     }
 
@@ -831,13 +873,10 @@ class Subzz_Azure_API_Client {
     public function get_contract_download_url($email) {
         $endpoint = $this->azure_base_url . '/portal/contract?' . http_build_query(array('email' => $email));
 
-        $response = wp_remote_get($endpoint, array(
-            'timeout' => $this->api_timeout,
-            'headers' => $this->get_default_headers()
-        ));
+        $response = wp_remote_get($endpoint, $this->get_default_request_args());
 
         if (is_wp_error($response)) {
-            error_log('SUBZZ PORTAL: Contract download request failed - ' . $response->get_error_message());
+            subzz_log('SUBZZ PORTAL: Contract download request failed - ' . $response->get_error_message());
             return false;
         }
 
@@ -853,7 +892,7 @@ class Subzz_Azure_API_Client {
             return false; // No contract found
         }
 
-        error_log('SUBZZ PORTAL: Contract download failed HTTP ' . $response_code);
+        subzz_log('SUBZZ PORTAL: Contract download failed HTTP ' . $response_code);
         return false;
     }
 
@@ -861,14 +900,14 @@ class Subzz_Azure_API_Client {
      * Update order status - FIXED for camelCase response validation
      */
     public function update_order_status($reference_id, $new_status, $reason = null) {
-        error_log('=== SUBZZ AZURE API: UPDATE ORDER STATUS REQUEST ===');
+        subzz_log('=== SUBZZ AZURE API: UPDATE ORDER STATUS REQUEST ===');
         
         // Log request details
         $endpoint = $this->azure_base_url . '/order/' . urlencode($reference_id) . '/update-status';
-        error_log('SUBZZ AZURE REQUEST: POST ' . $endpoint);
-        error_log('SUBZZ AZURE REQUEST: Reference ID: ' . $reference_id);
-        error_log('SUBZZ AZURE REQUEST: New Status: ' . $new_status);
-        error_log('SUBZZ AZURE REQUEST: Reason: ' . ($reason ?? 'No reason provided'));
+        subzz_log('SUBZZ AZURE REQUEST: POST ' . $endpoint);
+        subzz_log('SUBZZ AZURE REQUEST: Reference ID: ' . $reference_id);
+        subzz_log('SUBZZ AZURE REQUEST: New Status: ' . $new_status);
+        subzz_log('SUBZZ AZURE REQUEST: Reason: ' . ($reason ?? 'No reason provided'));
         
         // Prepare request payload with optional reason
         $payload = array(
@@ -877,27 +916,25 @@ class Subzz_Azure_API_Client {
         );
         
         $json_payload = wp_json_encode($payload);
-        error_log('SUBZZ AZURE REQUEST: Payload: ' . $json_payload);
+        subzz_log('SUBZZ AZURE REQUEST: Payload: ' . $json_payload);
         
         // Make API request
         $start_time = microtime(true);
-        error_log('SUBZZ AZURE API: Updating order status via Azure backend...');
+        subzz_log('SUBZZ AZURE API: Updating order status via Azure backend...');
 
-        $response = wp_remote_post($endpoint, array(
-            'timeout' => $this->api_timeout,
-            'headers' => $this->get_default_headers(),
+        $response = wp_remote_post($endpoint, $this->get_default_request_args(array(
             'body' => $json_payload
-        ));
+        )));
         
         $end_time = microtime(true);
         $request_duration = round(($end_time - $start_time) * 1000, 2);
         
-        error_log('SUBZZ AZURE API: Request completed in ' . $request_duration . 'ms');
+        subzz_log('SUBZZ AZURE API: Request completed in ' . $request_duration . 'ms');
         
         // Handle request errors
         if (is_wp_error($response)) {
-            error_log('SUBZZ AZURE ERROR: HTTP request failed');
-            error_log('SUBZZ AZURE ERROR: Error message: ' . $response->get_error_message());
+            subzz_log('SUBZZ AZURE ERROR: HTTP request failed');
+            subzz_log('SUBZZ AZURE ERROR: Error message: ' . $response->get_error_message());
             return false;
         }
         
@@ -906,34 +943,34 @@ class Subzz_Azure_API_Client {
         $response_message = wp_remote_retrieve_response_message($response);
         $response_body = wp_remote_retrieve_body($response);
         
-        error_log('SUBZZ AZURE RESPONSE: HTTP ' . $response_code . ' (' . $response_message . ')');
-        error_log('SUBZZ AZURE RESPONSE: Body content: ' . $response_body);
+        subzz_log('SUBZZ AZURE RESPONSE: HTTP ' . $response_code . ' (' . $response_message . ')');
+        subzz_log('SUBZZ AZURE RESPONSE: Body content: ' . $response_body);
         
         // Process response
         if ($response_code === 200) {
             $response_data = json_decode($response_body, true);
             
             if ($response_data === null) {
-                error_log('SUBZZ AZURE ERROR: Response JSON decode failed - ' . json_last_error_msg());
+                subzz_log('SUBZZ AZURE ERROR: Response JSON decode failed - ' . json_last_error_msg());
                 return false;
             }
             
-            error_log('SUBZZ AZURE RESPONSE: Decoded data keys: ' . implode(', ', array_keys($response_data)));
+            subzz_log('SUBZZ AZURE RESPONSE: Decoded data keys: ' . implode(', ', array_keys($response_data)));
             
             if (isset($response_data['success']) && $response_data['success'] === true) {
-                error_log('SUBZZ AZURE SUCCESS: Order status updated successfully');
-                error_log('SUBZZ AZURE SUCCESS: Previous status: ' . ($response_data['previousStatus'] ?? 'unknown'));
-                error_log('SUBZZ AZURE SUCCESS: Current status: ' . ($response_data['currentStatus'] ?? $new_status));
-                error_log('SUBZZ AZURE SUCCESS: Message: ' . ($response_data['message'] ?? 'No message'));
-                error_log('SUBZZ AZURE SUCCESS: Total processing time: ' . $request_duration . 'ms');
+                subzz_log('SUBZZ AZURE SUCCESS: Order status updated successfully');
+                subzz_log('SUBZZ AZURE SUCCESS: Previous status: ' . ($response_data['previousStatus'] ?? 'unknown'));
+                subzz_log('SUBZZ AZURE SUCCESS: Current status: ' . ($response_data['currentStatus'] ?? $new_status));
+                subzz_log('SUBZZ AZURE SUCCESS: Message: ' . ($response_data['message'] ?? 'No message'));
+                subzz_log('SUBZZ AZURE SUCCESS: Total processing time: ' . $request_duration . 'ms');
                 return true;
             } else {
-                error_log('SUBZZ AZURE ERROR: Order status update failed - Success flag not true or missing');
-                error_log('SUBZZ AZURE ERROR: Response success value: ' . json_encode($response_data['success'] ?? 'MISSING'));
+                subzz_log('SUBZZ AZURE ERROR: Order status update failed - Success flag not true or missing');
+                subzz_log('SUBZZ AZURE ERROR: Response success value: ' . json_encode($response_data['success'] ?? 'MISSING'));
                 
                 // Log all response fields for debugging
                 foreach ($response_data as $key => $value) {
-                    error_log('SUBZZ AZURE RESPONSE FIELD: ' . $key . ' = ' . json_encode($value));
+                    subzz_log('SUBZZ AZURE RESPONSE FIELD: ' . $key . ' = ' . json_encode($value));
                 }
                 
                 return false;
@@ -942,25 +979,25 @@ class Subzz_Azure_API_Client {
             // Handle BadRequest (invalid state transition)
             $error_data = json_decode($response_body, true);
             
-            error_log('SUBZZ AZURE ERROR: Update order status failed with HTTP 400');
-            error_log('SUBZZ AZURE ERROR: Response body: ' . $response_body);
+            subzz_log('SUBZZ AZURE ERROR: Update order status failed with HTTP 400');
+            subzz_log('SUBZZ AZURE ERROR: Response body: ' . $response_body);
             
             if ($error_data && isset($error_data['error'])) {
-                error_log('SUBZZ AZURE ERROR: ' . $error_data['error']);
+                subzz_log('SUBZZ AZURE ERROR: ' . $error_data['error']);
                 if (isset($error_data['currentStatus'])) {
-                    error_log('SUBZZ AZURE ERROR: Current status: ' . $error_data['currentStatus']);
+                    subzz_log('SUBZZ AZURE ERROR: Current status: ' . $error_data['currentStatus']);
                 }
             }
             
             return false;
         } else {
-            error_log('SUBZZ AZURE ERROR: Update order status failed with HTTP ' . $response_code);
-            error_log('SUBZZ AZURE ERROR: Response body: ' . $response_body);
+            subzz_log('SUBZZ AZURE ERROR: Update order status failed with HTTP ' . $response_code);
+            subzz_log('SUBZZ AZURE ERROR: Response body: ' . $response_body);
             
             // Try to decode error response for better debugging
             $error_data = json_decode($response_body, true);
             if ($error_data && isset($error_data['error'])) {
-                error_log('SUBZZ AZURE ERROR: Structured error message: ' . $error_data['error']);
+                subzz_log('SUBZZ AZURE ERROR: Structured error message: ' . $error_data['error']);
             }
             
             return false;
@@ -970,27 +1007,27 @@ class Subzz_Azure_API_Client {
      * Create LekkaPay payment session - COMPREHENSIVE LOGGING
      */
     public function create_lekkapay_session($session_data) {
-        error_log('=== SUBZZ AZURE API: CREATE LEKKAPAY SESSION REQUEST ===');
+        subzz_log('=== SUBZZ AZURE API: CREATE LEKKAPAY SESSION REQUEST ===');
         
         // Log request details
         $endpoint = $this->azure_base_url . '/payment/create-session';
-        error_log('SUBZZ AZURE REQUEST: POST ' . $endpoint);
-        error_log('SUBZZ AZURE REQUEST: Timeout: ' . $this->api_timeout . ' seconds');
+        subzz_log('SUBZZ AZURE REQUEST: POST ' . $endpoint);
+        subzz_log('SUBZZ AZURE REQUEST: Timeout: ' . $this->api_timeout . ' seconds');
         
         // Validate required fields
         $required_fields = ['orderReferenceId', 'customerEmail', 'customerName', 'amount'];
         foreach ($required_fields as $field) {
             if (!isset($session_data[$field])) {
-                error_log('SUBZZ AZURE ERROR: Missing required field: ' . $field);
+                subzz_log('SUBZZ AZURE ERROR: Missing required field: ' . $field);
                 return false;
             }
         }
         
         // Log session data
-        error_log('SUBZZ AZURE REQUEST DATA: Order Reference: ' . $session_data['orderReferenceId']);
-        error_log('SUBZZ AZURE REQUEST DATA: Customer Email: ' . $session_data['customerEmail']);
-        error_log('SUBZZ AZURE REQUEST DATA: Customer Name: ' . $session_data['customerName']);
-        error_log('SUBZZ AZURE REQUEST DATA: Amount: ' . ($session_data['currency'] ?? 'ZAR') . ' ' . $session_data['amount']);
+        subzz_log('SUBZZ AZURE REQUEST DATA: Order Reference: ' . $session_data['orderReferenceId']);
+        subzz_log('SUBZZ AZURE REQUEST DATA: Customer Email: ' . $session_data['customerEmail']);
+        subzz_log('SUBZZ AZURE REQUEST DATA: Customer Name: ' . $session_data['customerName']);
+        subzz_log('SUBZZ AZURE REQUEST DATA: Amount: ' . ($session_data['currency'] ?? 'ZAR') . ' ' . $session_data['amount']);
         
         // Prepare payload following Azure API structure
         // LekkaPay requires HTTPS for return/cancel URLs — force upgrade from http://
@@ -998,8 +1035,8 @@ class Subzz_Azure_API_Client {
         $cancel_url = set_url_scheme(home_url('/payment-cancelled/'), 'https');
         $webhook_url = $this->azure_base_url . '/webhook/payment';
 
-        error_log('SUBZZ LEKKAPAY: Return URL: ' . $return_url);
-        error_log('SUBZZ LEKKAPAY: Cancel URL: ' . $cancel_url);
+        subzz_log('SUBZZ LEKKAPAY: Return URL: ' . $return_url);
+        subzz_log('SUBZZ LEKKAPAY: Cancel URL: ' . $cancel_url);
 
         $payload = array(
             'orderReferenceId' => $session_data['orderReferenceId'],
@@ -1015,33 +1052,31 @@ class Subzz_Azure_API_Client {
         // Add optional signature ID if provided
         if (isset($session_data['signatureId'])) {
             $payload['signatureId'] = $session_data['signatureId'];
-            error_log('SUBZZ AZURE REQUEST DATA: Signature ID: ' . $session_data['signatureId']);
+            subzz_log('SUBZZ AZURE REQUEST DATA: Signature ID: ' . $session_data['signatureId']);
         }
         
         $json_payload = wp_json_encode($payload);
-        error_log('SUBZZ AZURE REQUEST DATA: JSON payload size: ' . strlen($json_payload) . ' bytes');
+        subzz_log('SUBZZ AZURE REQUEST DATA: JSON payload size: ' . strlen($json_payload) . ' bytes');
         
         // Make API request
         $start_time = microtime(true);
-        error_log('SUBZZ AZURE API: Sending LekkaPay session creation request...');
+        subzz_log('SUBZZ AZURE API: Sending LekkaPay session creation request...');
 
-        $response = wp_remote_post($endpoint, array(
-            'timeout' => $this->api_timeout,
-            'headers' => $this->get_default_headers(),
+        $response = wp_remote_post($endpoint, $this->get_default_request_args(array(
             'body' => $json_payload
-        ));
+        )));
         
         $end_time = microtime(true);
         $request_duration = round(($end_time - $start_time) * 1000, 2);
         
-        error_log('SUBZZ AZURE API: Request completed in ' . $request_duration . 'ms');
+        subzz_log('SUBZZ AZURE API: Request completed in ' . $request_duration . 'ms');
         
         // Handle request errors
         if (is_wp_error($response)) {
-            error_log('SUBZZ AZURE ERROR: HTTP request failed');
-            error_log('SUBZZ AZURE ERROR: Error code: ' . $response->get_error_code());
-            error_log('SUBZZ AZURE ERROR: Error message: ' . $response->get_error_message());
-            error_log('SUBZZ AZURE ERROR: Is Azure backend running on localhost:5000?');
+            subzz_log('SUBZZ AZURE ERROR: HTTP request failed');
+            subzz_log('SUBZZ AZURE ERROR: Error code: ' . $response->get_error_code());
+            subzz_log('SUBZZ AZURE ERROR: Error message: ' . $response->get_error_message());
+            subzz_log('SUBZZ AZURE ERROR: Is Azure backend running on localhost:5000?');
             return false;
         }
         
@@ -1050,36 +1085,36 @@ class Subzz_Azure_API_Client {
         $response_message = wp_remote_retrieve_response_message($response);
         $response_body = wp_remote_retrieve_body($response);
         
-        error_log('SUBZZ AZURE RESPONSE: HTTP ' . $response_code . ' (' . $response_message . ')');
-        error_log('SUBZZ AZURE RESPONSE: Body length: ' . strlen($response_body) . ' bytes');
-        error_log('SUBZZ AZURE RESPONSE: Body content: ' . $response_body);
+        subzz_log('SUBZZ AZURE RESPONSE: HTTP ' . $response_code . ' (' . $response_message . ')');
+        subzz_log('SUBZZ AZURE RESPONSE: Body length: ' . strlen($response_body) . ' bytes');
+        subzz_log('SUBZZ AZURE RESPONSE: Body content: ' . $response_body);
         
         // Process successful response
         if ($response_code === 200) {
             $response_data = json_decode($response_body, true);
             
             if ($response_data === null) {
-                error_log('SUBZZ AZURE ERROR: Response JSON decode failed - ' . json_last_error_msg());
+                subzz_log('SUBZZ AZURE ERROR: Response JSON decode failed - ' . json_last_error_msg());
                 return false;
             }
             
-            error_log('SUBZZ AZURE RESPONSE: Decoded data keys: ' . implode(', ', array_keys($response_data)));
+            subzz_log('SUBZZ AZURE RESPONSE: Decoded data keys: ' . implode(', ', array_keys($response_data)));
             
             // Validate response structure
             if (!isset($response_data['sessionId']) || !isset($response_data['checkoutUrl'])) {
-                error_log('SUBZZ AZURE ERROR: Response missing required fields (sessionId or checkoutUrl)');
+                subzz_log('SUBZZ AZURE ERROR: Response missing required fields (sessionId or checkoutUrl)');
                 return false;
             }
             
-            error_log('SUBZZ AZURE SUCCESS: LekkaPay session created successfully');
-            error_log('SUBZZ AZURE SUCCESS: Session ID: ' . $response_data['sessionId']);
-            error_log('SUBZZ AZURE SUCCESS: Checkout URL: ' . $response_data['checkoutUrl']);
-            error_log('SUBZZ AZURE SUCCESS: Total processing time: ' . $request_duration . 'ms');
+            subzz_log('SUBZZ AZURE SUCCESS: LekkaPay session created successfully');
+            subzz_log('SUBZZ AZURE SUCCESS: Session ID: ' . $response_data['sessionId']);
+            subzz_log('SUBZZ AZURE SUCCESS: Checkout URL: ' . $response_data['checkoutUrl']);
+            subzz_log('SUBZZ AZURE SUCCESS: Total processing time: ' . $request_duration . 'ms');
             
             return $response_data;
         } else {
-            error_log('SUBZZ AZURE ERROR: Create LekkaPay session failed with HTTP ' . $response_code);
-            error_log('SUBZZ AZURE ERROR: Response body: ' . $response_body);
+            subzz_log('SUBZZ AZURE ERROR: Create LekkaPay session failed with HTTP ' . $response_code);
+            subzz_log('SUBZZ AZURE ERROR: Response body: ' . $response_body);
             return false;
         }
     }

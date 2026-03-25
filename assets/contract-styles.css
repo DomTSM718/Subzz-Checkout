@@ -1,6 +1,6 @@
 /**
  * Subzz Contract Signature Page Styles - Complete
- * Updated: October 20, 2025
+ * Updated: February 2026 — Subzz Design System tokens from subzz-base.css
  * Includes: Billing Date Selection, Legal Compliance, Signature, and all existing functionality
  */
 
@@ -10,7 +10,7 @@
 
 .subzz-contract-page {
     padding: 20px 0;
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-family: var(--subzz-font-family);
     line-height: 1.6;
 }
 
@@ -19,8 +19,8 @@
     margin: 0 auto;
     padding: 0 20px;
     background: white;
-    border-radius: 12px;
-    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    border-radius: var(--subzz-radius-xl);
+    box-shadow: var(--subzz-shadow-2xl);
 }
 
 /* ============================================================================
@@ -31,11 +31,11 @@
     text-align: center;
     margin-bottom: 40px;
     padding: 30px 0 20px 0;
-    border-bottom: 3px solid #3498db;
+    border-bottom: 3px solid var(--subzz-blue);
 }
 
 .contract-header h1 {
-    color: #2c3e50;
+    color: var(--subzz-gray);
     margin-bottom: 15px;
     font-size: 32px;
     font-weight: 600;
@@ -47,7 +47,7 @@
     border-radius: 25px;
     display: inline-block;
     font-size: 14px;
-    color: #666;
+    color: rgba(84, 84, 84, 0.6);
     border: 1px solid #e9ecef;
     font-weight: 500;
 }
@@ -70,13 +70,13 @@
     align-items: center;
     margin-bottom: 25px;
     padding-bottom: 15px;
-    border-bottom: 3px solid #3498db;
+    border-bottom: 3px solid var(--subzz-blue);
 }
 
 .step-number {
     width: 45px;
     height: 45px;
-    background: linear-gradient(135deg, #3498db 0%, #2980b9 100%);
+    background: var(--subzz-blue);
     color: white;
     border-radius: 50%;
     display: flex;
@@ -89,21 +89,21 @@
 }
 
 .step-header h2 {
-    color: #2c3e50;
+    color: var(--subzz-gray);
     margin: 0;
     font-size: 26px;
     font-weight: 700;
 }
 
 .step-description {
-    color: #495057;
+    color: var(--subzz-gray);
     font-size: 16px;
     line-height: 1.6;
     margin-bottom: 30px;
     padding: 20px;
     background: #f8f9fa;
-    border-left: 4px solid #3498db;
-    border-radius: 6px;
+    border-left: 4px solid var(--subzz-blue);
+    border-radius: var(--subzz-radius-sm);
 }
 
 /* Billing Options Grid */
@@ -136,39 +136,39 @@
     justify-content: center;
     padding: 30px 20px;
     background: white;
-    border: 3px solid #dee2e6;
+    border: 3px solid var(--subzz-border);
     border-radius: 12px;
     transition: all 0.3s ease;
     min-height: 140px;
 }
 
 .billing-option:hover .option-content {
-    border-color: #3498db;
-    box-shadow: 0 4px 12px rgba(52, 152, 219, 0.15);
+    border-color: var(--subzz-blue);
+    box-shadow: var(--subzz-shadow-xl);
     transform: translateY(-2px);
 }
 
 .billing-option input[type="radio"]:checked + .option-content {
-    background: linear-gradient(135deg, #e7f3ff 0%, #d0e8ff 100%);
-    border-color: #3498db;
+    background: var(--subzz-info-bg);
+    border-color: var(--subzz-blue);
     border-width: 4px;
-    box-shadow: 0 6px 16px rgba(52, 152, 219, 0.25);
+    box-shadow: var(--subzz-shadow-xl);
 }
 
 .day-number {
     font-size: 36px;
     font-weight: 700;
-    color: #3498db;
+    color: var(--subzz-blue);
     margin-bottom: 8px;
 }
 
 .billing-option input[type="radio"]:checked + .option-content .day-number {
-    color: #2980b9;
+    color: var(--subzz-blue);
 }
 
 .day-label {
     font-size: 15px;
-    color: #6c757d;
+    color: rgba(84, 84, 84, 0.6);
     font-weight: 500;
 }
 
@@ -221,24 +221,23 @@
 }
 
 .step-actions .button:disabled {
-    background: #95a5a6 !important;
+    opacity: 0.5 !important;
     cursor: not-allowed !important;
-    opacity: 0.7 !important;
     box-shadow: none !important;
     color: white !important;
 }
 
 .step-actions .button.primary:not(:disabled) {
-    background: linear-gradient(135deg, #3498db 0%, #2980b9 100%) !important;
+    background: var(--subzz-blue) !important;
     color: white !important;
     cursor: pointer !important;
-    box-shadow: 0 2px 4px rgba(52, 152, 219, 0.3) !important;
+    box-shadow: var(--subzz-shadow-lg) !important;
 }
 
 .step-actions .button.primary:not(:disabled):hover {
-    background: linear-gradient(135deg, #2980b9, #21618c) !important;
+    opacity: 0.9 !important;
     transform: translateY(-1px);
-    box-shadow: 0 4px 8px rgba(52, 152, 219, 0.4) !important;
+    box-shadow: var(--subzz-shadow-xl) !important;
 }
 
 /* Loading State */
@@ -246,7 +245,7 @@
     text-align: center;
     padding: 60px 20px;
     background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
-    border: 3px solid #3498db;
+    border: 3px solid var(--subzz-blue);
     border-radius: 12px;
     margin-bottom: 40px;
 }
@@ -255,7 +254,7 @@
     width: 60px;
     height: 60px;
     border: 6px solid #e9ecef;
-    border-top-color: #3498db;
+    border-top-color: var(--subzz-blue);
     border-radius: 50%;
     animation: spin 1s linear infinite;
     margin: 0 auto 20px;
@@ -267,7 +266,7 @@
 }
 
 .loading-state p {
-    color: #495057;
+    color: var(--subzz-gray);
     font-size: 18px;
     font-weight: 600;
     margin: 0;
@@ -275,8 +274,8 @@
 
 /* Billing Summary */
 .billing-summary {
-    background: linear-gradient(135deg, #e7f3ff 0%, #d0e8ff 100%);
-    border: 3px solid #3498db;
+    background: var(--subzz-info-bg);
+    border: 3px solid var(--subzz-blue);
     border-radius: 12px;
     padding: 20px 30px;
     margin-bottom: 30px;
@@ -297,27 +296,27 @@
 .summary-text {
     flex: 1;
     font-size: 16px;
-    color: #2c3e50;
+    color: var(--subzz-gray);
 }
 
 .summary-text strong {
     font-weight: 700;
-    color: #2980b9;
+    color: var(--subzz-blue);
 }
 
 .change-link {
-    color: #3498db;
+    color: var(--subzz-blue);
     text-decoration: none;
     font-weight: 600;
     padding: 8px 16px;
-    border: 2px solid #3498db;
-    border-radius: 6px;
+    border: 2px solid var(--subzz-blue);
+    border-radius: var(--subzz-radius-sm);
     transition: all 0.3s ease;
     flex-shrink: 0;
 }
 
 .change-link:hover {
-    background: #3498db;
+    background: var(--subzz-blue);
     color: white;
     text-decoration: none;
 }
@@ -329,18 +328,18 @@
 .order-summary-section {
     background: #f8f9fa;
     padding: 25px;
-    border-radius: 8px;
+    border-radius: var(--subzz-radius-md);
     margin-bottom: 25px;
-    border: 1px solid #dee2e6;
+    border: 1px solid var(--subzz-border);
 }
 
 .order-summary-section h2 {
-    color: #2c3e50;
+    color: var(--subzz-gray);
     margin-bottom: 20px;
     font-size: 24px;
     font-weight: 600;
     padding-bottom: 10px;
-    border-bottom: 2px solid #dee2e6;
+    border-bottom: 2px solid var(--subzz-border);
 }
 
 .subscription-item {
@@ -348,25 +347,25 @@
     padding: 20px;
     border-radius: 6px;
     margin-bottom: 15px;
-    border-left: 4px solid #3498db;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    border-left: 4px solid var(--subzz-blue);
+    box-shadow: var(--subzz-shadow-sm);
 }
 
 .subscription-item h3 {
     margin: 0 0 10px 0;
-    color: #2c3e50;
+    color: var(--subzz-gray);
     font-size: 1.2em;
 }
 
 .subscription-item p {
     margin-bottom: 8px;
-    color: #555;
+    color: var(--subzz-gray);
 }
 
 .order-totals {
     margin-top: 20px;
     padding-top: 20px;
-    border-top: 2px solid #ddd;
+    border-top: 2px solid var(--subzz-border);
     background: white;
     padding: 20px;
     border-radius: 6px;
@@ -380,14 +379,14 @@
 }
 
 .customer-info h3 {
-    color: #2c3e50;
+    color: var(--subzz-gray);
     margin-bottom: 15px;
     font-size: 1.2em;
 }
 
 .customer-info p {
     margin-bottom: 8px;
-    color: #555;
+    color: var(--subzz-gray);
 }
 
 /* ============================================================================
@@ -397,32 +396,32 @@
 .contract-terms-section {
     margin-bottom: 25px;
     background: white;
-    border: 2px solid #dee2e6;
-    border-radius: 10px;
+    border: 2px solid var(--subzz-border);
+    border-radius: var(--subzz-radius-lg);
     padding: 30px;
 }
 
 .contract-terms-section h2 {
-    color: #2c3e50;
+    color: var(--subzz-gray);
     margin-bottom: 20px;
     font-size: 24px;
     font-weight: 600;
     padding-bottom: 10px;
-    border-bottom: 2px solid #dee2e6;
+    border-bottom: 2px solid var(--subzz-border);
 }
 
 .contract-text {
     background: white;
     padding: 25px;
     border-radius: 6px;
-    border: 1px solid #ddd;
+    border: 1px solid var(--subzz-border);
     max-height: 400px;
     overflow-y: auto;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    box-shadow: var(--subzz-shadow-sm);
 }
 
 .contract-text h3 {
-    color: #2c3e50;
+    color: var(--subzz-gray);
     margin-bottom: 20px;
     text-align: center;
     font-size: 1.4em;
@@ -430,7 +429,7 @@
 }
 
 .contract-text h4 {
-    color: #34495e;
+    color: var(--subzz-gray);
     margin-top: 25px;
     margin-bottom: 12px;
     font-weight: 600;
@@ -440,7 +439,7 @@
 .contract-text p {
     margin-bottom: 15px;
     line-height: 1.7;
-    color: #444;
+    color: var(--subzz-gray);
 }
 
 .agreement-date {
@@ -449,7 +448,7 @@
     border-top: 1px solid #eee;
     text-align: center;
     font-weight: 600;
-    color: #2c3e50;
+    color: var(--subzz-gray);
 }
 
 /* ============================================================================
@@ -458,35 +457,35 @@
 
 .legal-compliance-section {
     background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
-    border: 3px solid #495057;
-    border-radius: 12px;
+    border: 3px solid var(--subzz-gray);
+    border-radius: var(--subzz-radius-xl);
     padding: 35px;
     margin-bottom: 35px;
-    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    box-shadow: var(--subzz-shadow-md);
 }
 
 .legal-compliance-section h2 {
-    color: #2c3e50;
+    color: var(--subzz-gray);
     margin-bottom: 30px;
     font-size: 26px;
     font-weight: 700;
     text-align: center;
     padding-bottom: 15px;
-    border-bottom: 3px solid #3498db;
+    border-bottom: 3px solid var(--subzz-blue);
 }
 
 .compliance-step {
     background: white;
-    border: 2px solid #dee2e6;
-    border-radius: 10px;
+    border: 2px solid var(--subzz-border);
+    border-radius: var(--subzz-radius-lg);
     padding: 25px;
     margin-bottom: 25px;
     transition: all 0.3s ease;
 }
 
 .compliance-step:hover {
-    border-color: #3498db;
-    box-shadow: 0 3px 12px rgba(52, 152, 219, 0.15);
+    border-color: var(--subzz-blue);
+    box-shadow: var(--subzz-shadow-lg);
 }
 
 .compliance-step:last-child {
@@ -494,12 +493,12 @@
 }
 
 .compliance-step h3 {
-    color: #495057;
+    color: var(--subzz-gray);
     font-size: 20px;
     font-weight: 600;
     margin-bottom: 20px;
     padding-bottom: 12px;
-    border-bottom: 2px solid #3498db;
+    border-bottom: 2px solid var(--subzz-blue);
     display: flex;
     align-items: center;
 }
@@ -508,7 +507,7 @@
     content: '';
     width: 32px;
     height: 32px;
-    background: linear-gradient(135deg, #3498db 0%, #2980b9 100%);
+    background: var(--subzz-blue);
     border-radius: 50%;
     margin-right: 12px;
     flex-shrink: 0;
@@ -529,15 +528,15 @@
     display: block;
     font-weight: 600;
     margin-bottom: 10px;
-    color: #2c3e50;
+    color: var(--subzz-gray);
     font-size: 15px;
 }
 
 .form-field input[type="text"] {
     width: 100%;
     padding: 14px 16px;
-    border: 2px solid #ced4da;
-    border-radius: 8px;
+    border: 2px solid var(--subzz-border);
+    border-radius: var(--subzz-radius-md);
     font-size: 16px;
     transition: all 0.3s ease;
     font-family: inherit;
@@ -546,14 +545,14 @@
 
 .form-field input[type="text"]:focus {
     outline: none;
-    border-color: #3498db;
-    box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.1);
+    border-color: var(--subzz-border-focus);
+    box-shadow: 0 0 0 3px rgba(72, 202, 237, 0.15);
 }
 
 .field-hint {
     display: block;
     font-size: 13px;
-    color: #6c757d;
+    color: rgba(84, 84, 84, 0.6);
     margin-top: 8px;
     font-style: italic;
     line-height: 1.4;
@@ -577,22 +576,22 @@
 
 .consent-checkbox {
     background: white;
-    border: 2px solid #dee2e6;
-    border-radius: 10px;
+    border: 2px solid var(--subzz-border);
+    border-radius: var(--subzz-radius-lg);
     padding: 20px;
     transition: all 0.3s ease;
     cursor: pointer;
 }
 
 .consent-checkbox:hover {
-    border-color: #3498db;
-    box-shadow: 0 2px 10px rgba(52, 152, 219, 0.1);
+    border-color: var(--subzz-blue);
+    box-shadow: var(--subzz-shadow-md);
     transform: translateY(-2px);
 }
 
 .consent-checkbox.consent-checked {
-    background-color: #f0f8ff;
-    border-color: #3498db;
+    background-color: var(--subzz-info-bg);
+    border-color: var(--subzz-blue);
 }
 
 .consent-checkbox label {
@@ -602,7 +601,7 @@
     margin: 0;
     line-height: 1.6;
     font-size: 15px;
-    color: #2c3e50;
+    color: var(--subzz-gray);
 }
 
 .consent-checkbox input[type="checkbox"] {
@@ -612,11 +611,11 @@
     margin-top: 2px;
     cursor: pointer;
     flex-shrink: 0;
-    accent-color: #3498db;
+    accent-color: var(--subzz-blue);
 }
 
 .consent-checkbox strong {
-    color: #2c3e50;
+    color: var(--subzz-gray);
     display: block;
     margin-bottom: 5px;
 }
@@ -627,29 +626,29 @@
 
 .signature-section {
     background: white;
-    border: 3px solid #495057;
-    border-radius: 12px;
+    border: 3px solid var(--subzz-border);
+    border-radius: var(--subzz-radius-xl);
     padding: 35px;
     margin-bottom: 35px;
-    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    box-shadow: var(--subzz-shadow-md);
 }
 
 .signature-section h2 {
-    color: #2c3e50;
+    color: var(--subzz-gray);
     margin-bottom: 15px;
     font-size: 26px;
     font-weight: 700;
 }
 
 .signature-section > p {
-    color: #6c757d;
+    color: rgba(84, 84, 84, 0.6);
     font-size: 15px;
     margin-bottom: 25px;
 }
 
 .signature-pad-container {
-    border: 3px solid #dee2e6;
-    border-radius: 10px;
+    border: 3px solid var(--subzz-border);
+    border-radius: var(--subzz-radius-lg);
     padding: 15px;
     background: #fafafa;
     margin-top: 20px;
@@ -685,7 +684,7 @@
 
 .button {
     padding: 14px 28px;
-    border-radius: 8px;
+    border-radius: var(--subzz-radius-md);
     text-decoration: none;
     display: inline-block;
     font-weight: 600;
@@ -698,38 +697,37 @@
 }
 
 .button.primary {
-    background: linear-gradient(135deg, #3498db, #2980b9);
+    background: var(--subzz-blue);
     color: white;
-    box-shadow: 0 2px 4px rgba(52, 152, 219, 0.3);
+    box-shadow: var(--subzz-shadow-lg);
 }
 
 .button.primary:hover:not(:disabled) {
-    background: linear-gradient(135deg, #2980b9, #21618c);
+    opacity: 0.9;
     transform: translateY(-1px);
-    box-shadow: 0 4px 8px rgba(52, 152, 219, 0.4);
+    box-shadow: var(--subzz-shadow-xl);
 }
 
 .button.primary:disabled {
-    background: #bdc3c7 !important;
+    opacity: 0.5 !important;
     cursor: not-allowed !important;
     transform: none;
     box-shadow: none !important;
-    opacity: 0.7;
 }
 
 .button.secondary {
     background: #ecf0f1;
-    color: #2c3e50;
-    border: 2px solid #bdc3c7;
+    color: var(--subzz-gray);
+    border: 2px solid var(--subzz-border);
 }
 
 .button.secondary:hover {
     background: #d5dbdb;
-    border-color: #95a5a6;
+    border-color: rgba(84, 84, 84, 0.4);
 }
 
 .button:focus {
-    outline: 3px solid rgba(52, 152, 219, 0.5);
+    outline: 3px solid rgba(72, 202, 237, 0.5);
     outline-offset: 2px;
 }
 
@@ -752,8 +750,8 @@
     text-align: center;
     padding: 50px 20px;
     background: #f8f9fa;
-    border-radius: 8px;
-    border: 1px solid #dee2e6;
+    border-radius: var(--subzz-radius-md);
+    border: 1px solid var(--subzz-border);
 }
 
 .contract-success h2 {
@@ -763,7 +761,7 @@
 }
 
 .contract-success p {
-    color: #2c3e50;
+    color: var(--subzz-gray);
     font-size: 1.1em;
     margin-bottom: 15px;
     max-width: 600px;
@@ -779,7 +777,7 @@
 
 .contract-success li {
     margin-bottom: 10px;
-    color: #2c3e50;
+    color: var(--subzz-gray);
 }
 
 /* ============================================================================
@@ -787,8 +785,8 @@
    ============================================================================ */
 
 .error-message-section {
-    background: #fee;
-    border: 3px solid #fcc;
+    background: var(--subzz-error-bg);
+    border: 3px solid var(--subzz-error-border);
     border-radius: 12px;
     padding: 30px;
     text-align: center;
@@ -812,7 +810,7 @@
 .help-section {
     margin-top: 30px;
     padding-top: 20px;
-    border-top: 2px solid #fcc;
+    border-top: 2px solid var(--subzz-error-border);
 }
 
 .help-section h3 {
@@ -832,89 +830,137 @@
     .subzz-contract-page .container {
         padding: 20px 15px;
     }
-    
+
     .contract-header {
         padding: 20px 0 15px 0;
     }
-    
+
     .contract-header h1 {
         font-size: 24px;
     }
-    
+
     .progress-indicator {
         font-size: 12px;
         padding: 10px 16px;
     }
-    
+
     .billing-options {
         grid-template-columns: 1fr;
     }
-    
+
     .option-content {
         padding: 25px 15px;
         min-height: 120px;
     }
-    
+
     .day-number {
         font-size: 28px;
     }
-    
+
     .step-actions .button {
         min-width: 100%;
         width: 100%;
     }
-    
+
     .typed-name-section {
         grid-template-columns: 1fr;
         gap: 20px;
     }
-    
+
     .order-summary-section,
     .signature-section,
     .legal-compliance-section {
         padding: 20px;
     }
-    
+
     .signature-pad-container {
         padding: 10px;
     }
-    
+
     #signature-pad {
         height: 150px;
     }
-    
+
     .contract-actions {
         flex-direction: column;
         gap: 15px;
     }
-    
+
     .button {
         width: 100%;
         min-width: auto;
     }
-    
+
     .consent-checkbox label {
         font-size: 14px;
     }
-    
+
     .step-header h2 {
         font-size: 20px;
     }
-    
+
     .step-number {
         width: 40px;
         height: 40px;
         font-size: 20px;
     }
-    
+
     .billing-date-selection {
         padding: 0 10px;
     }
-    
+
     .summary-content {
         flex-direction: column;
         text-align: center;
     }
+}
+
+/* ============================================================================
+   ORDER SUMMARY COMPACT (shown on contract success before LekkaPay redirect)
+   ============================================================================ */
+
+.order-summary-compact {
+    max-width: 400px;
+    margin: 20px auto;
+    background: #f8f9fa;
+    border: 1px solid var(--subzz-border);
+    border-radius: var(--subzz-radius-md);
+    padding: 16px 20px;
+    text-align: left;
+}
+
+.order-summary-compact .summary-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--subzz-border);
+    font-size: 14px;
+    color: var(--subzz-gray);
+}
+
+.order-summary-compact .summary-row:last-child {
+    border-bottom: none;
+}
+
+.order-summary-compact .summary-row span {
+    color: rgba(84, 84, 84, 0.6);
+}
+
+.order-summary-compact .summary-row strong {
+    color: var(--subzz-gray);
+}
+
+.order-summary-compact .summary-row.highlight {
+    padding: 12px 0 8px;
+    margin-top: 4px;
+    border-top: 2px solid var(--subzz-blue);
+    border-bottom: none;
+}
+
+.order-summary-compact .summary-row.highlight strong {
+    color: var(--subzz-blue);
+    font-size: 16px;
 }
 
 /* ============================================================================
@@ -929,16 +975,16 @@
     .change-link {
         display: none !important;
     }
-    
+
     .contract-text {
         max-height: none;
         overflow: visible;
     }
-    
+
     .subzz-contract-page {
         padding: 0;
     }
-    
+
     .subzz-contract-page .container {
         box-shadow: none;
     }
@@ -950,12 +996,12 @@
 
 #terms-consent:focus,
 #electronic-consent:focus {
-    outline: 3px solid rgba(52, 152, 219, 0.5);
+    outline: 3px solid rgba(72, 202, 237, 0.5);
     outline-offset: 2px;
 }
 
 .billing-option input[type="radio"]:focus + .option-content {
-    outline: 3px solid rgba(52, 152, 219, 0.5);
+    outline: 3px solid rgba(72, 202, 237, 0.5);
     outline-offset: 2px;
 }
 
@@ -964,7 +1010,7 @@
     .billing-option input[type="radio"]:checked + .option-content {
         border-width: 5px;
     }
-    
+
     .button.primary {
         border: 2px solid #000;
     }

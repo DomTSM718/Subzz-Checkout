@@ -1,19 +1,18 @@
 <?php
 /**
  * Plugin Name: Subzz Subscription Payments
- * Description: Custom subscription payment processing with contract signatures and Azure backend integration
- * Version: 2.0.0 (Customer Portal + Payment Update)
+ * Description: Subscription checkout with plan selection, contract signing, LekkaPay payment, customer portal, and Azure backend integration.
+ * Version: 2.5.0
  * Author: Subzz Team
- * 
- * LEKKAPAY INTEGRATION UPDATE (Oct 29, 2025):
- * - Added payment success page routing (/payment-success/)
- * - Added payment cancelled page routing (/payment-cancelled/)
- * - Complete LekkaPay return URL support
- * 
- * HYBRID ARCHITECTURE UPDATE (Oct 19, 2025):
- * - Added billing-date-handler.js loading
- * - Updated signature-handler.js dependencies
- * - Separated billing date selection from signature logic
+ *
+ * Features:
+ * - Checkout flow: plan cards (12/18/24 months), initial payment slider, affordability enforcement
+ * - Contract signing: draw/type signature, billing date selection, PDF generation via Azure
+ * - LekkaPay HPP integration: card-only restriction, webhook processing, token vault
+ * - Customer portal: My Subscription tab, payment update, invoice history
+ * - Abandoned cart recovery: JWT resume links, cohort-based email triggers
+ * - Payment logging: success/cancel/error events posted to Azure API
+ * - Subzz design system: CSS variables, responsive, Figma-aligned
  */
 
 // Prevent direct access
@@ -21,24 +20,34 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
+/**
+ * Debug logging helper — only writes when SUBZZ_DEBUG is true in wp-config.php.
+ * Usage: subzz_log('My message');
+ */
+function subzz_log($message) {
+    if (defined('SUBZZ_DEBUG') && SUBZZ_DEBUG) {
+        error_log($message);
+    }
+}
+
 // Plugin activation hook
 register_activation_hook(__FILE__, 'subzz_activate_plugin');
 
 function subzz_activate_plugin() {
-    error_log('SUBZZ DEBUG: Plugin activation started');
+    subzz_log('SUBZZ DEBUG: Plugin activation started');
 
     // Register all rewrite rules before flushing
     subzz_add_rewrite_rules();
     flush_rewrite_rules();
 
-    error_log('SUBZZ DEBUG: Plugin activated - rewrite rules flushed');
+    subzz_log('SUBZZ DEBUG: Plugin activated - rewrite rules flushed');
 }
 
 // Plugin deactivation hook
 register_deactivation_hook(__FILE__, 'subzz_deactivate_plugin');
 
 function subzz_deactivate_plugin() {
-    error_log('SUBZZ DEBUG: Plugin deactivation - flushing rewrite rules');
+    subzz_log('SUBZZ DEBUG: Plugin deactivation - flushing rewrite rules');
     flush_rewrite_rules();
 }
 
@@ -46,12 +55,12 @@ function subzz_deactivate_plugin() {
 add_action('plugins_loaded', 'subzz_init_plugin');
 
 function subzz_init_plugin() {
-    error_log('SUBZZ DEBUG: Plugin initialization started');
+    subzz_log('SUBZZ DEBUG: Plugin initialization started');
     
     // Check if WooCommerce is active
     if (!class_exists('WooCommerce')) {
         add_action('admin_notices', 'subzz_woocommerce_missing_notice');
-        error_log('SUBZZ ERROR: WooCommerce not found - plugin cannot initialize');
+        subzz_log('SUBZZ ERROR: WooCommerce not found - plugin cannot initialize');
         return;
     }
     
@@ -66,7 +75,7 @@ function subzz_init_plugin() {
     new Subzz_Contract_Integration();
     new Subzz_Customer_Portal();
 
-    error_log('SUBZZ DEBUG: Plugin initialized successfully with Azure integration');
+    subzz_log('SUBZZ DEBUG: Plugin initialized successfully with Azure integration');
 }
 
 function subzz_woocommerce_missing_notice() {
@@ -119,7 +128,7 @@ function subzz_handle_payment_page() {
         return;
     }
     
-    error_log('=== SUBZZ PAYMENT PAGE: Request received ===');
+    subzz_log('=== SUBZZ PAYMENT PAGE: Request received ===');
     
     // Load the payment page template
     $template_path = plugin_dir_path(__FILE__) . 'templates/subscription-payment.php';
@@ -128,7 +137,7 @@ function subzz_handle_payment_page() {
         include $template_path;
         exit;
     } else {
-        error_log('SUBZZ PAYMENT PAGE ERROR: Template file not found at ' . $template_path);
+        subzz_log('SUBZZ PAYMENT PAGE ERROR: Template file not found at ' . $template_path);
         wp_die('Payment page template not found. Please contact support.');
     }
 }
@@ -143,11 +152,11 @@ function subzz_handle_success_page() {
         return;
     }
     
-    error_log('=== SUBZZ PAYMENT SUCCESS PAGE: Request received ===');
+    subzz_log('=== SUBZZ PAYMENT SUCCESS PAGE: Request received ===');
     
     // Log any parameters received from LekkaPay
     if (!empty($_GET)) {
-        error_log('SUBZZ PAYMENT SUCCESS: URL parameters: ' . print_r($_GET, true));
+        subzz_log('SUBZZ PAYMENT SUCCESS: URL parameters: ' . print_r($_GET, true));
     }
     
     // Load the payment success template
@@ -157,7 +166,7 @@ function subzz_handle_success_page() {
         include $template_path;
         exit;
     } else {
-        error_log('SUBZZ PAYMENT SUCCESS ERROR: Template file not found at ' . $template_path);
+        subzz_log('SUBZZ PAYMENT SUCCESS ERROR: Template file not found at ' . $template_path);
         wp_die('Payment success page template not found. Please contact support.');
     }
 }
@@ -172,11 +181,11 @@ function subzz_handle_cancelled_page() {
         return;
     }
     
-    error_log('=== SUBZZ PAYMENT CANCELLED PAGE: Request received ===');
+    subzz_log('=== SUBZZ PAYMENT CANCELLED PAGE: Request received ===');
     
     // Log any parameters received from LekkaPay
     if (!empty($_GET)) {
-        error_log('SUBZZ PAYMENT CANCELLED: URL parameters: ' . print_r($_GET, true));
+        subzz_log('SUBZZ PAYMENT CANCELLED: URL parameters: ' . print_r($_GET, true));
     }
     
     // Load the payment cancelled template
@@ -186,7 +195,7 @@ function subzz_handle_cancelled_page() {
         include $template_path;
         exit;
     } else {
-        error_log('SUBZZ PAYMENT CANCELLED ERROR: Template file not found at ' . $template_path);
+        subzz_log('SUBZZ PAYMENT CANCELLED ERROR: Template file not found at ' . $template_path);
         wp_die('Payment cancelled page template not found. Please contact support.');
     }
 }
@@ -200,37 +209,32 @@ function subzz_handle_checkout_subscription_page() {
         return;
     }
 
-    error_log('=== SUBZZ CHECKOUT SUBSCRIPTION: Request received ===');
+    subzz_log('=== SUBZZ CHECKOUT SUBSCRIPTION: Request received ===');
+
+    // Handle abandoned cart resume link (before login check — customer may not be logged in)
+    if (isset($_GET['resume']) && !empty($_GET['resume'])) {
+        subzz_log('SUBZZ CHECKOUT SUBSCRIPTION: Resume token detected — routing to resume handler');
+        $handler = new Subzz_Payment_Handler();
+        $handler->handle_checkout_resume(sanitize_text_field($_GET['resume']));
+        return;
+    }
 
     // Require login
     if (!is_user_logged_in()) {
-        error_log('SUBZZ CHECKOUT SUBSCRIPTION: User not logged in - redirecting to login');
+        subzz_log('SUBZZ CHECKOUT SUBSCRIPTION: User not logged in - redirecting to login');
         wp_redirect(wp_login_url(home_url('/checkout-subscription/')));
         exit;
     }
 
     // Require WooCommerce cart with subscription product
     if (!class_exists('WooCommerce') || !WC()->cart || WC()->cart->is_empty()) {
-        error_log('SUBZZ CHECKOUT SUBSCRIPTION: Cart empty - redirecting to cart');
+        subzz_log('SUBZZ CHECKOUT SUBSCRIPTION: Cart empty - redirecting to cart');
         wp_redirect(wc_get_cart_url());
         exit;
     }
 
-    // Check for subscription product in cart
-    $has_subscription = false;
-    foreach (WC()->cart->get_cart() as $cart_item) {
-        $subscription_enabled = get_post_meta($cart_item['product_id'], '_subzz_subscription_enabled', true);
-        if ($subscription_enabled === 'yes') {
-            $has_subscription = true;
-            break;
-        }
-    }
-
-    if (!$has_subscription) {
-        error_log('SUBZZ CHECKOUT SUBSCRIPTION: No subscription product in cart - redirecting to normal checkout');
-        wp_redirect(wc_get_checkout_url());
-        exit;
-    }
+    // All Subzz products are subscription products — no per-product meta check needed.
+    // Cart is already verified non-empty above.
 
     // Enqueue checkout subscription assets
     add_action('wp_enqueue_scripts', 'subzz_enqueue_checkout_subscription_assets', 1);
@@ -240,7 +244,7 @@ function subzz_handle_checkout_subscription_page() {
         include $template_path;
         exit;
     } else {
-        error_log('SUBZZ CHECKOUT SUBSCRIPTION ERROR: Template not found');
+        subzz_log('SUBZZ CHECKOUT SUBSCRIPTION ERROR: Template not found');
         wp_die('Checkout page template not found. Please contact support.');
     }
 }
@@ -254,7 +258,7 @@ function subzz_handle_payment_update_page() {
         return;
     }
 
-    error_log('=== SUBZZ PAYMENT UPDATE: Request received ===');
+    subzz_log('=== SUBZZ PAYMENT UPDATE: Request received ===');
 
     // Enqueue payment update assets
     add_action('wp_enqueue_scripts', 'subzz_enqueue_payment_update_assets', 1);
@@ -264,7 +268,7 @@ function subzz_handle_payment_update_page() {
         include $template_path;
         exit;
     } else {
-        error_log('SUBZZ PAYMENT UPDATE ERROR: Template not found');
+        subzz_log('SUBZZ PAYMENT UPDATE ERROR: Template not found');
         wp_die('Payment update page template not found. Please contact support.');
     }
 }
@@ -273,10 +277,17 @@ function subzz_enqueue_payment_update_assets() {
     $plugin_url = plugin_dir_url(__FILE__);
 
     wp_enqueue_style(
+        'subzz-base',
+        $plugin_url . 'assets/css/subzz-base.css',
+        array(),
+        '2.1.0'
+    );
+
+    wp_enqueue_style(
         'subzz-customer-portal',
         $plugin_url . 'assets/css/customer-portal.css',
-        array(),
-        '2.0.0'
+        array('subzz-base'),
+        '2.1.0'
     );
 
     wp_enqueue_script(
@@ -303,10 +314,17 @@ function subzz_enqueue_portal_assets() {
     $plugin_url = plugin_dir_url(__FILE__);
 
     wp_enqueue_style(
+        'subzz-base',
+        $plugin_url . 'assets/css/subzz-base.css',
+        array(),
+        '2.1.0'
+    );
+
+    wp_enqueue_style(
         'subzz-customer-portal',
         $plugin_url . 'assets/css/customer-portal.css',
-        array(),
-        '2.0.0'
+        array('subzz-base'),
+        '2.1.0'
     );
 
     wp_enqueue_script(
@@ -325,13 +343,20 @@ function subzz_enqueue_portal_assets() {
 }
 
 function subzz_enqueue_checkout_subscription_assets() {
-    $plugin_url = plugin_dir_url(dirname(__FILE__) . '/../subzz-subscription-payments.php');
+    $plugin_url = plugin_dir_url(__FILE__);
+
+    wp_enqueue_style(
+        'subzz-base',
+        $plugin_url . 'assets/css/subzz-base.css',
+        array(),
+        '2.1.0'
+    );
 
     wp_enqueue_style(
         'subzz-checkout-plans',
         $plugin_url . 'assets/css/checkout-plans.css',
-        array(),
-        '2.0.0'
+        array('subzz-base'),
+        '2.1.0'
     );
 
     wp_enqueue_script(
@@ -354,44 +379,52 @@ function subzz_force_load_signature_assets_early() {
     // Method 1: Check URL request
     if (isset($wp->request) && $wp->request === 'contract-signature') {
         $is_contract_page = true;
-        error_log('SUBZZ DEBUG: Contract page detected via URL request (early)');
+        subzz_log('SUBZZ DEBUG: Contract page detected via URL request (early)');
     }
     
     // Method 2: Check query variable
     if (get_query_var('subzz_contract_page')) {
         $is_contract_page = true;
-        error_log('SUBZZ DEBUG: Contract page detected via query variable (early)');
+        subzz_log('SUBZZ DEBUG: Contract page detected via query variable (early)');
     }
     
     // Method 3: Check if current URL contains contract-signature
     $current_url = $_SERVER['REQUEST_URI'] ?? '';
     if (strpos($current_url, 'contract-signature') !== false) {
         $is_contract_page = true;
-        error_log('SUBZZ DEBUG: Contract page detected via URL analysis (early)');
+        subzz_log('SUBZZ DEBUG: Contract page detected via URL analysis (early)');
     }
     
     if (!$is_contract_page) {
         return; // Not the signature page
     }
     
-    error_log('SUBZZ DEBUG: Loading signature assets EARLY on contract signature page (HYBRID architecture)');
+    subzz_log('SUBZZ DEBUG: Loading signature assets EARLY on contract signature page (HYBRID architecture)');
     
     // Force enqueue the assets immediately
     add_action('wp_enqueue_scripts', 'subzz_enqueue_signature_assets_now', 1);
     
     function subzz_enqueue_signature_assets_now() {
-        error_log('SUBZZ DEBUG: Enqueuing signature assets NOW (HYBRID: billing-date-handler.js + signature-handler.js)');
+        subzz_log('SUBZZ DEBUG: Enqueuing signature assets NOW (HYBRID: billing-date-handler.js + signature-handler.js)');
         
         $plugin_url = plugin_dir_url(__FILE__);
         
+        // Enqueue base design tokens first
+        wp_enqueue_style(
+            'subzz-base',
+            $plugin_url . 'assets/css/subzz-base.css',
+            array(),
+            '2.1.0'
+        );
+
         // Enqueue contract styles
         wp_enqueue_style(
             'subzz-contract-styles',
             $plugin_url . 'assets/contract-styles.css',
-            array(),
-            '1.4.0'
+            array('subzz-base'),
+            '2.1.0'
         );
-        error_log('SUBZZ DEBUG: contract-styles.css enqueued');
+        subzz_log('SUBZZ DEBUG: contract-styles.css enqueued');
         
         // Step 1: Billing date selection (HYBRID architecture)
         wp_enqueue_script(
@@ -401,7 +434,7 @@ function subzz_force_load_signature_assets_early() {
             '1.4.0',
             true
         );
-        error_log('SUBZZ DEBUG: billing-date-handler.js enqueued (HYBRID Step 1)');
+        subzz_log('SUBZZ DEBUG: billing-date-handler.js enqueued (HYBRID Step 1)');
         
         // Step 2 & 3: Signature handling (depends on billing date completion)
         wp_enqueue_script(
@@ -411,7 +444,7 @@ function subzz_force_load_signature_assets_early() {
             '1.4.0',
             true
         );
-        error_log('SUBZZ DEBUG: signature-handler.js enqueued (HYBRID Steps 2 & 3, depends on billing handler)');
+        subzz_log('SUBZZ DEBUG: signature-handler.js enqueued (HYBRID Steps 2 & 3, depends on billing handler)');
         
         // Signature Pad library
         $signature_pad_path = plugin_dir_path(__FILE__) . 'assets/signature-pad.min.js';
@@ -423,7 +456,7 @@ function subzz_force_load_signature_assets_early() {
                 '4.1.7',
                 true
             );
-            error_log('SUBZZ DEBUG: signature-pad.min.js enqueued from local file');
+            subzz_log('SUBZZ DEBUG: signature-pad.min.js enqueued from local file');
         } else {
             wp_enqueue_script(
                 'signature-pad',
@@ -432,7 +465,7 @@ function subzz_force_load_signature_assets_early() {
                 '4.1.7',
                 true
             );
-            error_log('SUBZZ DEBUG: signature-pad.min.js enqueued from CDN (local file not found)');
+            subzz_log('SUBZZ DEBUG: signature-pad.min.js enqueued from CDN (local file not found)');
         }
         
         // Localize script with AJAX URL
@@ -440,12 +473,29 @@ function subzz_force_load_signature_assets_early() {
             'ajaxurl' => admin_url('admin-ajax.php'),
             'nonce' => wp_create_nonce('subzz_signature_nonce')
         ));
-        error_log('SUBZZ DEBUG: AJAX configuration localized for signature handler');
+        subzz_log('SUBZZ DEBUG: AJAX configuration localized for signature handler');
     }
 }
 
 // NOTE: Contract signature page is handled by Subzz_Contract_Integration class
 // See includes/class-contract-integration.php -> handle_contract_signature_page()
+
+// Enqueue base design tokens on payment template pages (success, cancelled, subscription-payment)
+add_action('template_redirect', 'subzz_enqueue_base_on_payment_templates', 5);
+function subzz_enqueue_base_on_payment_templates() {
+    global $wp;
+    $payment_pages = array('subscription-payment', 'payment-success', 'payment-cancelled');
+    if (isset($wp->request) && in_array($wp->request, $payment_pages, true)) {
+        add_action('wp_enqueue_scripts', function() {
+            wp_enqueue_style(
+                'subzz-base',
+                plugin_dir_url(__FILE__) . 'assets/css/subzz-base.css',
+                array(),
+                '2.1.0'
+            );
+        }, 1);
+    }
+}
 
 // Debug URL handling
 add_action('template_redirect', 'subzz_debug_url_handling');
@@ -453,35 +503,35 @@ function subzz_debug_url_handling() {
     global $wp;
     
     if (isset($wp->request) && $wp->request === 'contract-signature') {
-        error_log('SUBZZ DEBUG: Contract signature URL matched - WordPress routing working');
+        subzz_log('SUBZZ DEBUG: Contract signature URL matched - WordPress routing working');
     }
     
     if (isset($wp->request) && $wp->request === 'subscription-payment') {
-        error_log('SUBZZ DEBUG: Subscription payment URL matched - WordPress routing working');
+        subzz_log('SUBZZ DEBUG: Subscription payment URL matched - WordPress routing working');
     }
     
     if (isset($wp->request) && $wp->request === 'payment-success') {
-        error_log('SUBZZ DEBUG: Payment success URL matched - WordPress routing working');
+        subzz_log('SUBZZ DEBUG: Payment success URL matched - WordPress routing working');
     }
     
     if (isset($wp->request) && $wp->request === 'payment-cancelled') {
-        error_log('SUBZZ DEBUG: Payment cancelled URL matched - WordPress routing working');
+        subzz_log('SUBZZ DEBUG: Payment cancelled URL matched - WordPress routing working');
     }
     
     if (get_query_var('subzz_contract_page')) {
-        error_log('SUBZZ DEBUG: Contract page query var detected - rewrite rules working');
+        subzz_log('SUBZZ DEBUG: Contract page query var detected - rewrite rules working');
     }
     
     if (get_query_var('subzz_payment_page')) {
-        error_log('SUBZZ DEBUG: Payment page query var detected - rewrite rules working');
+        subzz_log('SUBZZ DEBUG: Payment page query var detected - rewrite rules working');
     }
     
     if (get_query_var('subzz_payment_success')) {
-        error_log('SUBZZ DEBUG: Payment success query var detected - rewrite rules working');
+        subzz_log('SUBZZ DEBUG: Payment success query var detected - rewrite rules working');
     }
     
     if (get_query_var('subzz_payment_cancelled')) {
-        error_log('SUBZZ DEBUG: Payment cancelled query var detected - rewrite rules working');
+        subzz_log('SUBZZ DEBUG: Payment cancelled query var detected - rewrite rules working');
     }
 }
 
@@ -685,7 +735,7 @@ function subzz_create_missing_assets() {
     // Create assets directory if it doesn't exist
     if (!file_exists($assets_dir)) {
         wp_mkdir_p($assets_dir);
-        error_log('SUBZZ DEBUG: Created assets directory: ' . $assets_dir);
+        subzz_log('SUBZZ DEBUG: Created assets directory: ' . $assets_dir);
     }
     
     // Download signature-pad.min.js if it doesn't exist
@@ -697,10 +747,10 @@ function subzz_create_missing_assets() {
             $body = wp_remote_retrieve_body($signature_pad_content);
             if (!empty($body)) {
                 file_put_contents($signature_pad_file, $body);
-                error_log('SUBZZ DEBUG: Downloaded signature-pad.min.js to: ' . $signature_pad_file);
+                subzz_log('SUBZZ DEBUG: Downloaded signature-pad.min.js to: ' . $signature_pad_file);
             }
         } else {
-            error_log('SUBZZ WARNING: Failed to download signature-pad.min.js: ' . $signature_pad_content->get_error_message());
+            subzz_log('SUBZZ WARNING: Failed to download signature-pad.min.js: ' . $signature_pad_content->get_error_message());
         }
     }
 }

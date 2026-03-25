@@ -14,220 +14,229 @@ if (!defined('ABSPATH')) {
 
 get_header();
 
-// Attempt to load order details from Azure via reference_id or session
-$order_details = null;
+// Capture all LekkaPay return parameters
 $reference_id = isset($_GET['reference_id']) ? sanitize_text_field($_GET['reference_id']) : '';
+$response_code = isset($_GET['response_code']) ? sanitize_text_field($_GET['response_code']) : '';
+$response_message = isset($_GET['response']) ? sanitize_text_field($_GET['response']) : '';
+$transaction_result = isset($_GET['transaction_result']) ? sanitize_text_field($_GET['transaction_result']) : '';
+$transaction_id = isset($_GET['transaction_id']) ? sanitize_text_field($_GET['transaction_id']) : '';
 
 if (empty($reference_id) && WC()->session) {
     $reference_id = WC()->session->get('subzz_reference_id', '');
 }
 
-if (!empty($reference_id) && class_exists('Subzz_Azure_API_Client')) {
+// Log payment return event to Azure API
+if (class_exists('Subzz_Azure_API_Client')) {
     $azure_client = new Subzz_Azure_API_Client();
-    $order_details = $azure_client->retrieve_order_data($reference_id);
-    error_log('SUBZZ PAYMENT SUCCESS: Loaded order details for reference: ' . $reference_id);
+
+    // Log the event
+    $user = wp_get_current_user();
+    $azure_client->log_payment_event(array(
+        'eventType'         => 'return_success',
+        'orderReferenceId'  => $reference_id ?: null,
+        'customerEmail'     => $user ? $user->user_email : null,
+        'responseCode'      => $response_code ?: null,
+        'responseMessage'   => $response_message ?: null,
+        'transactionResult' => $transaction_result ?: null,
+        'transactionId'     => $transaction_id ?: null,
+        'rawParams'         => wp_json_encode($_GET),
+        'source'            => 'wordpress'
+    ));
+
+    // Load order details
+    $order_details = null;
+    if (!empty($reference_id)) {
+        $order_details = $azure_client->retrieve_order_data($reference_id);
+        subzz_log('SUBZZ PAYMENT SUCCESS: Loaded order details for reference: ' . $reference_id);
+    }
 }
 ?>
 
+<div class="subzz-checkout-header">
+    <a href="<?php echo esc_url(home_url('/')); ?>">
+        <img src="<?php echo esc_url(plugin_dir_url(dirname(__FILE__)) . 'assets/img/logo-white.png'); ?>" alt="<?php echo esc_attr(get_bloginfo('name')); ?>">
+    </a>
+</div>
+
 <style>
-/* ── Subzz Payment Success — Matches checkout design system ──────── */
 .subzz-payment-success {
-    max-width: 900px;
-    margin: 40px auto;
-    padding: 0 20px;
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
-    color: #2d3748;
+    max-width: 600px;
+    margin: 50px auto;
+    padding: 30px;
+    text-align: center;
+    font-family: var(--subzz-font-family);
 }
 
-/* ── Progress indicator ── */
-.checkout-progress { display: flex; align-items: center; justify-content: center; gap: 0; margin-bottom: 36px; }
-.progress-step { display: flex; flex-direction: column; align-items: center; gap: 6px; }
-.step-dot { width: 32px; height: 32px; border-radius: 50%; background: #dee2e6; color: #fff; font-weight: 700; font-size: 14px; display: flex; align-items: center; justify-content: center; }
-.progress-step.done .step-dot { background: #27ae60; }
-.progress-step.active .step-dot { background: #3498db; }
-.step-label { font-size: 12px; color: #6c757d; font-weight: 500; }
-.progress-step.done .step-label { color: #27ae60; font-weight: 600; }
-.progress-step.active .step-label { color: #3498db; font-weight: 600; }
-.progress-line { width: 48px; height: 3px; background: #dee2e6; margin: 0 4px; margin-bottom: 20px; }
-.progress-line.done { background: #27ae60; }
-
-/* ── Header ── */
-.success-header { text-align: center; margin-bottom: 32px; }
-.success-header h1 { font-size: 28px; font-weight: 700; color: #27ae60; margin-bottom: 8px; }
-.success-header p { color: #4a5568; font-size: 16px; }
-
-/* ── Content card ── */
-.success-content {
-    background: white;
-    border: 1px solid #e2e8f0;
-    border-radius: 12px;
-    padding: 32px;
+.success-icon {
+    font-size: 64px;
+    color: #28a745;
     margin-bottom: 20px;
+    animation: successPulse 0.6s ease-in-out;
 }
 
-.success-content p {
-    font-size: 15px;
-    line-height: 1.6;
-    color: #4a5568;
-    margin-bottom: 12px;
+@keyframes successPulse {
+    0% { transform: scale(0.8); opacity: 0; }
+    50% { transform: scale(1.1); }
+    100% { transform: scale(1); opacity: 1; }
 }
 
-/* ── Order summary within success ── */
-.order-summary-box {
-    background: #fafbfc;
-    border: 1px solid #eee;
-    border-radius: 8px;
-    padding: 20px;
-    margin-top: 20px;
+.success-message h1 {
+    color: #28a745;
+    margin-bottom: 15px;
+    font-size: 32px;
 }
 
-.order-summary-box .summary-label {
-    font-size: 13px;
-    color: #6c757d;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    margin-bottom: 12px;
-}
-
-.order-summary-box .summary-row {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 8px 0;
-    font-size: 15px;
-}
-
-.order-summary-box .summary-row span { color: #4a5568; }
-.order-summary-box .summary-row strong { color: #1a202c; }
-.order-summary-box .ref-id { font-size: 12px; color: #a0aec0; margin-top: 8px; }
-
-/* ── Info box ── */
-.info-box {
-    background: #ebf8ff;
-    border: 1px solid #bee3f8;
-    border-radius: 8px;
-    padding: 20px;
+.success-content {
+    background: #f8f9fa;
+    border: 1px solid var(--subzz-border);
+    border-radius: var(--subzz-radius-xl);
+    box-shadow: var(--subzz-shadow-2xl);
+    padding: 30px;
     margin: 20px 0;
     text-align: left;
 }
 
+.success-content p {
+    font-size: 16px;
+    line-height: 1.6;
+    color: var(--subzz-gray);
+    margin-bottom: 15px;
+}
+
+.info-box {
+    background: var(--subzz-info-bg);
+    border-left: 4px solid var(--subzz-blue);
+    padding: 15px;
+    margin: 20px 0;
+    text-align: left;
+    border-radius: var(--subzz-radius-md);
+}
+
 .info-box strong {
-    color: #1a202c;
+    color: var(--subzz-blue);
     display: block;
     margin-bottom: 10px;
-    font-size: 15px;
 }
 
 .info-box ul {
-    margin: 8px 0 0 20px;
+    margin: 10px 0 0 20px;
     padding: 0;
 }
 
 .info-box li {
-    margin-bottom: 6px;
-    color: #4a5568;
-    font-size: 14px;
+    margin-bottom: 8px;
+    color: var(--subzz-gray);
 }
 
-/* ── Processing note ── */
+.action-buttons {
+    margin-top: 30px;
+}
+
+.button {
+    display: inline-block;
+    padding: 12px 30px;
+    margin: 0 10px;
+    background: var(--subzz-blue);
+    color: white !important;
+    text-decoration: none;
+    border-radius: var(--subzz-radius-md);
+    transition: all 150ms;
+    font-weight: 700;
+}
+
+.button:hover {
+    opacity: 0.9;
+    color: white !important;
+}
+
+.button.secondary {
+    background: transparent;
+    color: var(--subzz-gray) !important;
+    border: 2px solid var(--subzz-border);
+}
+
+.button.secondary:hover {
+    opacity: 0.7;
+    color: var(--subzz-gray) !important;
+}
+
 .processing-note {
-    background: #fffbeb;
-    border: 1px solid #fef3c7;
-    border-radius: 8px;
-    padding: 16px 20px;
+    background: var(--subzz-warning-bg);
+    border: 1px solid var(--subzz-warning-border);
+    border-radius: var(--subzz-radius-md);
+    padding: 15px;
     margin: 20px 0;
     font-size: 14px;
-    color: #92400e;
+    color: #856404;
 }
 
-/* ── Buttons (theme-safe) ── */
-.action-buttons { text-align: center; margin-top: 28px; }
-
-.btn-primary {
-    display: inline-block;
-    padding: 14px 28px;
-    font-size: 16px;
-    font-weight: 700;
-    text-align: center;
-    text-decoration: none;
-    border: none;
-    border-radius: 12px;
-    cursor: pointer;
-    transition: all 0.2s;
-    background: linear-gradient(135deg, #3498db 0%, #2980b9 100%);
-    color: #fff;
-    margin: 6px 8px;
+.subzz-dash-divider {
+    display: flex;
+    gap: 8px;
+    justify-content: center;
+    margin-bottom: 32px;
 }
 
-.btn-primary:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(52, 152, 219, 0.3); color: #fff; }
-
-.btn-secondary {
-    display: inline-block;
-    padding: 10px 20px;
-    font-size: 14px;
-    font-weight: 600;
-    text-align: center;
-    text-decoration: none;
-    border: 2px solid #3498db;
-    border-radius: 8px;
-    cursor: pointer;
-    transition: all 0.2s;
-    background: #fff;
-    color: #3498db;
-    margin: 6px 8px;
+.subzz-dash-divider span {
+    width: 48px;
+    height: 4px;
+    border-radius: 9999px;
 }
-
-.btn-secondary:hover { background: #3498db; color: #fff; }
 
 @media (max-width: 600px) {
-    .subzz-payment-success { padding: 0 12px; }
-    .success-content { padding: 20px 16px; }
-    .success-header h1 { font-size: 22px; }
+    .subzz-payment-success {
+        margin: 20px auto;
+        padding: 16px;
+    }
+
+    .success-message h1 {
+        font-size: 24px;
+    }
+
+    .success-content {
+        padding: 20px 16px;
+    }
+
+    .success-icon {
+        font-size: 48px;
+    }
+
+    .action-buttons .button {
+        display: block;
+        margin: 8px 0;
+    }
+
+    .subzz-dash-divider span {
+        width: 36px;
+    }
 }
 </style>
 
 <div class="subzz-payment-success">
-    <div class="success-header">
-        <h1>Payment Received!</h1>
-        <div class="checkout-progress">
-            <div class="progress-step done">
-                <span class="step-dot">1</span>
-                <span class="step-label">Choose Plan</span>
-            </div>
-            <div class="progress-line done"></div>
-            <div class="progress-step done">
-                <span class="step-dot">2</span>
-                <span class="step-label">Contract</span>
-            </div>
-            <div class="progress-line done"></div>
-            <div class="progress-step done">
-                <span class="step-dot">3</span>
-                <span class="step-label">Payment</span>
-            </div>
-            <div class="progress-line done"></div>
-            <div class="progress-step active">
-                <span class="step-dot">4</span>
-                <span class="step-label">Complete</span>
-            </div>
+    <div class="success-icon">✅</div>
+    
+    <div class="success-message">
+        <h1>Subscription Confirmed!</h1>
+        <div class="subzz-dash-divider">
+            <span style="background: var(--subzz-orange)"></span>
+            <span style="background: var(--subzz-red)"></span>
+            <span style="background: var(--subzz-blue)"></span>
+            <span style="background: var(--subzz-cyan)"></span>
         </div>
     </div>
-
+    
     <div class="success-content">
-        <p><strong>Thank you for your payment!</strong></p>
-        <p>Your payment is being processed and you will receive a confirmation email shortly.</p>
-        <p>Your subscription will be activated once the payment is confirmed (usually within a few minutes).</p>
+        <p><strong>Your subscription has been placed!</strong></p>
+        <p>We've received your payment and your subscription is now being activated.</p>
+        <p>You will receive a confirmation email shortly with your subscription details.</p>
 
         <?php if ($order_details): ?>
-        <div class="order-summary-box">
-            <div class="summary-label">Order Summary</div>
+        <div style="margin-top:20px;padding-top:15px;border-top:1px solid #dee2e6;">
+            <p style="font-size:14px;color:#666;margin-bottom:8px;"><strong>Order Summary</strong></p>
             <?php if (isset($order_details['order_items']) && is_array($order_details['order_items'])): ?>
                 <?php foreach ($order_details['order_items'] as $item): ?>
                     <?php if (!empty($item['is_subscription'])): ?>
-                    <div class="summary-row">
-                        <span>Product</span>
-                        <strong><?php echo esc_html($item['name']); ?></strong>
-                    </div>
+                    <p style="margin:4px 0;"><strong><?php echo esc_html($item['name']); ?></strong></p>
                     <?php endif; ?>
                 <?php endforeach; ?>
             <?php endif; ?>
@@ -241,32 +250,23 @@ if (!empty($reference_id) && class_exists('Subzz_Azure_API_Client')) {
             ?>
 
             <?php if ($ip > 0): ?>
-            <div class="summary-row">
-                <span>Initial payment</span>
-                <strong><?php echo esc_html($cur); ?> <?php echo number_format($ip, 2); ?></strong>
-            </div>
+            <p style="margin:4px 0;">Initial payment: <strong><?php echo esc_html($cur); ?> <?php echo number_format(ceil($ip), 0); ?></strong></p>
             <?php if ($term && $reduced): ?>
-            <div class="summary-row">
-                <span><?php echo $term; ?> monthly payments of</span>
-                <strong><?php echo esc_html($cur); ?> <?php echo number_format($reduced, 2); ?></strong>
-            </div>
+            <p style="margin:4px 0;"><?php echo ($term - 1); ?> monthly payments of: <strong><?php echo esc_html($cur); ?> <?php echo number_format(ceil($reduced), 0); ?></strong></p>
             <?php endif; ?>
             <?php elseif ($std > 0): ?>
-            <div class="summary-row">
-                <span>Monthly payment</span>
-                <strong><?php echo esc_html($cur); ?> <?php echo number_format($std, 2); ?></strong>
-            </div>
+            <p style="margin:4px 0;">Monthly payment: <strong><?php echo esc_html($cur); ?> <?php echo number_format(ceil($std), 0); ?></strong></p>
             <?php endif; ?>
 
             <?php if (!empty($reference_id)): ?>
-            <div class="ref-id">Reference: <?php echo esc_html($reference_id); ?></div>
+            <p style="margin:8px 0 0;font-size:12px;color:#999;">Reference: <?php echo esc_html($reference_id); ?></p>
             <?php endif; ?>
         </div>
         <?php endif; ?>
     </div>
-
+    
     <div class="info-box">
-        <strong>What happens next?</strong>
+        <strong>📧 What happens next?</strong>
         <ul>
             <li>Payment confirmation email (within 5 minutes)</li>
             <li>Subscription activation (immediate after confirmation)</li>
@@ -274,16 +274,16 @@ if (!empty($reference_id) && class_exists('Subzz_Azure_API_Client')) {
             <li>First billing will occur on your selected billing date</li>
         </ul>
     </div>
-
+    
     <div class="processing-note">
-        <strong>Processing Time:</strong> Payment confirmations typically arrive within 2-5 minutes. If you don't receive confirmation within 10 minutes, please check your spam folder or contact support.
+        <strong>⏱️ Processing Time:</strong> Payment confirmations typically arrive within 2-5 minutes. If you don't receive confirmation within 10 minutes, please check your spam folder or contact support.
     </div>
-
+    
     <div class="action-buttons">
-        <a href="<?php echo esc_url(home_url('/')); ?>" class="btn-primary">
+        <a href="<?php echo esc_url(home_url('/')); ?>" class="button">
             Return to Home
         </a>
-        <a href="<?php echo esc_url(home_url('/my-account/')); ?>" class="btn-secondary">
+        <a href="<?php echo esc_url(home_url('/my-account/')); ?>" class="button secondary">
             View My Account
         </a>
     </div>

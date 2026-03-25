@@ -24,8 +24,11 @@ class Subzz_Customer_Portal {
 
         // Register the My Account endpoint
         add_action('init', array($this, 'register_endpoint'));
-        add_filter('woocommerce_account_menu_items', array($this, 'add_menu_item'));
+        add_filter('woocommerce_account_menu_items', array($this, 'build_menu'), 999);
         add_action('woocommerce_account_my-subscription_endpoint', array($this, 'render_content'));
+
+        // Override the default Dashboard content with our custom dashboard
+        add_action('init', array($this, 'override_dashboard'));
 
         // AJAX handlers (logged-in users only)
         add_action('wp_ajax_subzz_load_invoices', array($this, 'ajax_load_invoices'));
@@ -41,17 +44,103 @@ class Subzz_Customer_Portal {
     }
 
     /**
-     * Add "My Subscription" to the My Account menu, after "Orders".
+     * Build a clean My Account menu — hide unused WooCommerce tabs.
+     * Keeps: Dashboard, My Subscription, Account Details, Logout.
+     * Hides: Orders, Downloads, Addresses, Subscriptions, Wishlist.
      */
-    public function add_menu_item($items) {
-        $new_items = array();
-        foreach ($items as $key => $label) {
-            $new_items[$key] = $label;
-            if ($key === 'orders') {
-                $new_items['my-subscription'] = 'My Subscription';
-            }
+    public function build_menu($items) {
+        $clean_items = array();
+
+        // Add Dashboard first
+        if (isset($items['dashboard'])) {
+            $clean_items['dashboard'] = $items['dashboard'];
         }
-        return $new_items;
+
+        // Add My Subscription
+        $clean_items['my-subscription'] = 'My Subscription';
+
+        // Add Account Details
+        if (isset($items['edit-account'])) {
+            $clean_items['edit-account'] = $items['edit-account'];
+        }
+
+        // Add Logout last
+        if (isset($items['customer-logout'])) {
+            $clean_items['customer-logout'] = $items['customer-logout'];
+        }
+
+        return $clean_items;
+    }
+
+    /**
+     * Replace WooCommerce default dashboard action with ours.
+     * Must run after WooCommerce has registered its own actions.
+     */
+    public function override_dashboard() {
+        remove_action('woocommerce_account_dashboard', 'woocommerce_account_dashboard');
+        add_action('woocommerce_account_dashboard', array($this, 'render_dashboard'));
+    }
+
+    /**
+     * Render custom Subzz dashboard instead of WooCommerce default.
+     * Shows subscription summary card + featured products.
+     * Hooked to woocommerce_account_dashboard (only fires on dashboard page).
+     */
+    public function render_dashboard() {
+        $user = wp_get_current_user();
+        $email = $user ? $user->user_email : '';
+        $subscriptions = $email ? $this->api_client->get_customer_subscriptions($email) : array();
+
+        // Get featured products via WC_Product_Query
+        $featured_products = $this->get_featured_products(4);
+
+        // Load the dashboard template
+        $template_path = plugin_dir_path(dirname(__FILE__)) . 'templates/dashboard.php';
+        if (file_exists($template_path)) {
+            include $template_path;
+        }
+    }
+
+    /**
+     * Get featured products using WooCommerce product query.
+     * Falls back to latest products if none are marked as featured.
+     *
+     * @param int $limit Number of products to return
+     * @return array Array of product data
+     */
+    private function get_featured_products($limit = 4) {
+        $products = array();
+
+        // Try featured products first
+        $args = array(
+            'status'   => 'publish',
+            'featured' => true,
+            'limit'    => $limit,
+            'orderby'  => 'date',
+            'order'    => 'DESC',
+        );
+
+        $query = new \WC_Product_Query($args);
+        $results = $query->get_products();
+
+        // Fallback to latest products if no featured
+        if (empty($results)) {
+            $args['featured'] = false;
+            $query = new \WC_Product_Query($args);
+            $results = $query->get_products();
+        }
+
+        foreach ($results as $product) {
+            $products[] = array(
+                'id'        => $product->get_id(),
+                'name'      => $product->get_name(),
+                'price'     => $product->get_price(),
+                'image'     => wp_get_attachment_url($product->get_image_id()),
+                'permalink' => $product->get_permalink(),
+            );
+        }
+
+        return $products;
     }
 
     /**
@@ -68,8 +157,29 @@ class Subzz_Customer_Portal {
         $email = $user->user_email;
         $active_tab = isset($_GET['tab']) ? sanitize_text_field($_GET['tab']) : 'overview';
 
-        // Fetch subscription data server-side
-        $subscription = $this->api_client->get_customer_subscription($email);
+        // Fetch ALL subscriptions
+        $subscriptions = $this->api_client->get_customer_subscriptions($email);
+
+        // Determine which subscription to show detail for
+        $selected_id = isset($_GET['sid']) ? sanitize_text_field($_GET['sid']) : '';
+        $subscription = false;
+
+        if (!empty($subscriptions)) {
+            if ($selected_id) {
+                // Find the selected subscription by ID
+                foreach ($subscriptions as $sub) {
+                    if ($sub['subscriptionId'] === $selected_id) {
+                        $subscription = $sub;
+                        break;
+                    }
+                }
+            }
+            // Default to the first (most recent) subscription
+            if (!$subscription) {
+                $subscription = $subscriptions[0];
+            }
+        }
+
         $invoices = $this->api_client->get_customer_invoices($email, 1, 10);
         $contract = $this->api_client->get_contract_download_url($email);
 
@@ -79,7 +189,7 @@ class Subzz_Customer_Portal {
             include $template_path;
         } else {
             echo '<p>Subscription portal template not found.</p>';
-            error_log('SUBZZ PORTAL: Template not found at ' . $template_path);
+            subzz_log('SUBZZ PORTAL: Template not found at ' . $template_path);
         }
     }
 
@@ -170,7 +280,7 @@ class Subzz_Customer_Portal {
         ));
 
         if (is_wp_error($response)) {
-            error_log('SUBZZ PORTAL: Payment token generation failed - ' . $response->get_error_message());
+            subzz_log('SUBZZ PORTAL: Payment token generation failed - ' . $response->get_error_message());
             wp_send_json_error('Failed to generate payment token');
         }
 
@@ -178,7 +288,7 @@ class Subzz_Customer_Portal {
         $body = json_decode(wp_remote_retrieve_body($response), true);
 
         if ($response_code !== 200 || !$body || empty($body['token'])) {
-            error_log('SUBZZ PORTAL: Payment token generation failed HTTP ' . $response_code);
+            subzz_log('SUBZZ PORTAL: Payment token generation failed HTTP ' . $response_code);
             wp_send_json_error('Failed to generate payment token');
         }
 

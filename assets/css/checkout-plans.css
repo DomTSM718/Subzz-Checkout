@@ -1,36 +1,71 @@
 /**
- * Subzz Checkout Plans — Styles
- * Single-page subscription checkout: plan cards, customise panel, address form, billing date.
- * Matches existing design language from contract-styles.css (blue #3498db, 12px radius).
+ * Subzz Checkout Plans — Card-Based Layout (Figma Redesign)
+ * Individual white cards on grey background.
+ * Uses Subzz Design System tokens from subzz-base.css.
  */
 
-/* ── Base layout ─────────────────────────────────────────────────── */
+/* -- Base layout --------------------------------------------------------- */
 .subzz-checkout-page {
     max-width: 900px;
     margin: 30px auto;
     padding: 0 20px;
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
-    color: #333;
+    font-family: var(--subzz-font-family);
+    color: var(--subzz-gray);
+    background: var(--subzz-page-bg);
 }
 
 .checkout-container {
-    background: #fff;
+    /* Transparent container — each section is its own card */
+    background: transparent;
+    border-radius: 0;
+    box-shadow: none;
+    padding: 0;
+}
+
+/* -- Back to cart link --------------------------------------------------- */
+.back-to-cart-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--subzz-blue);
+    text-decoration: none;
+    font-size: 14px;
+    font-weight: 600;
+    margin-bottom: 24px;
+    transition: opacity 0.2s;
+}
+
+.back-to-cart-link:hover {
+    opacity: 0.8;
+}
+
+.back-to-cart-link svg {
+    flex-shrink: 0;
+}
+
+/* -- Checkout card (shared) ---------------------------------------------- */
+.checkout-card {
+    background: var(--subzz-white);
     border-radius: 12px;
-    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
-    padding: 40px;
+    box-shadow: var(--subzz-shadow-sm);
+    padding: 24px;
+    margin-bottom: 24px;
 }
 
-@media (max-width: 600px) {
-    .checkout-container { padding: 20px 16px; }
+.card-heading {
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--subzz-gray);
+    margin: 0 0 24px;
 }
 
-/* ── Progress indicator ──────────────────────────────────────────── */
+/* -- Progress indicator -------------------------------------------------- */
 .checkout-progress {
     display: flex;
     align-items: center;
     justify-content: center;
     gap: 0;
-    margin-bottom: 36px;
+    margin-bottom: 0;
 }
 
 .progress-step {
@@ -41,10 +76,10 @@
 }
 
 .step-dot {
-    width: 32px;
-    height: 32px;
+    width: 40px;
+    height: 40px;
     border-radius: 50%;
-    background: #dee2e6;
+    background: var(--subzz-border);
     color: #fff;
     font-weight: 700;
     font-size: 14px;
@@ -55,323 +90,170 @@
 }
 
 .progress-step.active .step-dot {
-    background: #3498db;
+    background: var(--subzz-red);
+    box-shadow: var(--subzz-shadow-lg);
+}
+
+.progress-step.completed .step-dot,
+.progress-step.done .step-dot {
+    background: var(--subzz-blue);
 }
 
 .step-label {
     font-size: 12px;
-    color: #6c757d;
+    color: rgba(84, 84, 84, 0.5);
     font-weight: 500;
 }
 
 .progress-step.active .step-label {
-    color: #3498db;
+    color: var(--subzz-red);
+    font-weight: 600;
+}
+
+.progress-step.completed .step-label,
+.progress-step.done .step-label {
+    color: var(--subzz-blue);
     font-weight: 600;
 }
 
 .progress-line {
-    width: 48px;
-    height: 3px;
-    background: #dee2e6;
+    flex: 1;
+    height: 4px;
+    background: var(--subzz-border);
     margin: 0 4px;
     margin-bottom: 20px;
+    transition: background 0.3s;
 }
 
-/* ── Product summary ─────────────────────────────────────────────── */
-.product-summary {
+.progress-line.active {
+    background: var(--subzz-blue);
+}
+
+/* -- Product Details card ------------------------------------------------ */
+.product-details-row {
     display: flex;
-    align-items: center;
-    gap: 20px;
-    padding: 20px;
-    background: #f8f9fa;
-    border-radius: 12px;
-    margin-bottom: 32px;
-}
-
-.product-image img {
-    width: 100px;
-    height: 100px;
-    object-fit: cover;
-    border-radius: 8px;
-    border: 1px solid #dee2e6;
-}
-
-.product-info h2 {
-    margin: 0 0 6px;
-    font-size: 20px;
-    color: #2c3e50;
-}
-
-.product-rrp {
-    margin: 0;
-    font-size: 15px;
-    color: #6c757d;
-}
-
-.product-rrp strong {
-    color: #2c3e50;
-    font-size: 18px;
-}
-
-/* ── Plan cards ──────────────────────────────────────────────────── */
-.plan-cards-section h2 {
-    font-size: 22px;
-    margin-bottom: 20px;
-    color: #2c3e50;
-}
-
-.plan-cards-grid {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    align-items: flex-start;
     gap: 16px;
-    margin-bottom: 24px;
 }
 
-@media (max-width: 700px) {
-    .plan-cards-grid { grid-template-columns: 1fr; }
+.product-thumb {
+    width: 80px;
+    height: 80px;
+    border-radius: var(--subzz-radius-lg);
+    overflow: hidden;
+    flex-shrink: 0;
+    background: #f8f9fa;
 }
 
-.plan-card {
-    position: relative;
-    background: #fff;
-    border: 2px solid #dee2e6;
-    border-radius: 12px;
-    padding: 24px 20px;
-    text-align: center;
-    cursor: pointer;
-    transition: all 0.2s ease;
+.product-thumb img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
 }
 
-.plan-card:hover {
-    border-color: #3498db;
-    box-shadow: 0 4px 12px rgba(52, 152, 219, 0.15);
-    transform: translateY(-2px);
+.product-meta-name {
+    font-weight: 600;
+    color: var(--subzz-gray);
+    margin-bottom: 8px;
+    font-size: 16px;
 }
 
-.plan-card.selected {
-    border-color: #3498db;
-    background: #eaf4fd;
-    box-shadow: 0 4px 16px rgba(52, 152, 219, 0.2);
+.product-meta-attrs {
+    font-size: 14px;
+    color: rgba(84, 84, 84, 0.7);
 }
 
-.plan-card.recommended {
-    border-color: #27ae60;
-}
-
-.plan-card.recommended.selected {
-    border-color: #27ae60;
-    background: #eafaf1;
-}
-
-.card-badge {
-    position: absolute;
-    top: -12px;
-    left: 50%;
-    transform: translateX(-50%);
-    background: #27ae60;
-    color: #fff;
-    font-size: 11px;
+.product-meta-attrs .attr-bold {
     font-weight: 700;
-    text-transform: uppercase;
-    padding: 4px 14px;
-    border-radius: 12px;
-    letter-spacing: 0.5px;
 }
 
-.card-term {
-    font-size: 18px;
+.product-meta-attrs .attr-sep {
+    margin: 0 6px;
     font-weight: 700;
-    color: #2c3e50;
-    margin: 8px 0 12px;
 }
 
-.card-price {
-    font-size: 28px;
-    font-weight: 700;
-    color: #3498db;
+/* -- Customise card (term, slider, billing) ------------------------------ */
+.field-label {
+    display: block;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--subzz-gray);
     margin-bottom: 12px;
 }
 
-.card-price span {
-    font-size: 14px;
-    font-weight: 400;
-    color: #6c757d;
+.field-hint {
+    font-size: 12px;
+    color: rgba(84, 84, 84, 0.7);
+    margin: -8px 0 12px;
 }
 
-.card-detail {
-    font-size: 13px;
-    color: #6c757d;
-    margin-bottom: 6px;
-}
-
-.card-detail strong {
-    color: #2c3e50;
-}
-
-.card-savings {
-    color: #27ae60;
-    font-weight: 600;
-}
-
-/* ── Skeleton loading ────────────────────────────────────────────── */
-.plan-card.skeleton {
-    cursor: default;
-    pointer-events: none;
-}
-
-.skeleton-badge,
-.skeleton-title,
-.skeleton-price,
-.skeleton-detail {
-    background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
-    background-size: 200% 100%;
-    animation: shimmer 1.5s infinite;
-    border-radius: 6px;
-    margin: 0 auto;
-}
-
-.skeleton-badge { width: 80px; height: 14px; margin-bottom: 12px; }
-.skeleton-title { width: 100px; height: 20px; margin-bottom: 16px; }
-.skeleton-price { width: 120px; height: 32px; margin-bottom: 12px; }
-.skeleton-detail { width: 140px; height: 14px; margin-bottom: 8px; }
-
-@keyframes shimmer {
-    0% { background-position: 200% 0; }
-    100% { background-position: -200% 0; }
-}
-
-/* ── Errors ──────────────────────────────────────────────────────── */
-.plan-error,
-.not-verified {
-    text-align: center;
-    padding: 30px 20px;
-    background: #fff3cd;
-    border: 1px solid #ffeaa7;
-    border-radius: 12px;
-}
-
-.not-verified {
-    background: #fef4e8;
-    border-color: #f0c36d;
-}
-
-.not-verified h3 { margin-top: 0; color: #856404; }
-
-.no-plans {
-    text-align: center;
-    padding: 30px;
-    color: #6c757d;
-    grid-column: 1 / -1;
-}
-
-/* ── Customise panel ─────────────────────────────────────────────── */
-.customise-section {
-    margin-bottom: 28px;
-}
-
-.customise-toggle {
-    width: 100%;
-    padding: 14px 20px;
-    background: #f8f9fa;
-    border: 2px solid #dee2e6;
-    border-radius: 12px;
-    cursor: pointer;
-    font-size: 15px;
-    font-weight: 600;
-    color: #3498db;
-    text-align: left;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    transition: background 0.2s;
-}
-
-.customise-toggle:hover {
-    background: #eaf4fd;
-    border-color: #3498db;
-}
-
-.toggle-icon {
-    font-size: 18px;
-    font-weight: 700;
-    width: 24px;
-    text-align: center;
-}
-
-.customise-panel {
-    padding: 24px 20px;
-    border: 2px solid #dee2e6;
-    border-top: none;
-    border-radius: 0 0 12px 12px;
-    background: #fafbfc;
-}
-
+/* Term buttons */
 .term-toggle {
     margin-bottom: 24px;
 }
 
-.term-toggle label {
-    display: block;
-    font-weight: 600;
-    margin-bottom: 10px;
-    color: #2c3e50;
-}
-
 .term-buttons {
-    display: flex;
-    gap: 10px;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
 }
 
 .term-btn {
-    flex: 1;
-    padding: 10px 16px;
-    border: 2px solid #dee2e6;
-    border-radius: 8px;
-    background: #fff;
+    padding: 12px 16px;
+    border: 2px solid var(--subzz-border);
+    border-radius: var(--subzz-radius-lg);
+    background: var(--subzz-white);
     cursor: pointer;
     font-weight: 600;
     font-size: 14px;
-    color: #6c757d;
+    color: var(--subzz-gray);
     transition: all 0.2s;
+    text-align: center;
+    font-family: inherit;
 }
 
 .term-btn:hover {
-    border-color: #3498db;
-    color: #3498db;
+    border-color: var(--subzz-blue);
+    color: var(--subzz-blue);
 }
 
 .term-btn.active {
-    background: #3498db;
-    border-color: #3498db;
-    color: #fff;
+    border-color: var(--subzz-blue);
+    background: rgba(42, 139, 234, 0.05);
+    color: var(--subzz-blue);
 }
 
-.initial-payment-slider {
-    margin-bottom: 16px;
+/* Deposit slider */
+.deposit-slider {
+    margin-bottom: 24px;
 }
 
-.initial-payment-slider label {
-    display: block;
-    font-weight: 600;
-    margin-bottom: 10px;
-    color: #2c3e50;
-}
-
-.initial-payment-slider input[type="range"] {
+.deposit-slider input[type="range"] {
     width: 100%;
     height: 8px;
     -webkit-appearance: none;
     appearance: none;
-    background: #dee2e6;
+    background: var(--subzz-border);
     border-radius: 4px;
     outline: none;
+    margin-bottom: 4px;
 }
 
-.initial-payment-slider input[type="range"]::-webkit-slider-thumb {
+.deposit-slider input[type="range"]::-webkit-slider-thumb {
     -webkit-appearance: none;
     width: 22px;
     height: 22px;
-    background: #3498db;
+    background: var(--subzz-blue);
+    border-radius: 50%;
+    cursor: pointer;
+    border: 3px solid #fff;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
+}
+
+.deposit-slider input[type="range"]::-moz-range-thumb {
+    width: 22px;
+    height: 22px;
+    background: var(--subzz-blue);
     border-radius: 50%;
     cursor: pointer;
     border: 3px solid #fff;
@@ -382,34 +264,87 @@
     display: flex;
     justify-content: space-between;
     font-size: 12px;
-    color: #6c757d;
-    margin-top: 4px;
+    color: rgba(84, 84, 84, 0.7);
 }
 
-.monthly-preview {
-    background: #eaf4fd;
-    padding: 12px 16px;
-    border-radius: 8px;
+/* Payment display box */
+.payment-display-box {
+    background: rgba(42, 139, 234, 0.05);
+    border: 1px solid rgba(42, 139, 234, 0.15);
+    border-radius: var(--subzz-radius-lg);
+    padding: 16px 20px;
+    margin-bottom: 24px;
+}
+
+.payment-display-row {
     text-align: center;
-    font-size: 15px;
+    margin-bottom: 12px;
 }
 
-.monthly-preview strong {
-    color: #3498db;
-    font-size: 18px;
+.payment-display-row:last-child {
+    margin-bottom: 0;
 }
 
-/* ── Address form ────────────────────────────────────────────────── */
-.address-section {
-    margin-bottom: 28px;
+.payment-display-label {
+    display: block;
+    font-size: 12px;
+    color: var(--subzz-gray);
+    margin-bottom: 2px;
 }
 
-.address-section h2 {
-    font-size: 20px;
-    margin-bottom: 16px;
-    color: #2c3e50;
+.payment-display-value {
+    font-size: 14px;
+    color: var(--subzz-gray);
 }
 
+.payment-display-primary .payment-display-label {
+    font-weight: 700;
+    font-size: 14px;
+}
+
+.payment-amount-large {
+    font-size: 28px;
+    font-weight: 700;
+    color: var(--subzz-blue);
+}
+
+/* Billing date buttons */
+.billing-date-toggle {
+    margin-top: 0;
+}
+
+.billing-buttons {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+}
+
+.billing-btn {
+    padding: 12px 8px;
+    border: 2px solid var(--subzz-border);
+    border-radius: var(--subzz-radius-lg);
+    background: var(--subzz-white);
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 14px;
+    color: var(--subzz-gray);
+    transition: all 0.2s;
+    text-align: center;
+    font-family: inherit;
+}
+
+.billing-btn:hover {
+    border-color: var(--subzz-blue);
+    color: var(--subzz-blue);
+}
+
+.billing-btn.active {
+    border-color: var(--subzz-blue);
+    background: rgba(42, 139, 234, 0.05);
+    color: var(--subzz-blue);
+}
+
+/* -- Address form -------------------------------------------------------- */
 .address-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -420,207 +355,138 @@
     grid-column: 1 / -1;
 }
 
-@media (max-width: 600px) {
-    .address-grid { grid-template-columns: 1fr; }
-}
-
 .form-field label {
     display: block;
     font-weight: 600;
     margin-bottom: 6px;
     font-size: 14px;
-    color: #2c3e50;
+    color: var(--subzz-gray);
 }
 
 .form-field input,
 .form-field select {
     width: 100%;
     padding: 10px 14px;
-    border: 2px solid #dee2e6;
-    border-radius: 8px;
+    border: 2px solid var(--subzz-border);
+    border-radius: var(--subzz-radius-md);
     font-size: 15px;
     transition: border-color 0.2s;
     box-sizing: border-box;
+    font-family: inherit;
+    color: var(--subzz-gray);
 }
-
 
 .form-field input:focus,
 .form-field select:focus {
     outline: none;
-    border-color: #3498db;
-    box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.1);
+    border-color: var(--subzz-border-focus);
+    box-shadow: 0 0 0 3px rgba(72, 202, 237, 0.15);
 }
 
-/* ── Billing date ────────────────────────────────────────────────── */
-.billing-date-section {
-    margin-bottom: 28px;
-}
-
-.billing-date-section h2 {
-    font-size: 20px;
-    margin-bottom: 8px;
-    color: #2c3e50;
-}
-
-.section-hint {
-    font-size: 14px;
-    color: #6c757d;
-    margin-bottom: 16px;
-}
-
-.billing-date-options {
+/* -- Order Summary card -------------------------------------------------- */
+.summary-product-row {
     display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding-bottom: 16px;
+    margin-bottom: 16px;
+    border-bottom: 1px solid var(--subzz-border);
+}
+
+.summary-product-thumb {
+    width: 64px;
+    height: 64px;
+    border-radius: var(--subzz-radius-md);
+    overflow: hidden;
+    flex-shrink: 0;
+    background: #f8f9fa;
+}
+
+.summary-product-thumb img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.summary-product-name {
+    font-weight: 600;
+    font-size: 14px;
+    color: var(--subzz-gray);
+    margin-bottom: 4px;
+}
+
+.summary-product-attrs {
+    font-size: 12px;
+    color: rgba(84, 84, 84, 0.7);
+    margin-bottom: 4px;
+}
+
+.summary-product-term {
+    font-size: 12px;
+    color: rgba(84, 84, 84, 0.7);
+}
+
+.summary-totals {
+    display: flex;
+    flex-direction: column;
     gap: 12px;
 }
 
-.billing-date-option {
-    flex: 1;
-    cursor: pointer;
-}
-
-.billing-date-option input[type="radio"] {
-    position: absolute;
-    opacity: 0;
-    pointer-events: none;
-}
-
-.date-label {
-    display: block;
-    text-align: center;
-    padding: 14px 8px;
-    border: 2px solid #dee2e6;
-    border-radius: 10px;
-    font-size: 18px;
-    font-weight: 700;
-    color: #6c757d;
-    transition: all 0.2s;
-}
-
-.billing-date-option:hover .date-label {
-    border-color: #3498db;
-    color: #3498db;
-}
-
-.billing-date-option input:checked + .date-label,
-.billing-date-option.selected .date-label {
-    border-color: #3498db;
-    background: #eaf4fd;
-    color: #3498db;
-}
-
-/* ── Province radio buttons ─────────────────────────────────────── */
-.province-options {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 8px;
-}
-
-@media (max-width: 600px) {
-    .province-options { grid-template-columns: repeat(2, 1fr); }
-}
-
-.province-option {
-    cursor: pointer;
-}
-
-.province-option input {
-    display: none;
-}
-
-.province-option span {
-    display: block;
-    text-align: center;
-    padding: 10px 6px;
-    border: 2px solid #dee2e6;
-    border-radius: 8px;
-    font-size: 13px;
-    color: #6c757d;
-    transition: all 0.2s;
-}
-
-.province-option:hover span {
-    border-color: #3498db;
-    color: #3498db;
-}
-
-.province-option input:checked + span {
-    border-color: #3498db;
-    background: #eaf4fd;
-    color: #3498db;
-    font-weight: 600;
-}
-
-/* ── Continue section ────────────────────────────────────────────── */
-.continue-section {
-    margin-top: 8px;
-}
-
-.order-summary-bar {
+.summary-line {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 14px 20px;
-    background: #f8f9fa;
-    border-radius: 10px;
-    margin-bottom: 16px;
+    font-size: 14px;
+    color: var(--subzz-gray);
 }
 
-.summary-left {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-}
-
-#summary-product {
-    font-weight: 600;
-    color: #2c3e50;
-}
-
-.summary-plan {
-    font-size: 13px;
-    color: #6c757d;
-    background: #e9ecef;
-    padding: 2px 10px;
-    border-radius: 10px;
-}
-
-.summary-monthly {
+.summary-line strong {
     font-weight: 700;
-    color: #3498db;
-    font-size: 16px;
+    color: var(--subzz-gray);
+}
+
+.summary-line-primary strong {
+    color: var(--subzz-blue);
+}
+
+/* -- Continue section ---------------------------------------------------- */
+.continue-section {
+    margin-top: 0;
 }
 
 .continue-hint {
     text-align: center;
     font-size: 13px;
-    color: #6c757d;
+    color: rgba(84, 84, 84, 0.6);
     margin-top: 10px;
 }
 
-/* ── Buttons ─────────────────────────────────────────────────────── */
+/* -- Buttons ------------------------------------------------------------- */
 .btn-primary {
     display: inline-block;
     width: 100%;
     padding: 16px 32px;
-    background: linear-gradient(135deg, #3498db 0%, #2980b9 100%);
+    background: var(--subzz-red);
     color: #fff;
     border: none;
-    border-radius: 12px;
+    border-radius: var(--subzz-radius-md);
     font-size: 16px;
     font-weight: 700;
     cursor: pointer;
     text-align: center;
     text-decoration: none;
-    transition: all 0.2s;
+    transition: all var(--subzz-transition-fast);
+    font-family: inherit;
 }
 
 .btn-primary:hover:not(:disabled) {
+    opacity: 0.9;
     transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(52, 152, 219, 0.3);
+    box-shadow: var(--subzz-shadow-lg);
 }
 
 .btn-primary:disabled {
-    background: #adb5bd;
+    opacity: 0.5;
     cursor: not-allowed;
     transform: none;
     box-shadow: none;
@@ -629,34 +495,100 @@
 .btn-secondary {
     display: inline-block;
     padding: 10px 20px;
-    background: #fff;
-    color: #3498db;
-    border: 2px solid #3498db;
-    border-radius: 8px;
+    background: var(--subzz-white);
+    color: var(--subzz-blue);
+    border: 2px solid var(--subzz-blue);
+    border-radius: var(--subzz-radius-md);
     font-size: 14px;
     font-weight: 600;
     cursor: pointer;
     transition: all 0.2s;
     text-decoration: none;
+    font-family: inherit;
 }
 
 .btn-secondary:hover {
-    background: #3498db;
+    background: var(--subzz-blue);
     color: #fff;
 }
 
-/* ── Back link ───────────────────────────────────────────────────── */
-.back-link {
+/* -- Errors / Not verified ----------------------------------------------- */
+.plan-error,
+.not-verified {
     text-align: center;
-    margin-top: 24px;
+    padding: 30px 20px;
+    background: var(--subzz-warning-bg);
+    border: 1px solid var(--subzz-warning-border);
+    border-radius: 12px;
+    margin-bottom: 24px;
 }
 
-.back-link a {
-    color: #6c757d;
-    text-decoration: none;
-    font-size: 14px;
+.not-verified {
+    background: #fef4e8;
+    border-color: #f0c36d;
 }
 
-.back-link a:hover {
-    color: #3498db;
+.not-verified h3 { margin-top: 0; color: #856404; }
+
+/* -- Form status --------------------------------------------------------- */
+.form-status {
+    text-align: center;
+    font-size: 13px;
+    color: var(--subzz-red);
+    margin-top: 10px;
+    min-height: 20px;
+    transition: opacity 0.2s;
+}
+
+.form-status:empty {
+    display: none;
+}
+
+/* -- Checkout error bar -------------------------------------------------- */
+#checkout-error-bar {
+    margin-top: 16px;
+}
+
+/* -- Responsive ---------------------------------------------------------- */
+@media (max-width: 600px) {
+    .checkout-card { padding: 16px; }
+
+    .step-dot {
+        width: 32px;
+        height: 32px;
+        font-size: 12px;
+    }
+
+    .step-label {
+        font-size: 10px;
+    }
+
+    .card-heading {
+        font-size: 18px;
+    }
+
+    .term-buttons {
+        grid-template-columns: 1fr;
+    }
+
+    .billing-buttons {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    .address-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .payment-amount-large {
+        font-size: 24px;
+    }
+
+    .product-details-row {
+        gap: 12px;
+    }
+
+    .product-thumb {
+        width: 64px;
+        height: 64px;
+    }
 }

@@ -1,0 +1,241 @@
+/**
+ * Subzz Base Design Tokens
+ * Source of truth: SUBZZ-STYLE-GUIDE.md (v2)
+ * Provides CSS custom properties consumed by all checkout & portal stylesheets.
+ */
+
+@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700;800;900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Dancing+Script:wght@400;700&display=swap');
+
+:root {
+  /* -- Brand Colours ------------------------------------------------- */
+  --subzz-red:            #F73C5C;
+  --subzz-orange:         #FF9D00;
+  --subzz-blue:           #2A8BEA;
+  --subzz-cyan:           #48CAED;
+  --subzz-gray:           #545454;
+
+  /* -- Neutrals ------------------------------------------------------ */
+  --subzz-page-bg:        #F5F5F5;
+  --subzz-white:          #FFFFFF;
+  --subzz-border:         #E0E0E0;
+  --subzz-border-focus:   #48CAED;
+  --subzz-border-active:  #2A8BEA;
+  --subzz-border-light:   #E5E7EB;
+
+  /* -- Semantic ------------------------------------------------------ */
+  --subzz-info-bg:        #F0F9FF;
+  --subzz-info-border:    #BAE6FD;
+  --subzz-error-bg:       #FEF2F2;
+  --subzz-error-border:   #FECACA;
+  --subzz-success-bg:     #d4edda;
+  --subzz-success-border: #28a745;
+  --subzz-warning-bg:     #fff3cd;
+  --subzz-warning-border: #ffc107;
+
+  /* -- Typography ---------------------------------------------------- */
+  --subzz-font-family:    'Montserrat', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --subzz-font-xs:        12px;
+  --subzz-font-sm:        14px;
+  --subzz-font-base:      16px;
+  --subzz-font-lg:        18px;
+  --subzz-font-xl:        20px;
+  --subzz-font-2xl:       24px;
+  --subzz-font-3xl:       30px;
+  --subzz-font-4xl:       36px;
+  --subzz-font-5xl:       48px;
+
+  --subzz-weight-normal:    400;
+  --subzz-weight-medium:    500;
+  --subzz-weight-semibold:  600;
+  --subzz-weight-bold:      700;
+
+  --subzz-leading-tight:    1.25;
+  --subzz-leading-normal:   1.5;
+  --subzz-leading-relaxed:  1.625;
+
+  /* -- Spacing (4px grid) -------------------------------------------- */
+  --subzz-space-1:   4px;
+  --subzz-space-2:   8px;
+  --subzz-space-3:   12px;
+  --subzz-space-4:   16px;
+  --subzz-space-5:   20px;
+  --subzz-space-6:   24px;
+  --subzz-space-8:   32px;
+  --subzz-space-10:  40px;
+  --subzz-space-12:  48px;
+  --subzz-space-16:  64px;
+  --subzz-space-24:  96px;
+
+  /* -- Border Radius ------------------------------------------------- */
+  --subzz-radius-sm:    6px;
+  --subzz-radius-md:    8px;
+  --subzz-radius-lg:    10px;
+  --subzz-radius-xl:    16px;
+  --subzz-radius-full:  9999px;
+
+  /* -- Shadows ------------------------------------------------------- */
+  --subzz-shadow-sm:   0 1px 2px 0 rgba(0,0,0,0.05);
+  --subzz-shadow-md:   0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -2px rgba(0,0,0,0.1);
+  --subzz-shadow-lg:   0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -4px rgba(0,0,0,0.1);
+  --subzz-shadow-xl:   0 20px 25px -5px rgba(0,0,0,0.1), 0 8px 10px -6px rgba(0,0,0,0.1);
+  --subzz-shadow-2xl:  0 25px 50px -12px rgba(0,0,0,0.25);
+
+  /* -- Transitions --------------------------------------------------- */
+  --subzz-transition-fast:    150ms;
+  --subzz-transition-normal:  300ms;
+  --subzz-transition-slow:    500ms;
+
+  /* -- Partner Colours ----------------------------------------------- */
+  --subzz-whatsapp:     #25D366;
+}
+
+/* -- Validation utilities (shared across all pages) -------------------- */
+.field-error input,
+.field-error select,
+input.field-error,
+select.field-error {
+    border-color: var(--subzz-red) !important;
+}
+
+.field-error-message {
+    display: none;
+    font-size: 13px;
+    color: var(--subzz-red);
+    margin-top: 4px;
+    line-height: 1.4;
+}
+
+.field-error .field-error-message,
+.field-error-message.visible {
+    display: block;
+}
+
+.field-valid input,
+input.field-valid {
+    border-color: var(--subzz-success-border) !important;
+}
+
+.field-warning input,
+input.field-warning {
+    border-color: var(--subzz-warning-border) !important;
+}
+
+.required-asterisk {
+    color: var(--subzz-red);
+    margin-left: 2px;
+}
+
+/* Shake animation for invalid submit attempts */
+@keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    20%, 60% { transform: translateX(-6px); }
+    40%, 80% { transform: translateX(6px); }
+}
+.shake {
+    animation: shake 0.4s ease-in-out;
+}
+
+/* Branded inline error bar (replaces alert()) */
+.subzz-error-bar {
+    display: none;
+    padding: 12px 16px;
+    background: var(--subzz-error-bg);
+    border: 1px solid var(--subzz-error-border);
+    border-radius: var(--subzz-radius-md);
+    color: var(--subzz-gray);
+    font-size: 14px;
+    margin-bottom: 16px;
+    text-align: center;
+}
+.subzz-error-bar.visible {
+    display: block;
+}
+
+/* Signature pad validation states */
+.signature-valid { border-color: var(--subzz-success-border) !important; }
+.signature-empty { border-color: var(--subzz-red) !important; }
+.consent-checked { background-color: var(--subzz-info-bg); }
+
+/* -- Hide theme header on checkout pages ------------------------------- */
+/* Elementor/Natsy theme header */
+.elementor-location-header {
+    display: none !important;
+}
+
+/* Astra theme header */
+.ast-above-header-wrap,
+.ast-below-header-wrap,
+.ast-main-header-wrap,
+header.site-header {
+    display: none !important;
+}
+
+/* -- Minimal checkout header bar --------------------------------------- */
+.subzz-checkout-header {
+    background: var(--subzz-gray);
+    padding: 16px 24px;
+    text-align: center;
+    box-shadow: var(--subzz-shadow-lg);
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    width: 100%;
+    z-index: 9999;
+}
+
+/* Push page content below the fixed header */
+.subzz-checkout-page,
+.subzz-contract-page,
+.subzz-payment-success,
+.subzz-payment-cancelled {
+    padding-top: 30px;
+    margin-top: 110px !important;
+}
+
+.subzz-checkout-header a {
+    display: inline-block;
+    text-decoration: none;
+}
+
+/* Fix grey-on-grey: force white on all link/text inside header */
+.subzz-checkout-header a,
+.subzz-checkout-header a:visited,
+.subzz-checkout-header a:hover,
+.subzz-checkout-header span,
+.subzz-checkout-header .custom-logo-link {
+    color: var(--subzz-white) !important;
+}
+
+.subzz-checkout-header img {
+    height: 48px;
+    width: auto;
+}
+
+.subzz-checkout-header .subzz-checkout-header-title {
+    color: var(--subzz-white) !important;
+    font-family: var(--subzz-font-family);
+    font-size: var(--subzz-font-xl);
+    font-weight: var(--subzz-weight-bold);
+    letter-spacing: 0.5px;
+}
+
+@media (min-width: 768px) {
+    .subzz-checkout-header img {
+        height: 56px;
+    }
+}
+
+/* Screen reader only (accessibility) */
+.sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}

@@ -1,48 +1,48 @@
 /**
  * Subzz Customer Portal — Styles
  * My Subscription tab + Payment Update page.
- * Matches checkout design language (blue #3498db, 12px radius, 0 2px 12px shadow).
+ * Uses Subzz Design System tokens from subzz-base.css.
  *
- * @since 2.0.0
+ * @since 2.2.0 — fully tokenised (no hardcoded colours)
  */
 
-/* ── Base ──────────────────────────────────────────────────────── */
+/* -- Base ---------------------------------------------------------------- */
 .subzz-portal,
 .subzz-payment-update {
     max-width: 800px;
     margin: 0 auto;
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
-    color: #333;
+    font-family: var(--subzz-font-family);
+    color: var(--subzz-gray);
 }
 
-/* ── Tabs ──────────────────────────────────────────────────────── */
+/* -- Tabs ---------------------------------------------------------------- */
 .portal-tabs {
     display: flex;
     gap: 0;
-    border-bottom: 2px solid #e9ecef;
-    margin-bottom: 24px;
+    border-bottom: 2px solid var(--subzz-border);
+    margin-bottom: var(--subzz-space-6);
 }
 
 .portal-tab {
-    padding: 12px 24px;
+    padding: var(--subzz-space-3) var(--subzz-space-6);
     background: none;
     border: none;
     border-bottom: 2px solid transparent;
     margin-bottom: -2px;
-    font-size: 15px;
-    font-weight: 500;
-    color: #6c757d;
+    font-size: var(--subzz-font-sm);
+    font-weight: var(--subzz-weight-medium);
+    color: color-mix(in srgb, var(--subzz-gray) 60%, transparent);
     cursor: pointer;
-    transition: color 0.2s, border-color 0.2s;
+    transition: color var(--subzz-transition-fast), border-color var(--subzz-transition-fast);
 }
 
 .portal-tab:hover {
-    color: #3498db;
+    color: var(--subzz-blue);
 }
 
 .portal-tab.active {
-    color: #3498db;
-    border-bottom-color: #3498db;
+    color: var(--subzz-blue);
+    border-bottom-color: var(--subzz-blue);
 }
 
 .portal-tab-content {
@@ -53,133 +53,133 @@
     display: block;
 }
 
-/* ── Status badges ─────────────────────────────────────────────── */
+/* -- Status badges ------------------------------------------------------- */
 .portal-status-row {
     display: flex;
     align-items: center;
-    gap: 12px;
-    margin-bottom: 20px;
+    gap: var(--subzz-space-3);
+    margin-bottom: var(--subzz-space-5);
 }
 
 .portal-status-badge {
     display: inline-block;
-    padding: 4px 12px;
-    border-radius: 20px;
-    font-size: 13px;
-    font-weight: 600;
+    padding: var(--subzz-space-1) var(--subzz-space-3);
+    border-radius: var(--subzz-radius-full);
+    font-size: var(--subzz-font-xs);
+    font-weight: var(--subzz-weight-semibold);
     text-transform: uppercase;
     letter-spacing: 0.5px;
 }
 
 .portal-status-active {
-    background: #d4edda;
-    color: #155724;
+    background: var(--subzz-success-bg);
+    color: var(--subzz-success-border);
 }
 
 .portal-status-suspended {
-    background: #fff3cd;
-    color: #856404;
+    background: var(--subzz-warning-bg);
+    color: var(--subzz-warning-border);
 }
 
 .portal-status-completed {
-    background: #e2e3e5;
-    color: #383d41;
+    background: var(--subzz-page-bg);
+    color: var(--subzz-gray);
 }
 
 .portal-customer-name {
-    font-size: 16px;
-    font-weight: 500;
-    color: #495057;
+    font-size: var(--subzz-font-base);
+    font-weight: var(--subzz-weight-medium);
+    color: var(--subzz-gray);
 }
 
-/* ── Detail card ───────────────────────────────────────────────── */
+/* -- Detail card --------------------------------------------------------- */
 .portal-detail-card {
-    background: #fff;
-    border: 1px solid #e9ecef;
-    border-radius: 12px;
-    padding: 24px;
-    margin-bottom: 24px;
+    background: var(--subzz-white);
+    border: 1px solid var(--subzz-border);
+    border-radius: var(--subzz-radius-xl);
+    padding: var(--subzz-space-6);
+    margin-bottom: var(--subzz-space-6);
 }
 
 .portal-detail-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 20px;
+    gap: var(--subzz-space-5);
 }
 
 .portal-detail-item {
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: var(--subzz-space-1);
 }
 
 .portal-detail-label {
-    font-size: 13px;
-    color: #6c757d;
-    font-weight: 500;
+    font-size: var(--subzz-font-xs);
+    color: color-mix(in srgb, var(--subzz-gray) 60%, transparent);
+    font-weight: var(--subzz-weight-medium);
     text-transform: uppercase;
     letter-spacing: 0.3px;
 }
 
 .portal-detail-value {
-    font-size: 16px;
-    font-weight: 600;
-    color: #212529;
+    font-size: var(--subzz-font-base);
+    font-weight: var(--subzz-weight-semibold);
+    color: var(--subzz-gray);
 }
 
 .portal-initial-payment-info {
-    margin-top: 16px;
-    padding-top: 16px;
-    border-top: 1px solid #e9ecef;
+    margin-top: var(--subzz-space-4);
+    padding-top: var(--subzz-space-4);
+    border-top: 1px solid var(--subzz-border);
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: var(--subzz-space-1);
 }
 
-/* ── Progress bar ──────────────────────────────────────────────── */
+/* -- Progress bar -------------------------------------------------------- */
 .portal-progress-section {
-    margin-bottom: 24px;
+    margin-bottom: var(--subzz-space-6);
 }
 
 .portal-progress-header,
 .portal-progress-footer {
     display: flex;
     justify-content: space-between;
-    font-size: 14px;
-    color: #6c757d;
+    font-size: var(--subzz-font-sm);
+    color: color-mix(in srgb, var(--subzz-gray) 60%, transparent);
 }
 
 .portal-progress-header {
-    margin-bottom: 8px;
-    font-weight: 500;
+    margin-bottom: var(--subzz-space-2);
+    font-weight: var(--subzz-weight-medium);
 }
 
 .portal-progress-footer {
-    margin-top: 8px;
-    font-size: 13px;
+    margin-top: var(--subzz-space-2);
+    font-size: var(--subzz-font-xs);
 }
 
 .portal-progress-bar {
     width: 100%;
     height: 10px;
-    background: #e9ecef;
-    border-radius: 5px;
+    background: var(--subzz-border);
+    border-radius: var(--subzz-radius-sm);
     overflow: hidden;
 }
 
 .portal-progress-fill {
     height: 100%;
-    background: linear-gradient(90deg, #3498db, #2980b9);
-    border-radius: 5px;
-    transition: width 0.3s ease;
+    background: var(--subzz-blue);
+    border-radius: var(--subzz-radius-sm);
+    transition: width var(--subzz-transition-normal) ease;
 }
 
-/* ── Contract section ──────────────────────────────────────────── */
+/* -- Contract section ---------------------------------------------------- */
 .portal-contract-section {
-    margin-top: 8px;
+    margin-top: var(--subzz-space-2);
 }
 
-/* ── Invoice table ─────────────────────────────────────────────── */
+/* -- Invoice table ------------------------------------------------------- */
 .portal-invoice-table-wrapper {
     overflow-x: auto;
 }
@@ -190,66 +190,66 @@
 }
 
 .portal-invoice-table th {
-    padding: 12px 16px;
+    padding: var(--subzz-space-3) var(--subzz-space-4);
     text-align: left;
-    font-size: 13px;
-    font-weight: 600;
-    color: #6c757d;
+    font-size: var(--subzz-font-xs);
+    font-weight: var(--subzz-weight-semibold);
+    color: color-mix(in srgb, var(--subzz-gray) 60%, transparent);
     text-transform: uppercase;
     letter-spacing: 0.3px;
-    border-bottom: 2px solid #e9ecef;
+    border-bottom: 2px solid var(--subzz-border);
 }
 
 .portal-invoice-table td {
-    padding: 12px 16px;
-    font-size: 14px;
-    border-bottom: 1px solid #f1f3f5;
+    padding: var(--subzz-space-3) var(--subzz-space-4);
+    font-size: var(--subzz-font-sm);
+    border-bottom: 1px solid var(--subzz-border-light);
     vertical-align: middle;
 }
 
 .portal-invoice-table tbody tr:hover {
-    background: #f8f9fa;
+    background: var(--subzz-page-bg);
 }
 
 .portal-table-empty {
     text-align: center;
-    color: #6c757d;
-    padding: 40px 16px !important;
+    color: color-mix(in srgb, var(--subzz-gray) 60%, transparent);
+    padding: var(--subzz-space-10) var(--subzz-space-4) !important;
 }
 
-/* ── Pagination ────────────────────────────────────────────────── */
+/* -- Pagination ---------------------------------------------------------- */
 .portal-pagination {
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 16px;
-    margin-top: 20px;
+    gap: var(--subzz-space-4);
+    margin-top: var(--subzz-space-5);
 }
 
 .portal-pagination-info {
-    font-size: 14px;
-    color: #6c757d;
+    font-size: var(--subzz-font-sm);
+    color: color-mix(in srgb, var(--subzz-gray) 60%, transparent);
 }
 
-/* ── Card display ──────────────────────────────────────────────── */
+/* -- Card display -------------------------------------------------------- */
 .portal-card-display {
     display: flex;
     align-items: center;
-    gap: 16px;
-    background: #f8f9fa;
-    border: 1px solid #e9ecef;
-    border-radius: 12px;
-    padding: 20px 24px;
-    margin-bottom: 24px;
+    gap: var(--subzz-space-4);
+    background: var(--subzz-page-bg);
+    border: 1px solid var(--subzz-border);
+    border-radius: var(--subzz-radius-xl);
+    padding: var(--subzz-space-5) var(--subzz-space-6);
+    margin-bottom: var(--subzz-space-6);
 }
 
 .portal-card-icon {
-    font-size: 14px;
-    font-weight: 700;
-    color: #3498db;
-    background: #e7f3ff;
-    padding: 8px 12px;
-    border-radius: 8px;
+    font-size: var(--subzz-font-sm);
+    font-weight: var(--subzz-weight-bold);
+    color: var(--subzz-blue);
+    background: color-mix(in srgb, var(--subzz-blue) 10%, transparent);
+    padding: var(--subzz-space-2) var(--subzz-space-3);
+    border-radius: var(--subzz-radius-md);
     text-transform: uppercase;
 }
 
@@ -260,39 +260,39 @@
 }
 
 .portal-card-number {
-    font-size: 16px;
-    font-weight: 500;
+    font-size: var(--subzz-font-base);
+    font-weight: var(--subzz-weight-medium);
     letter-spacing: 2px;
-    color: #212529;
+    color: var(--subzz-gray);
 }
 
 .portal-card-brand {
-    font-size: 13px;
-    color: #6c757d;
+    font-size: var(--subzz-font-xs);
+    color: color-mix(in srgb, var(--subzz-gray) 60%, transparent);
 }
 
-/* ── Payment actions ───────────────────────────────────────────── */
+/* -- Payment actions ----------------------------------------------------- */
 .portal-payment-actions {
     text-align: center;
 }
 
 .portal-help-text {
-    font-size: 13px;
-    color: #6c757d;
-    margin-top: 12px;
+    font-size: var(--subzz-font-xs);
+    color: color-mix(in srgb, var(--subzz-gray) 60%, transparent);
+    margin-top: var(--subzz-space-3);
 }
 
-/* ── Buttons ───────────────────────────────────────────────────── */
+/* -- Buttons ------------------------------------------------------------- */
 .portal-btn {
     display: inline-block;
-    padding: 10px 20px;
-    font-size: 14px;
-    font-weight: 600;
+    padding: var(--subzz-space-3) var(--subzz-space-5);
+    font-size: var(--subzz-font-sm);
+    font-weight: var(--subzz-weight-semibold);
     border: none;
-    border-radius: 8px;
+    border-radius: var(--subzz-radius-md);
     cursor: pointer;
     text-decoration: none;
-    transition: background 0.2s, transform 0.1s;
+    transition: background var(--subzz-transition-fast), transform 0.1s;
     line-height: 1.4;
 }
 
@@ -301,155 +301,155 @@
 }
 
 .portal-btn-primary {
-    background: #3498db;
-    color: #fff;
+    background: var(--subzz-blue);
+    color: var(--subzz-white);
 }
 
 .portal-btn-primary:hover {
-    background: #2980b9;
+    opacity: 0.9;
 }
 
 .portal-btn-primary:disabled {
-    background: #93c5e8;
+    opacity: 0.5;
     cursor: not-allowed;
 }
 
 .portal-btn-secondary {
-    background: #f8f9fa;
-    color: #3498db;
-    border: 1px solid #3498db;
+    background: var(--subzz-page-bg);
+    color: var(--subzz-blue);
+    border: 1px solid var(--subzz-blue);
 }
 
 .portal-btn-secondary:hover {
-    background: #e7f3ff;
+    background: var(--subzz-info-bg);
 }
 
 .portal-btn-sm {
-    padding: 6px 12px;
-    font-size: 13px;
+    padding: var(--subzz-space-2) var(--subzz-space-3);
+    font-size: var(--subzz-font-xs);
 }
 
-/* ── Alerts ────────────────────────────────────────────────────── */
+/* -- Alerts -------------------------------------------------------------- */
 .portal-alert {
-    padding: 16px 20px;
-    border-radius: 12px;
-    margin-bottom: 20px;
+    padding: var(--subzz-space-4) var(--subzz-space-5);
+    border-radius: var(--subzz-radius-md);
+    margin-bottom: var(--subzz-space-5);
 }
 
 .portal-alert strong {
     display: block;
-    margin-bottom: 6px;
+    margin-bottom: var(--subzz-space-2);
 }
 
 .portal-alert p {
-    margin: 4px 0;
-    font-size: 14px;
+    margin: var(--subzz-space-1) 0;
+    font-size: var(--subzz-font-sm);
 }
 
 .portal-alert-warning {
-    background: #fff3cd;
-    border: 1px solid #ffc107;
-    color: #856404;
+    background: var(--subzz-warning-bg);
+    border: 1px solid var(--subzz-warning-border);
+    color: var(--subzz-warning-border);
 }
 
 .portal-alert-success {
-    background: #d4edda;
-    border: 1px solid #28a745;
-    color: #155724;
+    background: var(--subzz-success-bg);
+    border: 1px solid var(--subzz-success-border);
+    color: var(--subzz-success-border);
 }
 
 .portal-alert-error {
-    background: #f8d7da;
-    border: 1px solid #dc3545;
-    color: #721c24;
+    background: var(--subzz-error-bg);
+    border: 1px solid var(--subzz-red);
+    color: var(--subzz-red);
 }
 
-/* ── Empty state ───────────────────────────────────────────────── */
+/* -- Empty state --------------------------------------------------------- */
 .portal-empty-state {
     text-align: center;
-    padding: 48px 20px;
-    color: #6c757d;
+    padding: var(--subzz-space-12) var(--subzz-space-5);
+    color: color-mix(in srgb, var(--subzz-gray) 60%, transparent);
 }
 
 .portal-empty-state h3 {
-    font-size: 18px;
-    color: #495057;
-    margin-bottom: 8px;
+    font-size: var(--subzz-font-lg);
+    color: var(--subzz-gray);
+    margin-bottom: var(--subzz-space-2);
 }
 
 .portal-empty-state p {
-    margin-bottom: 20px;
+    margin-bottom: var(--subzz-space-5);
 }
 
-/* ── Text utilities ────────────────────────────────────────────── */
+/* -- Text utilities ------------------------------------------------------ */
 .portal-text-muted {
-    color: #adb5bd;
-    font-size: 13px;
+    color: color-mix(in srgb, var(--subzz-gray) 50%, transparent);
+    font-size: var(--subzz-font-xs);
 }
 
-/* ── Payment Update page ───────────────────────────────────────── */
+/* -- Payment Update page ------------------------------------------------- */
 .payment-update-container {
-    background: #fff;
-    border-radius: 12px;
-    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
-    padding: 40px;
+    background: var(--subzz-white);
+    border-radius: var(--subzz-radius-xl);
+    box-shadow: var(--subzz-shadow-2xl);
+    padding: var(--subzz-space-10);
     max-width: 600px;
-    margin: 40px auto;
+    margin: var(--subzz-space-10) auto;
 }
 
 .payment-update-container h2 {
-    font-size: 22px;
-    margin-bottom: 24px;
-    color: #212529;
+    font-size: var(--subzz-font-xl);
+    margin-bottom: var(--subzz-space-6);
+    color: var(--subzz-gray);
 }
 
 .payment-update-summary {
-    background: #f8f9fa;
-    border: 1px solid #e9ecef;
-    border-radius: 12px;
-    padding: 20px;
-    margin-bottom: 24px;
+    background: var(--subzz-page-bg);
+    border: 1px solid var(--subzz-border);
+    border-radius: var(--subzz-radius-xl);
+    padding: var(--subzz-space-5);
+    margin-bottom: var(--subzz-space-6);
 }
 
 .payment-update-summary .summary-row {
     display: flex;
     justify-content: space-between;
-    padding: 6px 0;
-    font-size: 14px;
+    padding: var(--subzz-space-2) 0;
+    font-size: var(--subzz-font-sm);
 }
 
 .payment-update-summary .summary-label {
-    color: #6c757d;
+    color: color-mix(in srgb, var(--subzz-gray) 60%, transparent);
 }
 
 .payment-update-summary .summary-value {
-    font-weight: 600;
-    color: #212529;
+    font-weight: var(--subzz-weight-semibold);
+    color: var(--subzz-gray);
 }
 
 .payment-update-form {
-    margin-top: 24px;
+    margin-top: var(--subzz-space-6);
 }
 
 #payment-card-form {
     min-height: 100px;
-    border: 1px solid #e9ecef;
-    border-radius: 8px;
-    padding: 16px;
-    margin-bottom: 20px;
+    border: 1px solid var(--subzz-border);
+    border-radius: var(--subzz-radius-md);
+    padding: var(--subzz-space-4);
+    margin-bottom: var(--subzz-space-5);
 }
 
 .payment-update-result {
     display: none;
-    margin-top: 16px;
+    margin-top: var(--subzz-space-4);
 }
 
 .payment-update-back {
     display: block;
     text-align: center;
-    margin-top: 20px;
-    font-size: 14px;
-    color: #3498db;
+    margin-top: var(--subzz-space-5);
+    font-size: var(--subzz-font-sm);
+    color: var(--subzz-blue);
     text-decoration: none;
 }
 
@@ -459,41 +459,307 @@
 
 .payment-update-error {
     text-align: center;
-    padding: 60px 20px;
+    padding: var(--subzz-space-16) var(--subzz-space-5);
 }
 
 .payment-update-error h2 {
-    color: #dc3545;
-    margin-bottom: 12px;
+    color: var(--subzz-red);
+    margin-bottom: var(--subzz-space-3);
 }
 
 .payment-update-error p {
-    color: #6c757d;
-    font-size: 15px;
+    color: color-mix(in srgb, var(--subzz-gray) 60%, transparent);
+    font-size: var(--subzz-font-sm);
 }
 
-/* ── Loading spinner ───────────────────────────────────────────── */
+/* -- Loading spinner ----------------------------------------------------- */
 .portal-loading {
     display: inline-block;
     width: 16px;
     height: 16px;
-    border: 2px solid #fff;
+    border: 2px solid var(--subzz-white);
     border-top-color: transparent;
     border-radius: 50%;
     animation: portal-spin 0.6s linear infinite;
     vertical-align: middle;
-    margin-right: 6px;
+    margin-right: var(--subzz-space-2);
 }
 
 @keyframes portal-spin {
     to { transform: rotate(360deg); }
 }
 
-/* ── Responsive ────────────────────────────────────────────────── */
+/* -- Subscription Selector (My Subscription page, multiple subs) --------- */
+.portal-subscription-selector {
+    display: flex;
+    align-items: center;
+    gap: var(--subzz-space-3);
+    margin-bottom: var(--subzz-space-5);
+    padding: var(--subzz-space-3) var(--subzz-space-4);
+    background: var(--subzz-page-bg);
+    border: 1px solid var(--subzz-border);
+    border-radius: var(--subzz-radius-md);
+}
+
+.portal-subscription-selector label {
+    font-size: var(--subzz-font-sm);
+    font-weight: var(--subzz-weight-medium);
+    color: color-mix(in srgb, var(--subzz-gray) 60%, transparent);
+    white-space: nowrap;
+}
+
+.portal-subscription-selector select {
+    flex: 1;
+    padding: var(--subzz-space-2) var(--subzz-space-3);
+    font-size: var(--subzz-font-sm);
+    font-family: var(--subzz-font-family);
+    border: 1px solid var(--subzz-border);
+    border-radius: var(--subzz-radius-md);
+    background: var(--subzz-white);
+    color: var(--subzz-gray);
+    cursor: pointer;
+}
+
+/* -- Dashboard ----------------------------------------------------------- */
+.subzz-dashboard {
+    max-width: 800px;
+    margin: 0 auto;
+    font-family: var(--subzz-font-family);
+    color: var(--subzz-gray);
+}
+
+.dashboard-welcome h2 {
+    font-size: var(--subzz-font-xl);
+    font-weight: var(--subzz-weight-semibold);
+    color: var(--subzz-gray);
+    margin-bottom: var(--subzz-space-6);
+}
+
+/* Subscription summary card */
+.dashboard-subscription-card {
+    background: var(--subzz-white);
+    border: 1px solid var(--subzz-border);
+    border-radius: var(--subzz-radius-xl);
+    padding: var(--subzz-space-6);
+    margin-bottom: var(--subzz-space-8);
+}
+
+.dashboard-card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: var(--subzz-space-5);
+}
+
+.dashboard-card-header h3 {
+    font-size: var(--subzz-font-lg);
+    font-weight: var(--subzz-weight-semibold);
+    color: var(--subzz-gray);
+    margin: 0;
+}
+
+.dashboard-card-title {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.dashboard-product-title {
+    font-size: var(--subzz-font-base);
+    font-weight: var(--subzz-weight-semibold);
+    color: var(--subzz-gray);
+}
+
+.dashboard-term-label {
+    font-size: var(--subzz-font-xs);
+    color: color-mix(in srgb, var(--subzz-gray) 60%, transparent);
+    font-weight: var(--subzz-weight-medium);
+}
+
+.dashboard-subscriptions h3 {
+    font-size: var(--subzz-font-lg);
+    font-weight: var(--subzz-weight-semibold);
+    color: var(--subzz-gray);
+    margin-bottom: var(--subzz-space-4);
+}
+
+.dashboard-subscription-card + .dashboard-subscription-card {
+    margin-top: var(--subzz-space-4);
+}
+
+.dashboard-summary-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--subzz-space-4);
+    margin-bottom: var(--subzz-space-5);
+}
+
+.dashboard-summary-item {
+    display: flex;
+    flex-direction: column;
+    gap: var(--subzz-space-1);
+}
+
+.dashboard-summary-label {
+    font-size: var(--subzz-font-xs);
+    color: color-mix(in srgb, var(--subzz-gray) 60%, transparent);
+    font-weight: var(--subzz-weight-medium);
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+
+.dashboard-summary-value {
+    font-size: var(--subzz-font-base);
+    font-weight: var(--subzz-weight-semibold);
+    color: var(--subzz-gray);
+}
+
+.dashboard-progress {
+    display: flex;
+    align-items: center;
+    gap: var(--subzz-space-3);
+    margin-bottom: var(--subzz-space-5);
+}
+
+.dashboard-progress .portal-progress-bar {
+    flex: 1;
+}
+
+.dashboard-progress-label {
+    font-size: var(--subzz-font-xs);
+    color: color-mix(in srgb, var(--subzz-gray) 60%, transparent);
+    white-space: nowrap;
+}
+
+.dashboard-card-actions {
+    text-align: right;
+}
+
+/* No subscription CTA */
+.dashboard-no-subscription {
+    background: var(--subzz-white);
+    border: 1px solid var(--subzz-border);
+    border-radius: var(--subzz-radius-xl);
+    padding: var(--subzz-space-8) var(--subzz-space-6);
+    text-align: center;
+    margin-bottom: var(--subzz-space-8);
+}
+
+.dashboard-no-subscription h3 {
+    font-size: var(--subzz-font-lg);
+    font-weight: var(--subzz-weight-semibold);
+    color: var(--subzz-gray);
+    margin-bottom: var(--subzz-space-2);
+}
+
+.dashboard-no-subscription p {
+    color: color-mix(in srgb, var(--subzz-gray) 60%, transparent);
+    font-size: var(--subzz-font-sm);
+    margin-bottom: var(--subzz-space-5);
+    max-width: 500px;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+/* Featured products section */
+.dashboard-products-section {
+    margin-bottom: var(--subzz-space-8);
+}
+
+.dashboard-products-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: var(--subzz-space-4);
+}
+
+.dashboard-products-header h3 {
+    font-size: var(--subzz-font-lg);
+    font-weight: var(--subzz-weight-semibold);
+    color: var(--subzz-gray);
+    margin: 0;
+}
+
+.dashboard-shop-link {
+    font-size: var(--subzz-font-sm);
+    font-weight: var(--subzz-weight-medium);
+    color: var(--subzz-blue);
+    text-decoration: none;
+}
+
+.dashboard-shop-link:hover {
+    text-decoration: underline;
+}
+
+.dashboard-products-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: var(--subzz-space-4);
+}
+
+.dashboard-product-card {
+    background: var(--subzz-white);
+    border: 1px solid var(--subzz-border);
+    border-radius: var(--subzz-radius-xl);
+    overflow: hidden;
+    text-decoration: none;
+    color: inherit;
+    transition: box-shadow var(--subzz-transition-fast), transform 0.1s;
+}
+
+.dashboard-product-card:hover {
+    box-shadow: var(--subzz-shadow-lg);
+    transform: translateY(-2px);
+}
+
+.dashboard-product-image {
+    aspect-ratio: 4 / 3;
+    overflow: hidden;
+    background: var(--subzz-page-bg);
+}
+
+.dashboard-product-image img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.dashboard-product-no-image {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: color-mix(in srgb, var(--subzz-gray) 40%, transparent);
+    font-size: var(--subzz-font-sm);
+}
+
+.dashboard-product-info {
+    padding: var(--subzz-space-3) var(--subzz-space-4);
+    display: flex;
+    flex-direction: column;
+    gap: var(--subzz-space-1);
+}
+
+.dashboard-product-name {
+    font-size: var(--subzz-font-sm);
+    font-weight: var(--subzz-weight-medium);
+    color: var(--subzz-gray);
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.dashboard-product-price {
+    font-size: var(--subzz-font-xs);
+    color: var(--subzz-blue);
+    font-weight: var(--subzz-weight-semibold);
+}
+
+/* -- Responsive ---------------------------------------------------------- */
 @media (max-width: 600px) {
     .portal-detail-grid {
         grid-template-columns: 1fr;
-        gap: 12px;
+        gap: var(--subzz-space-3);
     }
 
     .portal-tabs {
@@ -501,8 +767,8 @@
     }
 
     .portal-tab {
-        padding: 10px 16px;
-        font-size: 14px;
+        padding: var(--subzz-space-3) var(--subzz-space-4);
+        font-size: var(--subzz-font-sm);
         white-space: nowrap;
     }
 
@@ -513,17 +779,42 @@
 
     .portal-invoice-table th,
     .portal-invoice-table td {
-        padding: 8px 10px;
-        font-size: 13px;
+        padding: var(--subzz-space-2) var(--subzz-space-3);
+        font-size: var(--subzz-font-xs);
     }
 
     .payment-update-container {
-        padding: 24px 16px;
-        margin: 20px 10px;
+        padding: var(--subzz-space-6) var(--subzz-space-4);
+        margin: var(--subzz-space-5) var(--subzz-space-3);
     }
 
     .payment-update-summary .summary-row {
         flex-direction: column;
         gap: 2px;
+    }
+
+    /* Dashboard responsive */
+    .dashboard-summary-grid {
+        grid-template-columns: 1fr;
+        gap: var(--subzz-space-3);
+    }
+
+    .dashboard-products-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .dashboard-subscription-card {
+        padding: var(--subzz-space-4);
+    }
+
+    .dashboard-card-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: var(--subzz-space-2);
+    }
+
+    .dashboard-progress {
+        flex-direction: column;
+        align-items: flex-start;
     }
 }

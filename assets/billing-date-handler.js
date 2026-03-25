@@ -28,7 +28,14 @@
 
 (function($) {
     'use strict';
-    
+
+    // Guard against multiple initializations
+    if (window._subzzBillingDateInitialized) {
+        console.warn('SUBZZ BILLING DATE: Already initialized, skipping');
+        return;
+    }
+    window._subzzBillingDateInitialized = true;
+
     console.log('SUBZZ BILLING DATE: Handler initializing');
     
     // Namespace for billing date functionality
@@ -75,6 +82,14 @@
             return;
         }
 
+        // Safety check: if Step 1 DOM element doesn't exist (removed in redesign)
+        // and no billing_day URL param, show error — user must go via checkout page
+        if ($('#step-1-billing-date').length === 0) {
+            console.warn('SUBZZ BILLING DATE: Step 1 element not found and no billing_day URL param');
+            showBillingError('Billing date information missing. Please return to checkout and select a billing date.');
+            return;
+        }
+
         // Initialize billing date selection
         initializeBillingDateSelection();
 
@@ -107,7 +122,7 @@
         
         if (missing.length > 0) {
             console.error('SUBZZ BILLING DATE ERROR: Missing required variables:', missing);
-            alert('Page configuration error. Please return to checkout and try again.');
+            showBillingError('Page configuration error. Please return to checkout and try again.');
             return false;
         }
         
@@ -179,12 +194,13 @@
         const dayOrdinal = getDayOrdinal(billingDay);
         
         // Update preview text
-        const previewHtml = 
-            'Your first payment of <strong>' + window.subzzCurrency + ' ' + 
-            window.subzzMonthlyAmount.toFixed(2) + '</strong> today covers you from <strong>' + 
-            todayFormatted + '</strong> to <strong>' + nextBillingFormatted + '</strong> (' + 
-            daysDiff + ' days). Then <strong>' + window.subzzCurrency + ' ' + 
-            window.subzzMonthlyAmount.toFixed(2) + '</strong> on the <strong>' + 
+        var roundedAmount = Math.ceil(window.subzzMonthlyAmount);
+        const previewHtml =
+            'Your first payment of <strong>' + window.subzzCurrency + ' ' +
+            roundedAmount.toLocaleString('en-ZA') + '</strong> today covers you from <strong>' +
+            todayFormatted + '</strong> to <strong>' + nextBillingFormatted + '</strong> (' +
+            daysDiff + ' days). Then <strong>' + window.subzzCurrency + ' ' +
+            roundedAmount.toLocaleString('en-ZA') + '</strong> on the <strong>' +
             dayOrdinal + '</strong> of each month.';
         
         $previewText.html(previewHtml);
@@ -220,7 +236,11 @@
             const billingDay = window.SubzzContract.selectedBillingDay;
             
             if (!billingDay) {
-                alert('Please select a billing date');
+                showBillingError('Please select a billing date');
+                // Shake the billing options
+                var $options = $('.billing-options');
+                $options.addClass('shake');
+                $options.one('animationend', function () { $options.removeClass('shake'); });
                 return;
             }
             
@@ -338,9 +358,12 @@
             }, 500);
         }, 400);
         
+        // Initialize scroll indicator — hide when user scrolls to bottom
+        initScrollIndicator();
+
         console.log('SUBZZ CONTRACT GENERATION: Contract displayed successfully');
         console.log('SUBZZ CONTRACT GENERATION: Billing info:', data.billing_info);
-        
+
         // Emit event for signature handler
         emitContractGeneratedEvent();
     }
@@ -350,9 +373,9 @@
      */
     function handleContractGenerationError(errorMessage) {
         console.error('SUBZZ CONTRACT GENERATION ERROR:', errorMessage);
-        
-        alert('Failed to generate contract: ' + (errorMessage || 'Unknown error'));
-        
+
+        showBillingError('Failed to generate contract: ' + (errorMessage || 'Unknown error'));
+
         // Return to Step 1
         returnToStep1();
     }
@@ -378,6 +401,28 @@
     }
     
     /**
+     * Initialize scroll indicator on contract text — hide when scrolled near bottom
+     */
+    function initScrollIndicator() {
+        var $scrollContainer = $('#contract-text-container');
+        var $indicator = $('#scroll-indicator');
+
+        if ($scrollContainer.length === 0 || $indicator.length === 0) {
+            return;
+        }
+
+        $scrollContainer.on('scroll', function() {
+            var el = this;
+            var atBottom = (el.scrollHeight - el.scrollTop - el.clientHeight) < 40;
+            if (atBottom) {
+                $indicator.fadeOut(300);
+            } else {
+                $indicator.fadeIn(300);
+            }
+        });
+    }
+
+    /**
      * Initialize change billing date link
      */
     function initializeChangeBillingDate() {
@@ -393,7 +438,17 @@
         $changeLink.on('click', function(e) {
             e.preventDefault();
             console.log('SUBZZ BILLING DATE: Change billing date clicked');
-            returnToStep1();
+
+            // Step 1 billing date selection lives on the checkout page now.
+            // If the Step 1 element exists on this page, show it; otherwise redirect back to checkout.
+            if ($('#step-1-billing-date').length > 0) {
+                returnToStep1();
+            } else {
+                // Redirect back to checkout page to re-select billing date
+                var checkoutUrl = window.location.origin + '/checkout-subscription/';
+                console.log('SUBZZ BILLING DATE: Redirecting to checkout page:', checkoutUrl);
+                window.location.href = checkoutUrl;
+            }
         });
         
         console.log('SUBZZ BILLING DATE: Change billing date link initialized');
@@ -442,6 +497,32 @@
         return day + 'th';
     }
     
+    /**
+     * Show branded inline error bar (replaces alert())
+     */
+    function showBillingError(message) {
+        // Try to find or create an error bar in the Step 1 area
+        var $bar = $('#billing-error-bar');
+        if ($bar.length === 0) {
+            $bar = $('<div id="billing-error-bar" class="subzz-error-bar"></div>');
+            // Insert before the billing options or at top of step 1
+            var $step1 = $('#step-1-billing-date');
+            if ($step1.length) {
+                $step1.prepend($bar);
+            } else {
+                // Fallback: insert before the contract container
+                $('.subzz-contract-page .container').prepend($bar);
+            }
+        }
+        $bar.text(message).addClass('visible');
+
+        // Scroll to error
+        $bar[0].scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+        // Auto-hide after 8 seconds
+        setTimeout(function () { $bar.removeClass('visible'); }, 8000);
+    }
+
     // Export functions for testing (optional)
     window.SubzzContract.returnToStep1 = returnToStep1;
     

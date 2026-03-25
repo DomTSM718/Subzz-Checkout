@@ -111,7 +111,7 @@ get_header();
                 </div>
                 <div class="summary-row">
                     <span class="summary-label">Monthly Amount</span>
-                    <span class="summary-value"><?php echo esc_html($subscription_data['currency']); ?> <?php echo number_format($subscription_data['monthlyAmount'], 2); ?></span>
+                    <span class="summary-value"><?php echo esc_html($subscription_data['currency']); ?> <?php echo number_format(ceil($subscription_data['monthlyAmount']), 0); ?></span>
                 </div>
                 <div class="summary-row">
                     <span class="summary-label">Current Card</span>

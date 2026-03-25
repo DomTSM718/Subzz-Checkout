@@ -58,25 +58,25 @@ class Subzz_Contract_Integration {
             return;
         }
         
-        error_log('=== SUBZZ CONTRACT PAGE: HYBRID Architecture request received ===');
-        error_log('SUBZZ CONTRACT PAGE: URL path: ' . $wp->request);
+        subzz_log('=== SUBZZ CONTRACT PAGE: HYBRID Architecture request received ===');
+        subzz_log('SUBZZ CONTRACT PAGE: URL path: ' . $wp->request);
         
         // Get and validate JWT token from URL
         if (!isset($_GET['token'])) {
-            error_log('SUBZZ CONTRACT ERROR: No token provided in URL');
+            subzz_log('SUBZZ CONTRACT ERROR: No token provided in URL');
             $this->display_styled_error_page('Missing Contract Token', 'Missing contract token. Please return to checkout and try again.');
             exit;
         }
 
         $jwt_token = sanitize_text_field($_GET['token']);
-        error_log('SUBZZ TOKEN RECEIVED: Length: ' . strlen($jwt_token) . ' characters');
+        subzz_log('SUBZZ TOKEN RECEIVED: Length: ' . strlen($jwt_token) . ' characters');
         
         // Decode JWT token
-        error_log('SUBZZ TOKEN DECODE: Starting JWT token decode process');
+        subzz_log('SUBZZ TOKEN DECODE: Starting JWT token decode process');
         $token_data = $this->decode_jwt_token($jwt_token);
         
         if (!$token_data) {
-            error_log('SUBZZ TOKEN ERROR: JWT decode failed - token invalid or malformed');
+            subzz_log('SUBZZ TOKEN ERROR: JWT decode failed - token invalid or malformed');
             $this->display_styled_error_page('Invalid Token', 'Invalid or expired contract token. Please return to checkout and try again.');
             exit;
         }
@@ -86,32 +86,32 @@ class Subzz_Contract_Integration {
         $expires_at = $token_data['exp'];
         $time_until_expiry = $expires_at - $current_time;
         
-        error_log("SUBZZ TOKEN VALIDATION: Current time: {$current_time}");
-        error_log("SUBZZ TOKEN VALIDATION: Token expires: {$expires_at}");
-        error_log("SUBZZ TOKEN VALIDATION: Time until expiry: {$time_until_expiry} seconds");
+        subzz_log("SUBZZ TOKEN VALIDATION: Current time: {$current_time}");
+        subzz_log("SUBZZ TOKEN VALIDATION: Token expires: {$expires_at}");
+        subzz_log("SUBZZ TOKEN VALIDATION: Time until expiry: {$time_until_expiry} seconds");
         
         if ($time_until_expiry <= 0) {
-            error_log('SUBZZ TOKEN ERROR: JWT token has expired');
+            subzz_log('SUBZZ TOKEN ERROR: JWT token has expired');
             $this->display_styled_error_page('Token Expired', 'Contract token has expired. Please return to checkout and try again.');
             exit;
         }
         
-        error_log('SUBZZ TOKEN SUCCESS: JWT token is valid and not expired');
-        error_log('SUBZZ TOKEN DATA: Reference ID: ' . $token_data['reference_id']);
-        error_log('SUBZZ TOKEN DATA: Customer email: ' . $token_data['customer_email']);
+        subzz_log('SUBZZ TOKEN SUCCESS: JWT token is valid and not expired');
+        subzz_log('SUBZZ TOKEN DATA: Reference ID: ' . $token_data['reference_id']);
+        subzz_log('SUBZZ TOKEN DATA: Customer email: ' . $token_data['customer_email']);
         
         // Retrieve order data from Azure
-        error_log('SUBZZ API CALL: Retrieving order data from Azure for Reference ID: ' . $token_data['reference_id']);
+        subzz_log('SUBZZ API CALL: Retrieving order data from Azure for Reference ID: ' . $token_data['reference_id']);
         $order_data = $this->azure_client->retrieve_order_data($token_data['reference_id']);
         
         if (!$order_data) {
-            error_log('SUBZZ API ERROR: Failed to retrieve order data from Azure');
+            subzz_log('SUBZZ API ERROR: Failed to retrieve order data from Azure');
             $this->display_styled_error_page('Unable to Load Order', 'Unable to load order information. Please return to checkout and try again.');
             exit;
         }
         
-        error_log('SUBZZ API SUCCESS: Order data retrieved from Azure');
-        error_log('SUBZZ HYBRID ARCHITECTURE: Contract will be generated after billing date selection');
+        subzz_log('SUBZZ API SUCCESS: Order data retrieved from Azure');
+        subzz_log('SUBZZ HYBRID ARCHITECTURE: Contract will be generated after billing date selection');
         
         // Enqueue order cancellation script
         wp_enqueue_script(
@@ -122,6 +122,9 @@ class Subzz_Contract_Integration {
         true
         );    
 
+        // Add body class to enable CSS hiding of theme product elements (before get_header)
+        add_filter('body_class', function($classes) { $classes[] = 'subzz-contract-active'; return $classes; });
+
         // Display contract signature page - contract generation deferred to JavaScript
         $this->display_contract_signature_page($jwt_token, $token_data, $order_data, null, null);
         exit;
@@ -131,11 +134,11 @@ class Subzz_Contract_Integration {
      * AJAX handler to regenerate contract with billing date
      */
     public function regenerate_contract_with_billing_date() {
-        error_log('=== SUBZZ BILLING DATE: Contract regeneration requested ===');
+        subzz_log('=== SUBZZ BILLING DATE: Contract regeneration requested ===');
         
         // Verify nonce
         if (!isset($_POST['nonce']) || !wp_verify_nonce($_POST['nonce'], 'subzz_signature')) {
-            error_log('SUBZZ BILLING DATE ERROR: Nonce verification failed');
+            subzz_log('SUBZZ BILLING DATE ERROR: Nonce verification failed');
             wp_send_json_error('Security check failed');
             return;
         }
@@ -146,13 +149,13 @@ class Subzz_Contract_Integration {
         $customer_email = sanitize_email($_POST['customer_email']);
         $billing_day = intval($_POST['billing_day']);
         
-        error_log('SUBZZ BILLING DATE: Reference ID: ' . $reference_id);
-        error_log('SUBZZ BILLING DATE: Customer email: ' . $customer_email);
-        error_log('SUBZZ BILLING DATE: Selected billing day: ' . $billing_day);
+        subzz_log('SUBZZ BILLING DATE: Reference ID: ' . $reference_id);
+        subzz_log('SUBZZ BILLING DATE: Customer email: ' . $customer_email);
+        subzz_log('SUBZZ BILLING DATE: Selected billing day: ' . $billing_day);
         
         // Validate billing day
         if (!in_array($billing_day, array(1, 8, 15, 22))) {
-            error_log('SUBZZ BILLING DATE ERROR: Invalid billing day selected: ' . $billing_day);
+            subzz_log('SUBZZ BILLING DATE ERROR: Invalid billing day selected: ' . $billing_day);
             wp_send_json_error('Invalid billing day selected');
             return;
         }
@@ -160,23 +163,23 @@ class Subzz_Contract_Integration {
         // Verify JWT token
         $token_data = $this->decode_jwt_token($jwt_token);
         if (!$token_data || $token_data['reference_id'] !== $reference_id) {
-            error_log('SUBZZ BILLING DATE ERROR: JWT token validation failed');
+            subzz_log('SUBZZ BILLING DATE ERROR: JWT token validation failed');
             wp_send_json_error('Invalid token');
             return;
         }
         
         // Retrieve order data
-        error_log('SUBZZ BILLING DATE: Retrieving order data from Azure');
+        subzz_log('SUBZZ BILLING DATE: Retrieving order data from Azure');
         $order_data = $this->azure_client->retrieve_order_data($reference_id);
         
         if (!$order_data) {
-            error_log('SUBZZ BILLING DATE ERROR: Failed to retrieve order data');
+            subzz_log('SUBZZ BILLING DATE ERROR: Failed to retrieve order data');
             wp_send_json_error('Unable to load order information');
             return;
         }
         
         // Generate contract WITH billing date
-        error_log('SUBZZ BILLING DATE: Generating contract with billing day: ' . $billing_day);
+        subzz_log('SUBZZ BILLING DATE: Generating contract with billing day: ' . $billing_day);
         $contract_response = $this->azure_client->generate_contract(
             $customer_email,
             $order_data,
@@ -185,7 +188,7 @@ class Subzz_Contract_Integration {
         );
         
         if (!$contract_response || !isset($contract_response['contractHtml'])) {
-            error_log('SUBZZ BILLING DATE ERROR: Failed to generate contract from Azure');
+            subzz_log('SUBZZ BILLING DATE ERROR: Failed to generate contract from Azure');
             wp_send_json_error('Unable to generate contract');
             return;
         }
@@ -197,7 +200,7 @@ class Subzz_Contract_Integration {
         // Store contract HTML in transient for later use during signature
         $transient_key = 'subzz_contract_html_' . $reference_id;
         set_transient($transient_key, $contract_html, HOUR_IN_SECONDS);
-        error_log('SUBZZ BILLING DATE: Contract HTML stored in transient: ' . $transient_key);
+        subzz_log('SUBZZ BILLING DATE: Contract HTML stored in transient: ' . $transient_key);
         
         // Extract billing date information from response
         $billing_info = array(
@@ -208,9 +211,9 @@ class Subzz_Contract_Integration {
             'days_of_coverage' => isset($contract_response['days_of_coverage']) ? $contract_response['days_of_coverage'] : null
         );
         
-        error_log('SUBZZ BILLING DATE SUCCESS: Contract generated with billing date');
-        error_log('SUBZZ BILLING DATE: Next billing date: ' . ($billing_info['next_billing_date'] ?? 'not set'));
-        error_log('SUBZZ BILLING DATE: Days of coverage: ' . ($billing_info['days_of_coverage'] ?? 'not set'));
+        subzz_log('SUBZZ BILLING DATE SUCCESS: Contract generated with billing date');
+        subzz_log('SUBZZ BILLING DATE: Next billing date: ' . ($billing_info['next_billing_date'] ?? 'not set'));
+        subzz_log('SUBZZ BILLING DATE: Days of coverage: ' . ($billing_info['days_of_coverage'] ?? 'not set'));
         
         // Return success with contract HTML and billing info
         wp_send_json_success(array(
@@ -241,12 +244,12 @@ class Subzz_Contract_Integration {
      * Returns associative array of payload fields on success, false on failure.
      */
     private function decode_jwt_token($token) {
-        error_log('SUBZZ JWT DECODE: Starting signed token verification for length: ' . strlen($token));
+        subzz_log('SUBZZ JWT DECODE: Starting signed token verification for length: ' . strlen($token));
 
         // Load vendored JWT library
-        require_once dirname(__FILE__) . '/vendor/firebase/php-jwt/src/JWT.php';
-        require_once dirname(__FILE__) . '/vendor/firebase/php-jwt/src/Key.php';
-        require_once dirname(__FILE__) . '/vendor/firebase/php-jwt/src/ExpiredException.php';
+        require_once dirname(__FILE__) . '/jwt/JWT.php';
+        require_once dirname(__FILE__) . '/jwt/Key.php';
+        require_once dirname(__FILE__) . '/jwt/ExpiredException.php';
 
         $secret_key = defined('SUBZZ_CHECKOUT_JWT_SECRET') ? SUBZZ_CHECKOUT_JWT_SECRET : wp_salt('auth');
 
@@ -256,18 +259,18 @@ class Subzz_Contract_Integration {
 
             // Validate required fields
             if (!isset($token_data['reference_id']) || !isset($token_data['customer_email'])) {
-                error_log('SUBZZ JWT ERROR: Missing required fields in signed token');
+                subzz_log('SUBZZ JWT ERROR: Missing required fields in signed token');
                 return false;
             }
 
-            error_log('SUBZZ JWT SUCCESS: Signed token verified successfully');
+            subzz_log('SUBZZ JWT SUCCESS: Signed token verified successfully');
             return $token_data;
 
         } catch (\Firebase\JWT\ExpiredException $e) {
-            error_log('SUBZZ JWT ERROR: Token expired - ' . $e->getMessage());
+            subzz_log('SUBZZ JWT ERROR: Token expired - ' . $e->getMessage());
             return false;
         } catch (\Exception $e) {
-            error_log('SUBZZ JWT ERROR: Token verification failed - ' . $e->getMessage());
+            subzz_log('SUBZZ JWT ERROR: Token verification failed - ' . $e->getMessage());
             return false;
         }
     }
@@ -277,9 +280,14 @@ class Subzz_Contract_Integration {
      */
     private function display_styled_error_page($title, $message) {
         get_header();
-        
-        error_log('SUBZZ ERROR PAGE: Displaying error - ' . $title);
+
+        subzz_log('SUBZZ ERROR PAGE: Displaying error - ' . $title);
         ?>
+        <div class="subzz-checkout-header">
+            <a href="<?php echo esc_url(home_url('/')); ?>">
+                <img src="<?php echo esc_url(plugin_dir_url(dirname(__FILE__)) . 'assets/img/logo-white.png'); ?>" alt="<?php echo esc_attr(get_bloginfo('name')); ?>">
+            </a>
+        </div>
         <div class="subzz-contract-page">
             <div class="container">
                 <div class="contract-header">
@@ -320,7 +328,7 @@ class Subzz_Contract_Integration {
     private function display_contract_signature_page($jwt_token, $token_data, $order_data, $contract_html = null, $variant_info = null) {
         get_header();
         
-        error_log('SUBZZ PAGE RENDER: Starting contract signature page render (HYBRID architecture)');
+        subzz_log('SUBZZ PAGE RENDER: Starting contract signature page render (HYBRID architecture)');
         
         // Extract customer and order data
         $customer_name = $order_data['customer_data']['first_name'] . ' ' . $order_data['customer_data']['last_name'];
@@ -354,40 +362,64 @@ class Subzz_Contract_Integration {
         });
         
         ?>
-        
+
+        <div class="subzz-checkout-header">
+            <a href="<?php echo esc_url(home_url('/')); ?>">
+                <img src="<?php echo esc_url(plugin_dir_url(dirname(__FILE__)) . 'assets/img/logo-white.png'); ?>" alt="<?php echo esc_attr(get_bloginfo('name')); ?>">
+            </a>
+        </div>
+
         <style>
         /* ============================================================================
-           CONTRACT PAGE STYLES — Aligned with checkout-plans.css design language
-           Primary: #3498db | Text: #2c3e50 | Muted: #6c757d | Radius: 12px
+           CONTRACT PAGE STYLES — Figma Redesign (card-based layout)
+           Uses Subzz Design System tokens where possible.
            ============================================================================ */
+
+        /* Hide WooCommerce/Astra theme product elements injected via get_header() */
+        .subzz-contract-page ~ .woocommerce-products-header,
+        .subzz-contract-page ~ .wc-block-grid,
+        body.subzz-contract-active .woocommerce-products-header,
+        body.subzz-contract-active .wc-block-grid,
+        body.subzz-contract-active .related.products,
+        body.subzz-contract-active .up-sells,
+        body.subzz-contract-active .cross-sells,
+        body.subzz-contract-active .woocommerce-breadcrumb,
+        body.subzz-contract-active .woocommerce-result-count,
+        body.subzz-contract-active .woocommerce-ordering,
+        body.subzz-contract-active .ast-woocommerce-container .product,
+        body.subzz-contract-active .entry-content > .woocommerce:not(.subzz-contract-page),
+        body.subzz-contract-active .ast-single-post .entry-header,
+        body.subzz-contract-active .hentry .entry-header {
+            display: none !important;
+        }
 
         .subzz-contract-page {
             max-width: 900px;
             margin: 30px auto;
             padding: 0 20px;
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
-            color: #333;
+            font-family: var(--subzz-font-family);
+            color: var(--subzz-gray);
+            background: var(--subzz-page-bg);
         }
 
         .container {
-            background: #fff;
-            border-radius: 12px;
-            box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
-            padding: 40px;
+            background: transparent;
+            border-radius: 0;
+            box-shadow: none;
+            padding: 0;
         }
 
-        /* ── Header & Progress ────────────────────────────────────────────── */
+        /* ── Progress card ────────────────────────────────────────────────── */
         .contract-header {
+            background: var(--subzz-white);
+            border-radius: 12px;
+            box-shadow: var(--subzz-shadow-sm);
+            padding: 24px;
+            margin-bottom: 24px;
             text-align: center;
-            margin-bottom: 32px;
         }
 
-        .contract-header h1 {
-            color: #2c3e50;
-            margin: 0 0 20px;
-            font-size: 22px;
-            font-weight: 700;
-        }
+        .contract-header h1 { display: none; }
 
         .checkout-progress {
             display: flex;
@@ -405,10 +437,10 @@ class Subzz_Contract_Integration {
         }
 
         .step-dot {
-            width: 32px;
-            height: 32px;
+            width: 40px;
+            height: 40px;
             border-radius: 50%;
-            background: #dee2e6;
+            background: var(--subzz-border);
             color: #fff;
             font-weight: 700;
             font-size: 14px;
@@ -418,206 +450,80 @@ class Subzz_Contract_Integration {
             transition: background 0.3s;
         }
 
-        .progress-step.active .step-dot,
-        .progress-step.done .step-dot {
-            background: #3498db;
+        .progress-step.active .step-dot {
+            background: var(--subzz-red);
+            box-shadow: var(--subzz-shadow-lg);
         }
 
         .progress-step.done .step-dot {
-            background: #27ae60;
+            background: var(--subzz-blue);
         }
 
         .step-label {
             font-size: 12px;
-            color: #6c757d;
+            color: rgba(84, 84, 84, 0.5);
             font-weight: 500;
         }
 
         .progress-step.active .step-label {
-            color: #3498db;
+            color: var(--subzz-red);
+            font-weight: 600;
+        }
+
+        .progress-step.done .step-label {
+            color: var(--subzz-blue);
             font-weight: 600;
         }
 
         .progress-line {
-            width: 48px;
-            height: 3px;
-            background: #dee2e6;
+            flex: 1;
+            height: 4px;
+            background: var(--subzz-border);
             margin: 0 4px;
             margin-bottom: 20px;
+            transition: background 0.3s;
         }
 
-        /* Legacy progress indicator (hidden when new progress exists) */
-        .progress-indicator {
-            display: none;
+        .progress-line.active {
+            background: var(--subzz-red);
+        }
+
+        .progress-line.done {
+            background: var(--subzz-blue);
+        }
+
+        /* Legacy elements hidden */
+        .subzz-dash-divider { display: none; }
+        .progress-indicator { display: none; }
+
+        /* ── Contract card (shared) ───────────────────────────────────────── */
+        .contract-card {
+            background: var(--subzz-white);
+            border-radius: 12px;
+            box-shadow: var(--subzz-shadow-sm);
+            padding: 24px;
+            margin-bottom: 24px;
         }
 
         /* ── Steps ────────────────────────────────────────────────────────── */
         .contract-step {
-            margin-bottom: 28px;
+            margin-bottom: 0;
             transition: opacity 0.3s ease;
         }
 
         .contract-step.hidden { display: none; }
 
-        .step-header {
-            display: flex;
-            align-items: center;
-            margin-bottom: 20px;
-            padding-bottom: 0;
-            border-bottom: none;
-        }
+        .step-header { display: none; }
 
-        .step-number {
-            width: 32px;
-            height: 32px;
-            background: #3498db;
-            color: white;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 14px;
-            font-weight: 700;
-            margin-right: 12px;
-            flex-shrink: 0;
-        }
+        .step-description { display: none; }
 
-        .step-header h2 {
-            color: #2c3e50;
-            margin: 0;
-            font-size: 20px;
-            font-weight: 700;
-        }
-
-        .step-description {
-            color: #6c757d;
-            font-size: 14px;
-            line-height: 1.6;
-            margin-bottom: 20px;
-            padding: 14px 16px;
-            background: #f8f9fa;
-            border-left: 3px solid #3498db;
-            border-radius: 8px;
-        }
-
-        /* ── Billing Options Grid ─────────────────────────────────────────── */
-        .billing-options {
-            display: flex;
-            gap: 12px;
-            margin-bottom: 24px;
-        }
-
-        @media (max-width: 600px) {
-            .billing-options { flex-direction: column; }
-        }
-
-        .billing-option {
-            flex: 1;
-            position: relative;
-            cursor: pointer;
-            display: block;
-        }
-
-        .billing-option input[type="radio"] {
-            position: absolute;
-            opacity: 0;
-            pointer-events: none;
-        }
-
-        .option-content {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            padding: 14px 8px;
-            background: white;
-            border: 2px solid #dee2e6;
-            border-radius: 10px;
-            transition: all 0.2s;
-            min-height: auto;
-        }
-
-        .billing-option:hover .option-content {
-            border-color: #3498db;
-            color: #3498db;
-        }
-
-        .billing-option input[type="radio"]:checked + .option-content {
-            background: #eaf4fd;
-            border-color: #3498db;
-        }
-
-        .day-number {
-            font-size: 18px;
-            font-weight: 700;
-            color: #6c757d;
-            margin-bottom: 0;
-        }
-
-        .billing-option:hover .day-number,
-        .billing-option input[type="radio"]:checked + .option-content .day-number {
-            color: #3498db;
-        }
-
-        .day-label {
-            font-size: 12px;
-            color: #6c757d;
-            font-weight: 500;
-        }
-
-        /* ── Billing Preview ──────────────────────────────────────────────── */
-        .billing-preview {
-            background: #eafaf1;
-            border: 1px solid #27ae60;
-            border-radius: 12px;
-            padding: 16px 20px;
-            margin-bottom: 24px;
-            display: flex;
-            align-items: flex-start;
-            gap: 12px;
-        }
-
-        .preview-icon { font-size: 20px; flex-shrink: 0; }
-        .preview-content { flex: 1; }
-        .preview-content p { margin: 0; color: #2c3e50; font-size: 14px; line-height: 1.6; }
-        .preview-content strong { color: #27ae60; }
-
-        /* ── Loading State ────────────────────────────────────────────────── */
-        .loading-state {
-            text-align: center;
-            padding: 40px 20px;
-            background: #f8f9fa;
-            border: 2px solid #3498db;
-            border-radius: 12px;
-            margin-bottom: 28px;
-        }
-
-        .loading-spinner {
-            width: 40px;
-            height: 40px;
-            border: 4px solid #e9ecef;
-            border-top-color: #3498db;
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-            margin: 0 auto 16px;
-        }
-
-        @keyframes spin { to { transform: rotate(360deg); } }
-
-        .loading-state p {
-            color: #6c757d;
-            font-size: 15px;
-            font-weight: 600;
-            margin: 0;
-        }
-
-        /* ── Billing Summary ──────────────────────────────────────────────── */
+        /* ── Billing Summary (cyan border per design) ─────────────────────── */
         .billing-summary {
-            background: #eaf4fd;
-            border: 2px solid #3498db;
+            background: var(--subzz-white);
+            border: 2px solid var(--subzz-cyan);
             border-radius: 12px;
             padding: 14px 20px;
-            margin-bottom: 28px;
+            margin-bottom: 24px;
         }
 
         .summary-content {
@@ -632,177 +538,65 @@ class Subzz_Contract_Integration {
         .summary-text {
             flex: 1;
             font-size: 14px;
-            color: #2c3e50;
+            color: var(--subzz-gray);
         }
 
         .summary-text strong {
             font-weight: 700;
-            color: #3498db;
+            color: var(--subzz-gray);
         }
 
         .change-link {
-            color: #3498db;
+            color: var(--subzz-blue);
             text-decoration: none;
             font-weight: 600;
             font-size: 14px;
             padding: 6px 14px;
-            border: 2px solid #3498db;
+            border: 2px solid var(--subzz-blue);
             border-radius: 8px;
             transition: all 0.2s;
             flex-shrink: 0;
         }
 
         .change-link:hover {
-            background: #3498db;
+            background: var(--subzz-blue);
             color: white;
             text-decoration: none;
         }
 
-        .step-actions { text-align: center; }
-
-        /* ── Legacy compliance (kept for JS compatibility) ───────────────── */
-
-        .typed-name-section {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 16px;
-        }
-
-        @media (max-width: 600px) {
-            .typed-name-section { grid-template-columns: 1fr; }
-        }
-
-        .form-field { margin-bottom: 0; }
-
-        .form-field label {
-            display: block;
-            font-weight: 600;
-            margin-bottom: 6px;
-            color: #2c3e50;
-            font-size: 14px;
-        }
-
-        .form-field input[type="text"] {
-            width: 100%;
-            padding: 10px 14px;
-            border: 2px solid #dee2e6;
-            border-radius: 8px;
-            font-size: 15px;
-            transition: border-color 0.2s;
-            box-sizing: border-box;
-            font-family: inherit;
-        }
-
-        .form-field input[type="text"]:focus {
-            outline: none;
-            border-color: #3498db;
-            box-shadow: 0 0 0 3px rgba(52, 152, 219, 0.1);
-        }
-
-        .field-hint {
-            display: block;
-            font-size: 12px;
-            color: #6c757d;
-            margin-top: 4px;
-            font-style: normal;
-            line-height: 1.4;
-        }
-
-        .consent-checkboxes {
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-        }
-
-        .consent-checkbox {
-            background: white;
-            border: 2px solid #dee2e6;
-            border-radius: 8px;
-            padding: 16px;
-            transition: all 0.2s;
-            cursor: pointer;
-        }
-
-        .consent-checkbox:hover {
-            border-color: #3498db;
-        }
-
-        .consent-checkbox label {
-            display: flex;
-            align-items: flex-start;
-            cursor: pointer;
-            margin: 0;
-            line-height: 1.5;
-            font-size: 14px;
-        }
-
-        .consent-checkbox input[type="checkbox"] {
-            width: 20px;
-            height: 20px;
-            margin-right: 12px;
-            margin-top: 2px;
-            cursor: pointer;
-            flex-shrink: 0;
-            accent-color: #3498db;
-        }
-
-        .consent-checkbox strong {
-            color: #2c3e50;
-            display: block;
-            margin-bottom: 4px;
-        }
-
-        /* ── Signature pad (within sign-section) ──────────────────────────── */
-
-        .signature-pad-container {
-            border: 2px solid #dee2e6;
-            border-radius: 6px;
-            overflow: hidden;
-        }
-
-        #signature-pad {
-            display: block;
-            width: 100% !important;
-            cursor: crosshair;
-            background: white;
-        }
-
-        .signature-controls {
-            padding: 8px 12px;
-            text-align: right;
-            background: #f8f9fa;
-            border-top: 1px solid #eee;
-        }
-
         /* ── Contract Terms (scrollable) ──────────────────────────────────── */
         .contract-terms-section {
-            background: white;
-            border: 2px solid #dee2e6;
+            background: var(--subzz-white);
             border-radius: 12px;
+            box-shadow: var(--subzz-shadow-sm);
             padding: 24px;
-            margin-bottom: 20px;
+            margin-bottom: 24px;
         }
 
         .contract-terms-section h2 {
-            color: #2c3e50;
+            color: var(--subzz-gray);
             margin: 0 0 8px;
             font-size: 20px;
             font-weight: 700;
         }
 
         .contract-scroll-hint {
-            color: #6c757d;
+            color: rgba(84, 84, 84, 0.7);
             font-size: 13px;
             margin: 0 0 12px;
+        }
+
+        .contract-text-wrapper {
+            position: relative;
         }
 
         .contract-text-scroll {
             max-height: 400px;
             overflow-y: auto;
-            border: 1px solid #eee;
+            border: 2px solid var(--subzz-border);
             border-radius: 8px;
             padding: 20px;
-            background: #fafbfc;
+            background: #FAFAFA;
             font-size: 14px;
             line-height: 1.6;
         }
@@ -825,17 +619,56 @@ class Subzz_Contract_Integration {
             background: #aaa;
         }
 
+        /* Scroll indicator overlay */
+        .scroll-indicator {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 64px;
+            display: flex;
+            align-items: flex-end;
+            justify-content: center;
+            padding-bottom: 12px;
+            pointer-events: none;
+            border-radius: 0 0 8px 8px;
+            background: linear-gradient(to bottom, transparent, rgba(250, 250, 250, 0.95));
+            transition: opacity 0.3s;
+        }
+
+        .scroll-indicator-content {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            animation: bounce 2s infinite;
+        }
+
+        .scroll-indicator-content span {
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--subzz-blue);
+        }
+
+        @keyframes bounce {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-4px); }
+        }
+
+        .scroll-indicator.hidden {
+            opacity: 0;
+        }
+
         /* ── Combined Sign Section ────────────────────────────────────────── */
         .sign-section {
-            background: #f8f9fa;
-            border: 2px solid #dee2e6;
+            background: var(--subzz-white);
             border-radius: 12px;
+            box-shadow: var(--subzz-shadow-sm);
             padding: 24px;
-            margin-bottom: 20px;
+            margin-bottom: 24px;
         }
 
         .sign-section h2 {
-            color: #2c3e50;
+            color: var(--subzz-gray);
             margin: 0 0 16px;
             font-size: 20px;
             font-weight: 700;
@@ -850,7 +683,7 @@ class Subzz_Contract_Integration {
 
         .sign-card {
             background: white;
-            border: 2px solid #dee2e6;
+            border: 2px solid var(--subzz-border);
             border-radius: 8px;
             padding: 16px;
         }
@@ -858,14 +691,222 @@ class Subzz_Contract_Integration {
         .sign-card-label {
             display: block;
             font-weight: 600;
-            color: #2c3e50;
+            color: var(--subzz-gray);
             font-size: 14px;
             margin-bottom: 12px;
         }
 
+        /* Form fields */
+        .typed-name-section {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+        }
+
+        .form-field { margin-bottom: 0; }
+
+        .form-field label {
+            display: block;
+            font-weight: 600;
+            margin-bottom: 6px;
+            color: var(--subzz-gray);
+            font-size: 14px;
+        }
+
+        .form-field input[type="text"] {
+            width: 100%;
+            padding: 10px 14px;
+            border: 2px solid var(--subzz-border);
+            border-radius: 8px;
+            font-size: 15px;
+            transition: border-color 0.2s;
+            box-sizing: border-box;
+            font-family: inherit;
+            color: var(--subzz-gray);
+        }
+
+        .form-field input[type="text"]:focus {
+            outline: none;
+            border-color: var(--subzz-border-focus);
+            box-shadow: 0 0 0 3px rgba(72, 202, 237, 0.15);
+        }
+
+        .field-hint {
+            display: block;
+            font-size: 12px;
+            color: rgba(84, 84, 84, 0.7);
+            margin-top: 4px;
+            font-style: normal;
+            line-height: 1.4;
+        }
+
+        /* Consent checkboxes */
+        .consent-checkboxes {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .consent-checkbox {
+            background: white;
+            border: 2px solid var(--subzz-border);
+            border-radius: 8px;
+            padding: 16px;
+            transition: all 0.2s;
+            cursor: pointer;
+        }
+
+        .consent-checkbox:hover {
+            border-color: var(--subzz-cyan);
+        }
+
+        .consent-checkbox.consent-checked {
+            border-color: var(--subzz-cyan);
+            background: rgba(72, 202, 237, 0.03);
+        }
+
+        .consent-checkbox label {
+            display: flex;
+            align-items: flex-start;
+            cursor: pointer;
+            margin: 0;
+            line-height: 1.5;
+            font-size: 14px;
+            color: var(--subzz-gray);
+        }
+
+        .consent-checkbox input[type="checkbox"] {
+            width: 20px;
+            height: 20px;
+            margin-right: 12px;
+            margin-top: 2px;
+            cursor: pointer;
+            flex-shrink: 0;
+            accent-color: var(--subzz-blue);
+        }
+
+        .consent-checkbox a {
+            color: var(--subzz-blue);
+            text-decoration: underline;
+        }
+
+        .consent-checkbox a:hover {
+            text-decoration: none;
+        }
+
+        /* Signature pad */
+        .signature-pad-container {
+            border: 2px solid var(--subzz-border);
+            border-radius: 6px;
+            overflow: hidden;
+        }
+
+        #signature-pad {
+            display: block;
+            width: 100% !important;
+            cursor: crosshair;
+            background: white;
+        }
+
+        .signature-controls {
+            padding: 8px 12px;
+            text-align: right;
+            background: #f8f9fa;
+            border-top: 1px solid var(--subzz-border);
+        }
+
+        /* ── Signature Mode Tabs (Draw / Type) ───────────────────────────── */
+        .signature-mode-tabs {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 12px;
+        }
+
+        .sig-tab {
+            flex: 1;
+            padding: 10px 16px;
+            border: 2px solid var(--subzz-border);
+            border-radius: var(--subzz-radius-md);
+            background: transparent;
+            color: var(--subzz-gray);
+            font-weight: 600;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-family: inherit;
+            text-align: center;
+        }
+
+        .sig-tab:hover {
+            border-color: var(--subzz-blue);
+            color: var(--subzz-blue);
+        }
+
+        .sig-tab.active {
+            background: var(--subzz-blue);
+            border-color: var(--subzz-blue);
+            color: #fff;
+        }
+
+        /* Typed signature input */
+        .typed-sig-input {
+            width: 100%;
+            padding: 10px 14px;
+            border: 2px solid var(--subzz-border);
+            border-radius: var(--subzz-radius-md);
+            font-size: 15px;
+            font-family: inherit;
+            color: var(--subzz-gray);
+            box-sizing: border-box;
+            transition: border-color 0.2s;
+            margin-bottom: 12px;
+        }
+
+        .typed-sig-input:focus {
+            outline: none;
+            border-color: var(--subzz-cyan);
+            box-shadow: 0 0 0 3px rgba(72, 202, 237, 0.15);
+        }
+
+        /* Typed signature preview */
+        .typed-sig-preview {
+            min-height: 150px;
+            border: 2px solid var(--subzz-border);
+            border-radius: var(--subzz-radius-md);
+            background: #fff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+            transition: border-color 0.2s;
+        }
+
+        .typed-sig-preview.has-content {
+            border-color: var(--subzz-cyan);
+        }
+
+        .typed-sig-placeholder {
+            font-size: 14px;
+            color: rgba(84, 84, 84, 0.5);
+            margin: 0;
+        }
+
+        .typed-sig-text {
+            font-family: 'Dancing Script', cursive;
+            font-size: 36px;
+            color: #000;
+            margin: 0;
+            word-break: break-word;
+            text-align: center;
+        }
+
+        .signature-hint {
+            font-size: 12px;
+            color: rgba(84, 84, 84, 0.7);
+            margin-top: 8px;
+        }
+
         /* ── Buttons ──────────────────────────────────────────────────────── */
-        /* Uses .btn-primary/.btn-secondary (custom classes) instead of .button
-           to avoid CSS conflicts with ANY WordPress theme (Astra, Divi, etc.) */
         .btn-primary {
             display: inline-block;
             padding: 14px 28px;
@@ -874,20 +915,22 @@ class Subzz_Contract_Integration {
             text-align: center;
             text-decoration: none;
             border: none;
-            border-radius: 12px;
+            border-radius: var(--subzz-radius-md);
             cursor: pointer;
             transition: all 0.2s;
-            background: linear-gradient(135deg, #3498db 0%, #2980b9 100%);
+            background: var(--subzz-red);
             color: #fff;
+            font-family: inherit;
         }
 
         .btn-primary:hover:not(:disabled) {
+            opacity: 0.9;
             transform: translateY(-1px);
-            box-shadow: 0 4px 12px rgba(52, 152, 219, 0.3);
+            box-shadow: var(--subzz-shadow-lg);
         }
 
         .btn-primary:disabled {
-            background: #adb5bd;
+            opacity: 0.5;
             color: #fff;
             cursor: not-allowed;
             transform: none;
@@ -901,16 +944,21 @@ class Subzz_Contract_Integration {
             font-weight: 600;
             text-align: center;
             text-decoration: none;
-            border: 2px solid #3498db;
             border-radius: 8px;
             cursor: pointer;
             transition: all 0.2s;
             background: #fff;
-            color: #3498db;
+            font-family: inherit;
         }
 
-        .btn-secondary:hover {
-            background: #3498db;
+        /* Cancel button: charcoal outline */
+        .btn-cancel {
+            border: 2px solid var(--subzz-gray);
+            color: var(--subzz-gray);
+        }
+
+        .btn-cancel:hover {
+            background: var(--subzz-gray);
             color: #fff;
         }
 
@@ -921,35 +969,86 @@ class Subzz_Contract_Integration {
             margin-top: 24px;
         }
 
-        @media (max-width: 600px) {
-            .container { padding: 20px 16px; }
-            .contract-actions { flex-direction: column; }
-            .sign-section { padding: 20px 16px; }
-            .contract-text-scroll { max-height: 300px; }
+        /* ── Loading State (kept for JS compat) ──────────────────────────── */
+        .loading-state {
+            text-align: center;
+            padding: 40px 20px;
+            background: var(--subzz-white);
+            border: 2px solid var(--subzz-blue);
+            border-radius: 12px;
+            margin-bottom: 24px;
         }
+
+        .loading-spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid var(--subzz-border);
+            border-top-color: var(--subzz-blue);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 16px;
+        }
+
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        .loading-state p {
+            color: rgba(84, 84, 84, 0.7);
+            font-size: 15px;
+            font-weight: 600;
+            margin: 0;
+        }
+
+        .step-actions { text-align: center; }
 
         /* ── Error page ───────────────────────────────────────────────────── */
         .error-message-section {
             text-align: center;
             padding: 30px 20px;
-            background: #fff3cd;
-            border: 1px solid #ffeaa7;
+            background: var(--subzz-warning-bg);
+            border: 1px solid var(--subzz-warning-border);
             border-radius: 12px;
         }
 
         .error-actions { margin-top: 20px; }
+
+        /* ── Responsive ───────────────────────────────────────────────────── */
+        @media (max-width: 600px) {
+            .contract-header { padding: 16px; }
+            .contract-card,
+            .contract-terms-section,
+            .sign-section { padding: 16px; }
+            .contract-actions { flex-direction: column; }
+            .contract-text-scroll { max-height: 300px; }
+
+            .step-dot {
+                width: 32px;
+                height: 32px;
+                font-size: 12px;
+            }
+
+            .step-label { font-size: 10px; }
+
+            .typed-name-section { grid-template-columns: 1fr; }
+
+            .summary-content {
+                flex-direction: column;
+                text-align: center;
+            }
+        }
         </style>
         
+        <script>document.body.classList.add('subzz-contract-active');</script>
         <div class="subzz-contract-page">
             <div class="container">
+                <!-- Step indicator card -->
                 <div class="contract-header">
                     <h1>Subscription Agreement</h1>
                     <div class="checkout-progress">
                         <div class="progress-step done">
-                            <span class="step-dot">1</span>
-                            <span class="step-label">Choose Plan</span>
+                            <span class="step-dot">&#10003;</span>
+                            <span class="step-label">Plan</span>
                         </div>
-                        <div class="progress-line"></div>
+                        <div class="progress-line active"></div>
                         <div class="progress-step active">
                             <span class="step-dot">2</span>
                             <span class="step-label">Contract</span>
@@ -968,83 +1067,11 @@ class Subzz_Contract_Integration {
                 </div>
 
                 <div class="contract-content">
-                    
-                    <!-- ============================================================================
-                         STEP 1: BILLING DATE SELECTION
-                         JavaScript in: billing-date-handler.js
-                         ============================================================================ -->
-                    <div id="step-1-billing-date" class="contract-step active">
-                        <div class="step-header">
-                            <span class="step-number">1</span>
-                            <h2>Select Your Billing Date</h2>
-                        </div>
-                        
-                        <div class="billing-date-selection">
-                            <p class="step-description">
-                                Choose the day of the month when you'd like your subscription payment to be processed. 
-                                Your first payment of <strong><?php echo esc_html($currency); ?> <?php echo esc_html(number_format((float)$monthly_amount, 2)); ?></strong> 
-                                will be charged today.
-                            </p>
-                            
-                            <div class="billing-options">
-                                <label class="billing-option">
-                                    <input type="radio" name="billing_day" value="1" id="billing-day-1">
-                                    <span class="option-content">
-                                        <span class="day-number">1st</span>
-                                        <span class="day-label">of the month</span>
-                                    </span>
-                                </label>
-                                
-                                <label class="billing-option">
-                                    <input type="radio" name="billing_day" value="8" id="billing-day-8">
-                                    <span class="option-content">
-                                        <span class="day-number">8th</span>
-                                        <span class="day-label">of the month</span>
-                                    </span>
-                                </label>
-                                
-                                <label class="billing-option">
-                                    <input type="radio" name="billing_day" value="15" id="billing-day-15">
-                                    <span class="option-content">
-                                        <span class="day-number">15th</span>
-                                        <span class="day-label">of the month</span>
-                                    </span>
-                                </label>
-                                
-                                <label class="billing-option">
-                                    <input type="radio" name="billing_day" value="22" id="billing-day-22">
-                                    <span class="option-content">
-                                        <span class="day-number">22nd</span>
-                                        <span class="day-label">of the month</span>
-                                    </span>
-                                </label>
-                            </div>
-                            
-                            <div id="billing-preview" class="billing-preview" style="display: none;">
-                                <div class="preview-icon">ℹ️</div>
-                                <div class="preview-content">
-                                    <p id="preview-text"></p>
-                                </div>
-                            </div>
-                            
-                            <div class="step-actions">
-                                <button id="btn-continue-step-1" class="btn-primary" disabled>
-                                    Continue to Review Contract →
-                                </button>
-                            </div>
-                        </div>
-                    </div>
 
-                    <!-- Loading State -->
-                    <div id="loading-contract" class="loading-state" style="display: none;">
-                        <div class="loading-spinner"></div>
-                        <p>Generating your contract with selected billing date...</p>
-                    </div>
-
-                    <!-- Billing Date Summary -->
+                    <!-- Billing Date Summary (shown immediately from URL param) -->
                     <div id="billing-date-summary" class="billing-summary" style="display: none;">
                         <div class="summary-content">
-                            <span class="summary-icon">✅</span>
+                            <span class="summary-icon">&#10003;</span>
                             <span class="summary-text">
                                 <strong>Your Billing Date:</strong> <span id="selected-billing-day-display"></span>
                             </span>
@@ -1052,19 +1079,31 @@ class Subzz_Contract_Integration {
                         </div>
                     </div>
 
-                    <!-- ============================================================================
-                         STEPS 2 & 3: CONTRACT REVIEW AND SIGNATURE
-                         JavaScript in: signature-handler.js
-                         NOTE: contract-actions moved INSIDE this container to hide initially
-                         ============================================================================ -->
+                    <!-- Loading State (contract generation) -->
+                    <div id="loading-contract" class="loading-state" style="display: none;">
+                        <div class="loading-spinner"></div>
+                        <p>Generating your contract...</p>
+                    </div>
+
+                    <!-- Contract Review and Signature (no billing Step 1 — billing date comes from checkout page) -->
                     <div id="step-2-3-container" class="contract-step" style="display: none;">
 
-                        <!-- Contract Terms (populated via AJAX) — scrollable -->
+                        <!-- Contract Terms (populated via AJAX) — scrollable with scroll indicator -->
                         <div class="contract-terms-section">
                             <h2>Subscription Agreement</h2>
-                            <p class="contract-scroll-hint">Please review the full agreement below before signing.</p>
-                            <div id="contract-text-container" class="contract-text-scroll">
-                                <!-- Contract HTML will be inserted here via JavaScript -->
+                            <p class="contract-scroll-hint">Please scroll through and review the full agreement before signing below.</p>
+                            <div class="contract-text-wrapper">
+                                <div id="contract-text-container" class="contract-text-scroll">
+                                    <!-- Contract HTML will be inserted here via JavaScript -->
+                                </div>
+                                <div class="scroll-indicator" id="scroll-indicator">
+                                    <div class="scroll-indicator-content">
+                                        <span>Scroll to read agreement</span>
+                                        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                            <path d="M8 3V13M8 13L12 9M8 13L4 9" stroke="#2A8BEA" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                        </svg>
+                                    </div>
+                                </div>
                             </div>
                         </div>
 
@@ -1078,7 +1117,7 @@ class Subzz_Contract_Integration {
                                         <input type="checkbox" id="electronic-consent" required>
                                         <span>
                                             I consent to signing this agreement electronically in accordance
-                                            with the Electronic Communications and Transactions Act (ECTA).
+                                            with the <a href="https://www.gov.za/documents/electronic-communications-and-transactions-act" target="_blank" rel="noopener noreferrer">Electronic Communications and Transactions Act (ECTA)</a>.
                                         </span>
                                     </label>
                                 </div>
@@ -1087,7 +1126,8 @@ class Subzz_Contract_Integration {
                                     <label>
                                         <input type="checkbox" id="terms-consent" required>
                                         <span>
-                                            I confirm that I have read and agree to all terms and conditions
+                                            I confirm that I have read and agree to all
+                                            <a href="/terms-and-conditions/" target="_blank" rel="noopener noreferrer">terms and conditions</a>
                                             of this subscription agreement.
                                         </span>
                                     </label>
@@ -1114,26 +1154,51 @@ class Subzz_Contract_Integration {
                                 </div>
 
                                 <div class="sign-card">
-                                    <label class="sign-card-label">Your Signature</label>
-                                    <div class="signature-pad-container">
-                                        <canvas id="signature-pad" height="180"></canvas>
-                                        <div class="signature-controls">
-                                            <button id="clear-signature" type="button" class="btn-secondary">Clear</button>
+                                    <label class="sign-card-label">Your Signature <span class="required-asterisk">*</span></label>
+
+                                    <!-- Draw / Type tabs -->
+                                    <div class="signature-mode-tabs">
+                                        <button type="button" class="sig-tab active" data-mode="draw">Draw Signature</button>
+                                        <button type="button" class="sig-tab" data-mode="type">Type Signature</button>
+                                    </div>
+
+                                    <!-- Draw panel (default) -->
+                                    <div id="sig-panel-draw" class="sig-panel">
+                                        <div class="signature-pad-container">
+                                            <canvas id="signature-pad" height="180"></canvas>
+                                            <div class="signature-controls">
+                                                <button id="clear-signature" type="button" class="btn-secondary" style="border: 2px solid var(--subzz-cyan); color: var(--subzz-cyan);">Clear</button>
+                                            </div>
                                         </div>
                                     </div>
+
+                                    <!-- Type panel (hidden by default) -->
+                                    <div id="sig-panel-type" class="sig-panel" style="display:none;">
+                                        <input type="text" id="typed-signature-input" class="typed-sig-input"
+                                               placeholder="Type your full name" autocomplete="off">
+                                        <div class="typed-sig-preview" id="typed-sig-preview">
+                                            <p class="typed-sig-placeholder">Your signature will appear here</p>
+                                            <p class="typed-sig-text" id="typed-sig-text" style="display:none;"></p>
+                                        </div>
+                                    </div>
+
+                                    <!-- Hidden canvas for rendering typed signature to base64 -->
+                                    <canvas id="typed-signature-canvas" width="600" height="200" style="display:none;"></canvas>
+
+                                    <p class="signature-hint">Your signature is securely stored and legally binding. A copy of your signed agreement will be emailed to you.</p>
                                 </div>
                             </div>
                         </div>
 
                         <!-- Action Buttons -->
                         <div class="contract-actions">
-                            <button type="button" id="cancel-order-button" class="btn-secondary"
+                            <button type="button" id="cancel-order-button" class="btn-secondary btn-cancel"
                                     data-reference-id="<?php echo esc_attr($token_data['reference_id']); ?>">
                                 Cancel Order
                             </button>
 
                             <button id="sign-agreement" class="btn-primary" disabled>
-                                Sign & Continue to Payment
+                                Sign Agreement & Continue to Payment
                             </button>
                         </div>
 
@@ -1141,6 +1206,9 @@ class Subzz_Contract_Integration {
 
                 </div>
             </div>
+
+            <!-- Screen reader announcements -->
+            <div class="sr-only" aria-live="polite" id="contract-announcer"></div>
         </div>
 
         <script>
@@ -1172,18 +1240,18 @@ class Subzz_Contract_Integration {
         
         get_footer();
         
-        error_log('SUBZZ PAGE RENDER: Contract signature page rendered successfully (HYBRID architecture)');
+        subzz_log('SUBZZ PAGE RENDER: Contract signature page rendered successfully (HYBRID architecture)');
     }
 
     /**
      * Save signature via AJAX - HYBRID ARCHITECTURE
      */
     public function save_signature() {
-        error_log('=== SUBZZ SIGNATURE SAVE: AJAX request received (HYBRID architecture) ===');
+        subzz_log('=== SUBZZ SIGNATURE SAVE: AJAX request received (HYBRID architecture) ===');
         
         // Verify nonce
         if (!isset($_POST['nonce']) || !wp_verify_nonce($_POST['nonce'], 'subzz_signature')) {
-            error_log('SUBZZ SIGNATURE ERROR: Nonce verification failed');
+            subzz_log('SUBZZ SIGNATURE ERROR: Nonce verification failed');
             wp_die('Security check failed');
         }
 
@@ -1205,15 +1273,15 @@ class Subzz_Contract_Integration {
         // Extract variant info if provided
         $variant_info = isset($_POST['variant_info']) ? json_decode(stripslashes($_POST['variant_info']), true) : null;
         
-        error_log('SUBZZ SIGNATURE DATA: Reference ID: ' . $reference_id);
-        error_log('SUBZZ SIGNATURE DATA: Customer email: ' . $customer_email);
-        error_log('SUBZZ SIGNATURE DATA: Billing day: ' . ($billing_day_of_month ?? 'not provided'));
-        error_log('SUBZZ SIGNATURE LEGAL: Typed full name: ' . $typed_full_name);
-        error_log('SUBZZ SIGNATURE LEGAL: Typed initials: ' . $typed_initials);
+        subzz_log('SUBZZ SIGNATURE DATA: Reference ID: ' . $reference_id);
+        subzz_log('SUBZZ SIGNATURE DATA: Customer email: ' . $customer_email);
+        subzz_log('SUBZZ SIGNATURE DATA: Billing day: ' . ($billing_day_of_month ?? 'not provided'));
+        subzz_log('SUBZZ SIGNATURE LEGAL: Typed full name: ' . $typed_full_name);
+        subzz_log('SUBZZ SIGNATURE LEGAL: Typed initials: ' . $typed_initials);
         
         // Validate billing day
         if ($billing_day_of_month && !in_array($billing_day_of_month, array(1, 8, 15, 22))) {
-            error_log('SUBZZ SIGNATURE ERROR: Invalid billing day: ' . $billing_day_of_month);
+            subzz_log('SUBZZ SIGNATURE ERROR: Invalid billing day: ' . $billing_day_of_month);
             wp_send_json_error('Invalid billing day');
             return;
         }
@@ -1222,28 +1290,31 @@ class Subzz_Contract_Integration {
         $token_data = $this->decode_jwt_token($jwt_token);
         
         if (!$token_data) {
-            error_log('SUBZZ SIGNATURE ERROR: JWT token validation failed');
+            subzz_log('SUBZZ SIGNATURE ERROR: JWT token validation failed');
             wp_send_json_error('Invalid token');
             return;
         }
         
         if ($token_data['reference_id'] !== $reference_id) {
-            error_log('SUBZZ SIGNATURE ERROR: Reference ID mismatch');
+            subzz_log('SUBZZ SIGNATURE ERROR: Reference ID mismatch');
             wp_send_json_error('Token reference mismatch');
             return;
         }
         
-        error_log('SUBZZ SIGNATURE VALIDATION: JWT token verified successfully');
+        subzz_log('SUBZZ SIGNATURE VALIDATION: JWT token verified successfully');
 
         // Retrieve contract HTML from transient
         $transient_key = 'subzz_contract_html_' . $reference_id;
         $contract_html = get_transient($transient_key);
-        
+
         if ($contract_html) {
-            error_log('SUBZZ PDF: Contract HTML retrieved from transient: ' . strlen($contract_html) . ' chars');
+            subzz_log('SUBZZ PDF: Contract HTML retrieved from transient: ' . strlen($contract_html) . ' chars');
             delete_transient($transient_key);
         } else {
-            error_log('SUBZZ PDF WARNING: Contract HTML not found in transient');
+            // get_transient returns false when not found — must send null (not false)
+            // to Azure, otherwise JSON sends boolean false for a string field
+            $contract_html = null;
+            subzz_log('SUBZZ PDF WARNING: Contract HTML not found in transient');
         }
 
         // Prepare additional data for Azure
@@ -1261,20 +1332,20 @@ class Subzz_Contract_Integration {
             $additional_data['variant_info'] = $variant_info;
         }
 
-        error_log('SUBZZ SIGNATURE: Additional data includes billing_day_of_month: ' . ($billing_day_of_month ?? 'NULL'));
+        subzz_log('SUBZZ SIGNATURE: Additional data includes billing_day_of_month: ' . ($billing_day_of_month ?? 'NULL'));
 
         // Store signature in Azure
-        error_log('SUBZZ API CALL: Storing signature in Azure with billing date and legal compliance');
+        subzz_log('SUBZZ API CALL: Storing signature in Azure with billing date and legal compliance');
         
         $signature_stored = $this->azure_client->store_signature($customer_email, $signature_data, $reference_id, $additional_data);
         
         if (!$signature_stored) {
-            error_log('SUBZZ API ERROR: Failed to store signature in Azure');
+            subzz_log('SUBZZ API ERROR: Failed to store signature in Azure');
             wp_send_json_error('Failed to save signature. Please try again.');
             return;
         }
         
-        error_log('SUBZZ API SUCCESS: Signature stored in Azure successfully');
+        subzz_log('SUBZZ API SUCCESS: Signature stored in Azure successfully');
         
         // Find and update WooCommerce order
         $orders = wc_get_orders(array(
@@ -1293,7 +1364,7 @@ class Subzz_Contract_Integration {
             
             if ($billing_day_of_month) {
                 $order->update_meta_data('_subzz_billing_day', $billing_day_of_month);
-                error_log("SUBZZ ORDER UPDATE: Updated billing day {$billing_day_of_month} in order meta");
+                subzz_log("SUBZZ ORDER UPDATE: Updated billing day {$billing_day_of_month} in order meta");
             }
             
             if ($variant_info) {
@@ -1312,30 +1383,112 @@ class Subzz_Contract_Integration {
             
             $order->save();
             
-            error_log("SUBZZ ORDER UPDATE: Updated Order {$order_id} with signature completion and billing day");
+            subzz_log("SUBZZ ORDER UPDATE: Updated Order {$order_id} with signature completion and billing day");
         }
         
         // Update order status
         $status_updated = $this->azure_client->update_order_status($reference_id, 'signature_completed');
 
         if (!$status_updated) {
-            error_log('SUBZZ API WARNING: Failed to update order status in Azure');
+            subzz_log('SUBZZ API WARNING: Failed to update order status in Azure');
         } else {
-            error_log('SUBZZ API SUCCESS: Order status updated to signature_completed');
+            subzz_log('SUBZZ API SUCCESS: Order status updated to signature_completed');
         }
         
         // Get initial payment and term info from order meta (reliable source, set during checkout)
         $initial_payment_amount = 0;
         $subscription_months = 12;
+        $monthly_amount = 0;
         if (!empty($orders)) {
             $ip = $orders[0]->get_meta('_subzz_initial_payment_amount');
             if ($ip) $initial_payment_amount = floatval($ip);
             $sm = $orders[0]->get_meta('_subzz_selected_term_months');
             if ($sm) $subscription_months = intval($sm);
+            $ma = $orders[0]->get_meta('_subzz_monthly_amount');
+            if ($ma) $monthly_amount = floatval($ma);
         }
 
-        // Generate return URL to payment page
-        $return_url = add_query_arg(array(
+        // --- PAYMENT SESSION ---
+        // Create LekkaPay session directly here for single-redirect flow.
+        // Previously deferred to subscription-payment.php (caused double redirect).
+        // The code 99 bug (22 Mar) was from duplicate sessions — now we only create here.
+        // subscription-payment.php is kept as fallback if session creation fails.
+        $checkout_url = null;
+        $order_summary = null;
+
+        try {
+            // 1. Retrieve order data from Azure
+            subzz_log('SUBZZ SIGNATURE: Retrieving order data for payment session');
+            $order_data = $this->azure_client->retrieve_order_data($reference_id);
+
+            if ($order_data) {
+                // 2. Update status to payment_pending
+                if (isset($order_data['order_status']) && $order_data['order_status'] === 'signature_completed') {
+                    $this->azure_client->update_order_status($reference_id, 'payment_pending');
+                    subzz_log('SUBZZ SIGNATURE: Order status updated to payment_pending');
+                }
+
+                // 3. Extract customer data
+                $customer_data = array(
+                    'email' => $order_data['customer_email'] ?? $customer_email,
+                    'full_name' => trim(($order_data['customer_data']['first_name'] ?? '') . ' ' . ($order_data['customer_data']['last_name'] ?? ''))
+                );
+                if (empty($customer_data['full_name'])) {
+                    $customer_data['full_name'] = $typed_full_name;
+                }
+
+                // 4. Determine payment amount (initial payment or monthly)
+                $total_amount = $order_data['order_totals']['total'] ?? '0';
+                $currency = $order_data['order_totals']['currency'] ?? 'ZAR';
+                $payment_amount = ($initial_payment_amount > 0) ? $initial_payment_amount : $total_amount;
+
+                // 5. Update WC order meta
+                if (!empty($orders)) {
+                    $order = $orders[0];
+                    $order->update_meta_data('_subzz_payment_status', 'pending');
+                    $order->update_meta_data('_subzz_payment_provider', 'lekkapay');
+                    $order->update_meta_data('_subzz_order_status', 'payment_pending');
+                    $order->save();
+                }
+
+                // 6. Create LekkaPay session via Azure API (single session creation point)
+                subzz_log('SUBZZ SIGNATURE: Creating LekkaPay session via Azure API');
+                $session_data = array(
+                    'orderReferenceId' => $reference_id,
+                    'customerEmail' => $customer_data['email'],
+                    'customerName' => $customer_data['full_name'],
+                    'amount' => floatval($payment_amount),
+                    'currency' => $currency
+                );
+
+                $session_response = $this->azure_client->create_lekkapay_session($session_data);
+
+                if ($session_response && isset($session_response['checkoutUrl'])) {
+                    $checkout_url = $session_response['checkoutUrl'];
+                    subzz_log('SUBZZ SIGNATURE: LekkaPay session created — direct checkout URL ready');
+                } else {
+                    subzz_log('SUBZZ SIGNATURE WARNING: LekkaPay session creation failed — falling back to subscription-payment page');
+                }
+
+                // Build order summary for success page display
+                $order_summary = array(
+                    'customer_name' => $customer_data['full_name'],
+                    'customer_email' => $customer_data['email'],
+                    'payment_amount' => $payment_amount,
+                    'currency' => $currency,
+                    'subscription_months' => $subscription_months,
+                    'is_initial_payment' => ($initial_payment_amount > 0)
+                );
+            } else {
+                subzz_log('SUBZZ SIGNATURE WARNING: Could not retrieve order data — falling back to subscription-payment page');
+            }
+        } catch (Exception $e) {
+            subzz_log('SUBZZ SIGNATURE WARNING: Exception during payment session creation: ' . $e->getMessage());
+            // Fall through to fallback redirect_url below
+        }
+
+        // Fallback: redirect to subscription-payment.php (used when LekkaPay session creation fails)
+        $fallback_url = add_query_arg(array(
             'reference_id' => $reference_id,
             'signature_confirmed' => 'yes',
             'billing_day' => $billing_day_of_month,
@@ -1343,26 +1496,36 @@ class Subzz_Contract_Integration {
             'initial_payment' => $initial_payment_amount
         ), home_url('/subscription-payment/'));
 
-        error_log('SUBZZ SIGNATURE SUCCESS: Complete workflow finished (HYBRID architecture)');
-        error_log('SUBZZ SIGNATURE SUCCESS: Redirecting to payment page: ' . $return_url);
+        subzz_log('SUBZZ SIGNATURE SUCCESS: Complete workflow finished (HYBRID architecture)');
 
-        wp_send_json_success(array(
+        $response_data = array(
             'message' => 'Contract signed successfully! Redirecting to payment...',
-            'redirect_url' => $return_url,
+            'redirect_url' => $fallback_url,
             'reference_id' => $reference_id,
             'billing_day' => $billing_day_of_month,
             'variant_info' => $variant_info
-        ));
+        );
+
+        // Add checkout_url + order_summary if LekkaPay session was created
+        if ($checkout_url) {
+            $response_data['checkout_url'] = $checkout_url;
+            $response_data['order_summary'] = $order_summary;
+            subzz_log('SUBZZ SIGNATURE SUCCESS: Direct LekkaPay redirect ready — skipping subscription-payment page');
+        } else {
+            subzz_log('SUBZZ SIGNATURE SUCCESS: Falling back to subscription-payment page: ' . $fallback_url);
+        }
+
+        wp_send_json_success($response_data);
     }
     /**
      * Handle order cancellation and cart restoration
      */
     public function handle_order_cancellation() {
-        error_log('=== SUBZZ ORDER CANCELLATION: Request received ===');
+        subzz_log('=== SUBZZ ORDER CANCELLATION: Request received ===');
         
         // Verify nonce
         if (!isset($_POST['nonce']) || !wp_verify_nonce($_POST['nonce'], 'subzz_signature')) {
-            error_log('SUBZZ CANCELLATION ERROR: Nonce verification failed');
+            subzz_log('SUBZZ CANCELLATION ERROR: Nonce verification failed');
             wp_send_json_error(array('message' => 'Security check failed'));
             return;
         }
@@ -1370,12 +1533,12 @@ class Subzz_Contract_Integration {
         $reference_id = isset($_POST['reference_id']) ? sanitize_text_field($_POST['reference_id']) : '';
         
         if (empty($reference_id)) {
-            error_log('SUBZZ CANCELLATION ERROR: No reference ID provided');
+            subzz_log('SUBZZ CANCELLATION ERROR: No reference ID provided');
             wp_send_json_error(array('message' => 'Invalid request'));
             return;
         }
         
-        error_log('SUBZZ CANCELLATION: Processing for Reference ID: ' . $reference_id);
+        subzz_log('SUBZZ CANCELLATION: Processing for Reference ID: ' . $reference_id);
         
         // Find WooCommerce order by reference ID
         $orders = wc_get_orders(array(
@@ -1385,7 +1548,7 @@ class Subzz_Contract_Integration {
         ));
         
         if (empty($orders)) {
-            error_log('SUBZZ CANCELLATION ERROR: Order not found for reference: ' . $reference_id);
+            subzz_log('SUBZZ CANCELLATION ERROR: Order not found for reference: ' . $reference_id);
             wp_send_json_error(array('message' => 'Order not found'));
             return;
         }
@@ -1393,7 +1556,7 @@ class Subzz_Contract_Integration {
         $order = $orders[0];
         $order_id = $order->get_id();
         
-        error_log('SUBZZ CANCELLATION: Found WooCommerce Order ID: ' . $order_id);
+        subzz_log('SUBZZ CANCELLATION: Found WooCommerce Order ID: ' . $order_id);
         
         // Store order items before cancellation
         $order_items = array();
@@ -1408,12 +1571,12 @@ class Subzz_Contract_Integration {
                 'quantity' => $quantity
             );
             
-            error_log("SUBZZ CANCELLATION: Stored item - Product: {$product_id}, Qty: {$quantity}");
+            subzz_log("SUBZZ CANCELLATION: Stored item - Product: {$product_id}, Qty: {$quantity}");
         }
         
         // Cancel the order
         $order->update_status('cancelled', 'Order cancelled by customer during signature process');
-        error_log('SUBZZ CANCELLATION: Order status updated to cancelled');
+        subzz_log('SUBZZ CANCELLATION: Order status updated to cancelled');
         
         // Update order metadata
         $order->update_meta_data('_subzz_cancellation_reason', 'customer_cancelled_at_signature');
@@ -1422,11 +1585,11 @@ class Subzz_Contract_Integration {
         
         // Notify Azure backend about cancellation
         $this->azure_client->update_order_status($reference_id, 'cancelled');
-        error_log('SUBZZ CANCELLATION: Azure backend notified');
+        subzz_log('SUBZZ CANCELLATION: Azure backend notified');
         
         // Clear any existing cart
         WC()->cart->empty_cart();
-        error_log('SUBZZ CANCELLATION: Cart cleared');
+        subzz_log('SUBZZ CANCELLATION: Cart cleared');
         
         // Restore products to cart
         foreach ($order_items as $item) {
@@ -1440,10 +1603,10 @@ class Subzz_Contract_Integration {
         // Clear session data
         WC()->session->set('subzz_reference_id', null);
         WC()->session->set('subzz_jwt_token', null);
-        error_log('SUBZZ CANCELLATION: Session data cleared');
+        subzz_log('SUBZZ CANCELLATION: Session data cleared');
         
         $cart_count = WC()->cart->get_cart_contents_count();
-        error_log("SUBZZ CANCELLATION SUCCESS: Cart restored with {$cart_count} items");
+        subzz_log("SUBZZ CANCELLATION SUCCESS: Cart restored with {$cart_count} items");
         
         wp_send_json_success(array(
             'message' => 'Order cancelled successfully',

@@ -5,7 +5,7 @@
  * This page is displayed after successful contract signature
  * It creates a payment session and redirects to the payment gateway
  * 
- * PHASE 5A INTEGRATION: Updated to redirect to mock gateway for testing
+ * LekkaPay integration: Creates payment session and redirects to payment gateway
  */
 
 // Exit if accessed directly
@@ -24,7 +24,7 @@ $signature_verified = false;
 // Check for required parameters
 if (!isset($_GET['reference_id']) || !isset($_GET['signature_confirmed'])) {
     $error_message = 'Missing required parameters. Please complete the contract signature first.';
-    error_log('SUBZZ PAYMENT PAGE ERROR: Missing reference_id or signature_confirmed parameter');
+    subzz_log('SUBZZ PAYMENT PAGE ERROR: Missing reference_id or signature_confirmed parameter');
 }
 
 // Verify signature was completed
@@ -33,7 +33,7 @@ $signature_confirmed = sanitize_text_field($_GET['signature_confirmed'] ?? '');
 
 if ($signature_confirmed !== 'yes') {
     $error_message = 'Contract signature not confirmed. Please complete the signature process first.';
-    error_log('SUBZZ PAYMENT PAGE ERROR: Signature not confirmed for reference: ' . $reference_id);
+    subzz_log('SUBZZ PAYMENT PAGE ERROR: Signature not confirmed for reference: ' . $reference_id);
 }
 
 // Initialize Azure client
@@ -41,38 +41,38 @@ $azure_client = null;
 if (empty($error_message)) {
     if (class_exists('Subzz_Azure_API_Client')) {
         $azure_client = new Subzz_Azure_API_Client();
-        error_log('SUBZZ PAYMENT PAGE: Azure client initialized for reference: ' . $reference_id);
+        subzz_log('SUBZZ PAYMENT PAGE: Azure client initialized for reference: ' . $reference_id);
     } else {
         $error_message = 'Payment system temporarily unavailable. Please try again later.';
-        error_log('SUBZZ PAYMENT PAGE ERROR: Azure API Client class not found');
+        subzz_log('SUBZZ PAYMENT PAGE ERROR: Azure API Client class not found');
     }
 }
 
 // Retrieve order data from Azure
 if (empty($error_message) && $azure_client) {
-    error_log('SUBZZ PAYMENT PAGE: Retrieving order data for reference: ' . $reference_id);
+    subzz_log('SUBZZ PAYMENT PAGE: Retrieving order data for reference: ' . $reference_id);
     $order_data = $azure_client->retrieve_order_data($reference_id);
     
     if (!$order_data) {
         $error_message = 'Unable to retrieve order information. Your session may have expired.';
-        error_log('SUBZZ PAYMENT PAGE ERROR: Failed to retrieve order data from Azure');
+        subzz_log('SUBZZ PAYMENT PAGE ERROR: Failed to retrieve order data from Azure');
     } else {
-        error_log('SUBZZ PAYMENT PAGE: Order data retrieved successfully');
+        subzz_log('SUBZZ PAYMENT PAGE: Order data retrieved successfully');
         
         // ENHANCED: Extract comprehensive customer data from nested structure
         $customer_data = extract_customer_data_from_order($order_data);
         
-        error_log('SUBZZ PAYMENT PAGE: Customer email: ' . $customer_data['email']);
-        error_log('SUBZZ PAYMENT PAGE: Customer name: ' . $customer_data['full_name']);
-        error_log('SUBZZ PAYMENT PAGE: Order ID: ' . ($order_data['woocommerce_order_id'] ?? 'unknown'));
-        error_log('SUBZZ PAYMENT PAGE: Order Status: ' . ($order_data['order_status'] ?? 'unknown'));
+        subzz_log('SUBZZ PAYMENT PAGE: Customer email: ' . $customer_data['email']);
+        subzz_log('SUBZZ PAYMENT PAGE: Customer name: ' . $customer_data['full_name']);
+        subzz_log('SUBZZ PAYMENT PAGE: Order ID: ' . ($order_data['woocommerce_order_id'] ?? 'unknown'));
+        subzz_log('SUBZZ PAYMENT PAGE: Order Status: ' . ($order_data['order_status'] ?? 'unknown'));
         
         // Check if order status allows payment processing
         if (isset($order_data['order_status'])) {
             $allowed_statuses = ['signature_completed', 'payment_pending', 'payment_failed'];
             if (!in_array($order_data['order_status'], $allowed_statuses)) {
                 $error_message = 'Invalid order status for payment. Current status: ' . $order_data['order_status'];
-                error_log('SUBZZ PAYMENT PAGE ERROR: Invalid order status: ' . $order_data['order_status']);
+                subzz_log('SUBZZ PAYMENT PAGE ERROR: Invalid order status: ' . $order_data['order_status']);
             }
         }
     }
@@ -82,26 +82,26 @@ if (empty($error_message) && $azure_client) {
 if (empty($error_message) && $azure_client && $order_data) {
     // Only update if status is signature_completed (not if already payment_pending or payment_failed)
     if (isset($order_data['order_status']) && $order_data['order_status'] === 'signature_completed') {
-        error_log('SUBZZ PAYMENT PAGE: Updating order status from signature_completed to payment_pending');
+        subzz_log('SUBZZ PAYMENT PAGE: Updating order status from signature_completed to payment_pending');
         
         $status_updated = $azure_client->update_order_status($reference_id, 'payment_pending');
         
         if ($status_updated) {
-            error_log('SUBZZ PAYMENT PAGE SUCCESS: Order status updated to payment_pending');
+            subzz_log('SUBZZ PAYMENT PAGE SUCCESS: Order status updated to payment_pending');
             // Update local order_data to reflect new status
             $order_data['order_status'] = 'payment_pending';
         } else {
-            error_log('SUBZZ PAYMENT PAGE WARNING: Failed to update order status to payment_pending');
+            subzz_log('SUBZZ PAYMENT PAGE WARNING: Failed to update order status to payment_pending');
             // Continue anyway - don't block payment process
         }
     } else {
-        error_log('SUBZZ PAYMENT PAGE: Order status is ' . ($order_data['order_status'] ?? 'unknown') . ', no status update needed');
+        subzz_log('SUBZZ PAYMENT PAGE: Order status is ' . ($order_data['order_status'] ?? 'unknown') . ', no status update needed');
     }
 }
 
 // Verify signature exists in Azure
 if (empty($error_message) && $azure_client && $order_data) {
-    error_log('SUBZZ PAYMENT PAGE: Verifying signature exists for customer: ' . $customer_data['email']);
+    subzz_log('SUBZZ PAYMENT PAGE: Verifying signature exists for customer: ' . $customer_data['email']);
     
     // Since we have order_status = signature_completed or payment_pending, signature must exist
     // This verification is redundant but kept for future enhancement
@@ -109,16 +109,18 @@ if (empty($error_message) && $azure_client && $order_data) {
     
     if (!$signature_verified) {
         $error_message = 'Contract signature not found. Please complete the signature process first.';
-        error_log('SUBZZ PAYMENT PAGE ERROR: Signature verification failed');
+        subzz_log('SUBZZ PAYMENT PAGE ERROR: Signature verification failed');
     } else {
-        error_log('SUBZZ PAYMENT PAGE: Signature verified successfully');
+        subzz_log('SUBZZ PAYMENT PAGE: Signature verified successfully');
     }
 }
 
-// LEKKAPAY INTEGRATION: Create real payment session via Azure API
+// LEKKAPAY INTEGRATION: Create payment session via Azure API
+// This is the ONLY code path that creates LekkaPay sessions.
+// Contract signature flow no longer creates sessions (eliminated duplicate order_id issue).
 $payment_session_data = null;
 if (empty($error_message) && $signature_verified && $order_data) {
-    error_log('SUBZZ PAYMENT PAGE: Creating LekkaPay payment session');
+    subzz_log('SUBZZ PAYMENT PAGE: Creating LekkaPay payment session');
 
     // Determine payment amount: initial payment if present, otherwise monthly
     $initial_payment = isset($_GET['initial_payment']) ? floatval($_GET['initial_payment']) : 0;
@@ -132,10 +134,10 @@ if (empty($error_message) && $signature_verified && $order_data) {
     // If initial payment > 0, charge that amount first (not the monthly)
     $payment_amount = ($initial_payment > 0) ? $initial_payment : $total_amount;
 
-    error_log('SUBZZ PAYMENT PAGE: Customer email: ' . $customer_data['email']);
-    error_log('SUBZZ PAYMENT PAGE: Customer name: ' . $customer_data['full_name']);
-    error_log('SUBZZ PAYMENT PAGE: Payment amount: ' . $currency . ' ' . $payment_amount . ' (initial_payment=' . $initial_payment . ', order_total=' . $total_amount . ')');
-    error_log('SUBZZ PAYMENT PAGE: Reference ID: ' . $reference_id);
+    subzz_log('SUBZZ PAYMENT PAGE: Customer email: ' . $customer_data['email']);
+    subzz_log('SUBZZ PAYMENT PAGE: Customer name: ' . $customer_data['full_name']);
+    subzz_log('SUBZZ PAYMENT PAGE: Payment amount: ' . $currency . ' ' . $payment_amount . ' (initial_payment=' . $initial_payment . ', order_total=' . $total_amount . ')');
+    subzz_log('SUBZZ PAYMENT PAGE: Reference ID: ' . $reference_id);
 
     // Call Azure API to create LekkaPay session
     $lekkapay_response = $azure_client->create_lekkapay_session(array(
@@ -147,9 +149,9 @@ if (empty($error_message) && $signature_verified && $order_data) {
     ));
     
     if ($lekkapay_response && isset($lekkapay_response['sessionId'])) {
-        error_log('SUBZZ LEKKAPAY SUCCESS: Session created successfully');
-        error_log('SUBZZ LEKKAPAY SUCCESS: Session ID: ' . $lekkapay_response['sessionId']);
-        error_log('SUBZZ LEKKAPAY SUCCESS: Checkout URL: ' . $lekkapay_response['checkoutUrl']);
+        subzz_log('SUBZZ LEKKAPAY SUCCESS: Session created successfully');
+        subzz_log('SUBZZ LEKKAPAY SUCCESS: Session ID: ' . $lekkapay_response['sessionId']);
+        subzz_log('SUBZZ LEKKAPAY SUCCESS: Checkout URL: ' . $lekkapay_response['checkoutUrl']);
         
         $payment_session_data = array(
             'success' => true,
@@ -169,11 +171,11 @@ if (empty($error_message) && $signature_verified && $order_data) {
                 $wc_order->update_meta_data('_subzz_payment_provider', 'lekkapay');
                 $wc_order->update_meta_data('_subzz_order_status', 'payment_pending');
                 $wc_order->save();
-                error_log('SUBZZ LEKKAPAY: Updated WooCommerce order with LekkaPay session');
+                subzz_log('SUBZZ LEKKAPAY: Updated WooCommerce order with LekkaPay session');
             }
         }
     } else {
-        error_log('SUBZZ LEKKAPAY ERROR: Failed to create payment session');
+        subzz_log('SUBZZ LEKKAPAY ERROR: Failed to create payment session');
         $error_message = 'Unable to create payment session. Please try again or contact support.';
         $payment_session_data = null;
     }
@@ -238,307 +240,182 @@ function extract_customer_data_from_order($order_data) {
 ?>
 
 <style>
-/* ── Subzz Payment Page — Matches checkout & contract design system ─── */
-/* Uses .btn-primary/.btn-secondary to avoid WordPress theme conflicts */
+/* Reuse styles from contract signature page */
 .subzz-payment-page {
-    max-width: 900px;
+    max-width: 800px;
     margin: 40px auto;
     padding: 0 20px;
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
-    color: #2d3748;
+    font-family: var(--subzz-font-family);
 }
 
-/* ── Progress indicator (shared with checkout & contract) ── */
-.checkout-progress {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 0;
-    margin-bottom: 36px;
-}
-
-.progress-step {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 6px;
-}
-
-.step-dot {
-    width: 32px;
-    height: 32px;
-    border-radius: 50%;
-    background: #dee2e6;
-    color: #fff;
-    font-weight: 700;
-    font-size: 14px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: background 0.3s;
-}
-
-.progress-step.active .step-dot {
-    background: #3498db;
-}
-
-.progress-step.done .step-dot {
-    background: #27ae60;
-}
-
-.step-label {
-    font-size: 12px;
-    color: #6c757d;
-    font-weight: 500;
-}
-
-.progress-step.active .step-label {
-    color: #3498db;
-    font-weight: 600;
-}
-
-.progress-step.done .step-label {
-    color: #27ae60;
-    font-weight: 600;
-}
-
-.progress-line {
-    width: 48px;
-    height: 3px;
-    background: #dee2e6;
-    margin: 0 4px;
-    margin-bottom: 20px;
-}
-
-.progress-line.done {
-    background: #27ae60;
-}
-
-/* ── Page header ── */
 .payment-header {
     text-align: center;
-    margin-bottom: 32px;
+    margin-bottom: 40px;
 }
 
-.payment-header h1 {
-    font-size: 28px;
-    font-weight: 700;
-    color: #1a202c;
-    margin-bottom: 24px;
+.progress-indicator {
+    margin-top: 20px;
+    color: rgba(84, 84, 84, 0.6);
+    font-size: 14px;
 }
 
-/* ── Content card ── */
 .payment-content {
     background: white;
-    border: 1px solid #e2e8f0;
-    border-radius: 12px;
-    padding: 32px;
+    border-radius: var(--subzz-radius-xl);
+    box-shadow: var(--subzz-shadow-2xl);
+    padding: 30px;
 }
 
-/* ── Order summary ── */
 .order-summary {
-    margin-bottom: 24px;
+    margin-bottom: 30px;
 }
 
 .order-summary h2 {
-    color: #1a202c;
-    margin-bottom: 16px;
-    font-size: 20px;
-    font-weight: 600;
+    color: var(--subzz-gray);
+    margin-bottom: 20px;
+    font-size: 24px;
 }
 
 .order-details {
-    background: #fafbfc;
-    border: 1px solid #eee;
-    border-radius: 8px;
+    background: #f9f9f9;
+    border-radius: var(--subzz-radius-md);
     padding: 20px;
+    margin-bottom: 20px;
 }
 
 .order-item {
     display: flex;
     justify-content: space-between;
-    align-items: center;
-    padding: 10px 0;
-    border-bottom: 1px solid #eee;
-    font-size: 15px;
+    margin-bottom: 10px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--subzz-border);
 }
 
 .order-item:last-child {
     border-bottom: none;
-}
-
-.order-item span {
-    color: #4a5568;
-}
-
-.order-item strong {
-    color: #1a202c;
+    margin-bottom: 0;
 }
 
 .order-total {
-    font-size: 18px;
-    font-weight: 700;
-    color: #1a202c;
-    border-top: 2px solid #dee2e6;
-    padding-top: 12px;
-    margin-top: 4px;
+    font-size: 20px;
+    font-weight: bold;
+    color: var(--subzz-gray);
+    margin-top: 20px;
+    padding-top: 20px;
+    border-top: 2px solid var(--subzz-gray);
 }
 
-/* ── Buttons (theme-safe) ── */
-.btn-primary {
-    display: inline-block;
-    padding: 14px 28px;
-    font-size: 16px;
-    font-weight: 700;
-    text-align: center;
-    text-decoration: none;
-    border: none;
-    border-radius: 12px;
-    cursor: pointer;
-    transition: all 0.2s;
-    background: linear-gradient(135deg, #3498db 0%, #2980b9 100%);
-    color: #fff;
-}
-
-.btn-primary:hover:not(:disabled) {
-    transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(52, 152, 219, 0.3);
-}
-
-.btn-secondary {
-    display: inline-block;
-    padding: 10px 20px;
-    font-size: 14px;
-    font-weight: 600;
-    text-align: center;
-    text-decoration: none;
-    border: 2px solid #3498db;
-    border-radius: 8px;
-    cursor: pointer;
-    transition: all 0.2s;
-    background: #fff;
-    color: #3498db;
-}
-
-.btn-secondary:hover {
-    background: #3498db;
-    color: #fff;
-}
-
-/* ── Action area ── */
 .payment-action {
     text-align: center;
-    margin-top: 28px;
+    margin-top: 30px;
 }
 
-.payment-action .btn-primary,
-.payment-action .btn-secondary {
-    margin: 6px 8px;
+.button {
+    display: inline-block;
+    padding: 12px 30px;
+    text-decoration: none;
+    border-radius: var(--subzz-radius-md);
+    font-weight: 700;
+    transition: all 150ms;
+    border: none;
+    cursor: pointer;
+    font-size: 16px;
 }
 
-/* ── Spinner ── */
+.button.primary {
+    background: var(--subzz-blue);
+    color: white;
+    box-shadow: var(--subzz-shadow-lg);
+}
+
+.button.primary:hover {
+    opacity: 0.9;
+    transform: translateY(-1px);
+    box-shadow: var(--subzz-shadow-xl);
+}
+
+.button.secondary {
+    background: transparent;
+    color: var(--subzz-gray);
+    border: 2px solid var(--subzz-border);
+    margin-right: 15px;
+}
+
+.button.secondary:hover {
+    opacity: 0.7;
+}
+
 .loading-spinner {
     display: inline-block;
-    width: 24px;
-    height: 24px;
-    border: 3px solid #dee2e6;
+    width: 20px;
+    height: 20px;
+    border: 3px solid rgba(255,255,255,.3);
     border-radius: 50%;
-    border-top-color: #3498db;
-    animation: spin 0.8s linear infinite;
-    margin: 12px auto;
+    border-top-color: white;
+    animation: spin 1s ease-in-out infinite;
 }
 
 @keyframes spin {
     to { transform: rotate(360deg); }
 }
 
-/* ── Alert boxes ── */
 .error-message {
-    background: #fff5f5;
-    border: 1px solid #fed7d7;
-    border-radius: 8px;
-    padding: 16px 20px;
+    background: var(--subzz-error-bg);
+    border: 1px solid var(--subzz-error-border);
+    border-radius: var(--subzz-radius-md);
+    padding: 20px;
     margin-bottom: 20px;
-    color: #c53030;
-    font-size: 15px;
+    color: #c00;
 }
 
 .success-message {
-    background: #f0fff4;
-    border: 1px solid #c6f6d5;
-    border-radius: 8px;
-    padding: 16px 20px;
+    background: var(--subzz-success-bg);
+    border: 1px solid var(--subzz-success-border);
+    border-radius: var(--subzz-radius-md);
+    padding: 20px;
     margin-bottom: 20px;
-    color: #276749;
-    font-size: 15px;
-}
-
-.retry-message {
-    background: #fffbeb;
-    border: 1px solid #fef3c7;
-    border-radius: 8px;
-    padding: 16px 20px;
-    margin-bottom: 20px;
-    color: #92400e;
-    font-size: 15px;
+    color: #155724;
 }
 
 .security-info {
-    background: #ebf8ff;
-    border: 1px solid #bee3f8;
-    border-radius: 8px;
-    padding: 16px 20px;
+    background: var(--subzz-info-bg);
+    border: 1px solid var(--subzz-info-border);
+    border-radius: var(--subzz-radius-md);
+    padding: 15px;
     margin-top: 20px;
     font-size: 14px;
-    color: #4a5568;
+    color: rgba(84, 84, 84, 0.7);
 }
 
 .security-info strong {
-    color: #1a202c;
+    color: var(--subzz-gray);
 }
 
 .status-info {
-    background: #fafbfc;
-    border: 1px solid #eee;
-    border-radius: 8px;
-    padding: 10px 16px;
-    margin-bottom: 16px;
+    background: #f5f5f5;
+    border: 1px solid var(--subzz-border);
+    border-radius: var(--subzz-radius-md);
+    padding: 10px;
+    margin-bottom: 20px;
     font-size: 12px;
-    color: #6c757d;
+    color: rgba(84, 84, 84, 0.6);
 }
 
-/* ── Responsive ── */
-@media (max-width: 600px) {
-    .subzz-payment-page { padding: 0 12px; }
-    .payment-content { padding: 20px 16px; }
-    .payment-header h1 { font-size: 22px; }
-    .order-item { flex-direction: column; gap: 4px; }
+.retry-message {
+    background: var(--subzz-warning-bg);
+    border: 1px solid var(--subzz-warning-border);
+    border-radius: var(--subzz-radius-md);
+    padding: 15px;
+    margin-bottom: 20px;
+    color: #856404;
 }
 </style>
 
 <div class="subzz-payment-page">
     <div class="payment-header">
         <h1>Complete Your Payment</h1>
-        <div class="checkout-progress">
-            <div class="progress-step done">
-                <span class="step-dot">1</span>
-                <span class="step-label">Choose Plan</span>
-            </div>
-            <div class="progress-line done"></div>
-            <div class="progress-step done">
-                <span class="step-dot">2</span>
-                <span class="step-label">Contract</span>
-            </div>
-            <div class="progress-line done"></div>
-            <div class="progress-step active">
-                <span class="step-dot">3</span>
-                <span class="step-label">Payment</span>
-            </div>
-            <div class="progress-line"></div>
-            <div class="progress-step">
-                <span class="step-dot">4</span>
-                <span class="step-label">Complete</span>
-            </div>
+        <div class="progress-indicator">
+            ✅ Order Details → ✅ Agreement Signed → ✅ Payment → ⭕ Complete
         </div>
     </div>
 
@@ -554,13 +431,13 @@ function extract_customer_data_from_order($order_data) {
                 <strong>Error:</strong> <?php echo esc_html($error_message); ?>
             </div>
             <div class="payment-action">
-                <a href="<?php echo esc_url(wc_get_checkout_url()); ?>" class="btn-secondary">
+                <a href="<?php echo esc_url(wc_get_checkout_url()); ?>" class="button secondary">
                     ← Return to Checkout
                 </a>
                 <?php if (!empty($reference_id)): ?>
                 <?php
                 // CHK-001: Use signed JWT for re-sign link (same as generate_jwt_token in payment handler)
-                require_once dirname(dirname(__FILE__)) . '/includes/vendor/firebase/php-jwt/src/JWT.php';
+                require_once dirname(dirname(__FILE__)) . '/includes/jwt/JWT.php';
                 $resign_secret = defined('SUBZZ_CHECKOUT_JWT_SECRET') ? SUBZZ_CHECKOUT_JWT_SECRET : wp_salt('auth');
                 $resign_token = \Firebase\JWT\JWT::encode(array(
                     'iss' => home_url(),
@@ -571,7 +448,7 @@ function extract_customer_data_from_order($order_data) {
                     'purpose' => 'contract_signature'
                 ), $resign_secret, 'HS256');
                 ?>
-                <a href="<?php echo esc_url(home_url('/contract-signature/?token=' . $resign_token)); ?>" class="btn-primary">
+                <a href="<?php echo esc_url(home_url('/contract-signature/?token=' . $resign_token)); ?>" class="button primary">
                     Re-sign Contract
                 </a>
                 <?php endif; ?>
@@ -579,7 +456,7 @@ function extract_customer_data_from_order($order_data) {
         <?php elseif ($payment_session_data && isset($payment_session_data['success']) && $payment_session_data['success']): ?>
             <!-- Payment session created successfully -->
             <div class="success-message">
-                <strong>Your contract has been signed successfully!</strong>
+                <strong>✅ Your contract has been signed successfully!</strong>
             </div>
             
             <?php if (isset($order_data['order_status'])): ?>
@@ -626,14 +503,14 @@ function extract_customer_data_from_order($order_data) {
                     ?>
                         <div class="order-item">
                             <span><?php echo esc_html($item['name'] ?? 'Subscription Product'); ?></span>
-                            <strong><?php echo esc_html($order_data['order_totals']['currency'] ?? 'ZAR'); ?> <?php echo number_format((float)($item['price'] ?? 0), 2); ?></strong>
+                            <strong><?php echo esc_html($order_data['order_totals']['currency'] ?? 'ZAR'); ?> <?php echo number_format(ceil((float)($item['price'] ?? 0)), 0); ?></strong>
                         </div>
                     <?php endforeach; ?>
                     
                     <?php if ($initial_payment > 0): ?>
-                    <div class="order-item">
+                    <div class="order-item" style="background:#e7f3ff;padding:8px;border-radius:4px;">
                         <span><strong>Initial Payment (charged now):</strong></span>
-                        <strong><?php echo esc_html($currency); ?> <?php echo number_format($initial_payment, 2); ?></strong>
+                        <strong><?php echo esc_html($currency); ?> <?php echo number_format(ceil($initial_payment), 0); ?></strong>
                     </div>
                     <?php
                     $selected_term = isset($order_data['selected_term_months']) ? intval($order_data['selected_term_months']) : 0;
@@ -641,24 +518,24 @@ function extract_customer_data_from_order($order_data) {
                     if ($selected_term && $reduced): ?>
                     <div class="order-item">
                         <span>Then <?php echo $selected_term; ?> monthly payments of:</span>
-                        <strong><?php echo esc_html($currency); ?> <?php echo number_format($reduced, 2); ?></strong>
+                        <strong><?php echo esc_html($currency); ?> <?php echo number_format(ceil($reduced), 0); ?></strong>
                     </div>
                     <?php endif; ?>
                     <?php else: ?>
                     <div class="order-total order-item">
                         <span>Total Monthly Payment:</span>
-                        <strong><?php echo esc_html($currency); ?> <?php echo number_format((float)($total_amount), 2); ?></strong>
+                        <strong><?php echo esc_html($currency); ?> <?php echo number_format(ceil((float)($total_amount)), 0); ?></strong>
                     </div>
                     <?php endif; ?>
                 </div>
             </div>
             
             <div class="security-info">
-                <strong>Secure Payment:</strong> You will be redirected to our secure payment provider to complete your payment.
+                🔒 <strong>Secure Payment:</strong> You will be redirected to our secure payment provider (LekkaPay) to complete your payment.
             </div>
             
             <div class="payment-action" id="payment-redirect">
-                <p>Redirecting to secure payment gateway...</p>
+                <p>Redirecting to secure payment provider...</p>
                 <div class="loading-spinner"></div>
                 
                 <?php
@@ -672,7 +549,7 @@ function extract_customer_data_from_order($order_data) {
                 $checkout_domain = $parsed_checkout['host'] ?? '';
 
                 if (empty($allowed_domains) || !in_array($checkout_domain, $allowed_domains, true)) {
-                    error_log('SUBZZ SECURITY: Blocked redirect to untrusted domain: ' . $checkout_domain);
+                    subzz_log('SUBZZ SECURITY: Blocked redirect to untrusted domain: ' . $checkout_domain);
                     ?>
                     <div class="payment-error" style="color: #dc3545; padding: 20px; text-align: center;">
                         <p><strong>Payment gateway error.</strong> Please contact support.</p>
@@ -694,18 +571,11 @@ function extract_customer_data_from_order($order_data) {
                 </script>
 
                 <noscript>
-                    <a href="<?php echo esc_url($checkout_url_raw); ?>" class="btn-primary">
+                    <a href="<?php echo esc_url($checkout_url_raw); ?>" class="button primary">
                         Continue to Payment &rarr;
                     </a>
                 </noscript>
                 <?php } ?>
-                
-                <!-- Manual trigger for testing -->
-                <div style="margin-top: 20px;">
-                    <a href="<?php echo esc_url($checkout_url_raw); ?>" class="btn-secondary">
-                        Continue Manually →
-                    </a>
-                </div>
             </div>
             
         <?php else: ?>

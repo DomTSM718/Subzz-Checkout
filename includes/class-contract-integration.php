@@ -1132,6 +1132,21 @@ class Subzz_Contract_Integration {
                                         </span>
                                     </label>
                                 </div>
+
+                                <!-- R-G4 Chunk 1 (2026-04-14): Marketing consent checkbox.
+                                     POPIA Section 11 requires OPT-IN (default OFF), SEPARATE from
+                                     T&C/eSig (cannot be bundled — "forced consent" is prohibited),
+                                     with a clear purpose statement and withdrawal notice.
+                                     Must NOT have `required` attribute — consent must be freely given. -->
+                                <div class="consent-checkbox">
+                                    <label>
+                                        <input type="checkbox" id="marketing-consent">
+                                        <span>
+                                            I'd like to receive occasional updates from Subzz about new products,
+                                            offers, and golf subscription news. <em>Optional — you can unsubscribe at any time from any marketing email we send.</em>
+                                        </span>
+                                    </label>
+                                </div>
                             </div>
 
                             <div class="sign-fields">
@@ -1266,6 +1281,10 @@ class Subzz_Contract_Integration {
         $typed_initials = isset($_POST['typed_initials']) ? sanitize_text_field($_POST['typed_initials']) : '';
         $electronic_consent = isset($_POST['electronic_consent']) ? filter_var($_POST['electronic_consent'], FILTER_VALIDATE_BOOLEAN) : false;
         $terms_consent = isset($_POST['terms_consent']) ? filter_var($_POST['terms_consent'], FILTER_VALIDATE_BOOLEAN) : false;
+        // R-G4 Chunk 1 (2026-04-14): marketing consent. NOT required — defaults to false when absent
+        // (legacy plugin version) or when the customer leaves the checkbox unticked. POPIA compliant:
+        // we record the explicit state of the checkbox at signing, not an absence-of-answer.
+        $marketing_consent = isset($_POST['marketing_consent']) ? filter_var($_POST['marketing_consent'], FILTER_VALIDATE_BOOLEAN) : false;
         
         // Extract billing day (HYBRID ARCHITECTURE - from billing-date-handler.js)
         $billing_day_of_month = isset($_POST['billing_day_of_month']) ? intval($_POST['billing_day_of_month']) : null;
@@ -1323,6 +1342,7 @@ class Subzz_Contract_Integration {
             'typed_initials' => $typed_initials,
             'electronic_consent' => $electronic_consent,
             'terms_consent' => $terms_consent,
+            'marketing_consent' => $marketing_consent,
             'contract_html' => $contract_html,
             'signature_image_data' => $signature_data,
             'billing_day_of_month' => $billing_day_of_month
@@ -1377,6 +1397,7 @@ class Subzz_Contract_Integration {
             $order->add_meta_data('_subzz_typed_initials', $typed_initials);
             $order->add_meta_data('_subzz_electronic_consent', $electronic_consent ? 'yes' : 'no');
             $order->add_meta_data('_subzz_terms_consent', $terms_consent ? 'yes' : 'no');
+            $order->add_meta_data('_subzz_marketing_consent', $marketing_consent ? 'yes' : 'no');
             
             $order->update_meta_data('_subzz_redirect_required', 'no');
             $order->update_meta_data('_subzz_redirect_processed', 'yes');

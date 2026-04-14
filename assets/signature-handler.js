@@ -409,6 +409,9 @@ function initializeSignatureHandler() {
         const typedInitials = $('#typed-initials').val().trim().toUpperCase();
         const electronicConsent = $('#electronic-consent').is(':checked');
         const termsConsent = $('#terms-consent').is(':checked');
+        // R-G4 Chunk 1 (2026-04-14): marketing consent is OPTIONAL per POPIA — not required for
+        // submission. Default to false if element is missing (legacy plugin version) or unchecked.
+        const marketingConsent = $('#marketing-consent').is(':checked');
         
         // Validate typed full name
         if (!typedFullName) {
@@ -528,6 +531,8 @@ function initializeSignatureHandler() {
             typed_initials: typedInitials,
             electronic_consent: electronicConsent,
             terms_consent: termsConsent,
+            // R-G4 Chunk 1 (2026-04-14): marketing consent (POPIA opt-in)
+            marketing_consent: marketingConsent,
             
             // HYBRID ARCHITECTURE: Include billing day from billing-date-handler
             billing_day_of_month: billingDayOfMonth,

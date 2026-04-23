@@ -465,6 +465,8 @@
 
         var $btn = $('#btn-continue');
         $btn.prop('disabled', true).text('Processing...');
+        $('#continue-section').fadeOut(300);
+        $('#loading-checkout').fadeIn(300);
 
         var plan = state.selectedPlan;
         var totalValue = plan.standardMonthlyAmount * plan.termMonths;
@@ -516,6 +518,8 @@
                     console.error('SUBZZ CHECKOUT: Store order failed', resp);
                     showErrorBar(resp.data && resp.data.message ? resp.data.message : 'Failed to process order. Please try again.');
                     state.submitting = false;
+                    $('#loading-checkout').fadeOut(300);
+                    $('#continue-section').fadeIn(300);
                     $btn.prop('disabled', false).text('Continue to Contract');
                 }
             },
@@ -523,6 +527,8 @@
                 console.error('SUBZZ CHECKOUT: AJAX error', status, err);
                 showErrorBar('Network error. Please check your connection and try again.');
                 state.submitting = false;
+                $('#loading-checkout').fadeOut(300);
+                $('#continue-section').fadeIn(300);
                 $btn.prop('disabled', false).text('Continue to Contract');
             }
         });

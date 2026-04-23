@@ -477,7 +477,18 @@ function initializeSignatureHandler() {
         const $button = $(this);
         const originalText = $button.text();
         $button.prop('disabled', true).text('Processing Signature...');
+        $('.contract-actions').fadeOut(300);
+        $('#loading-signature').fadeIn(300);
         console.log('SUBZZ SIGNATURE: Button disabled, showing loading state');
+
+        // Restore UI on any error path. Success path auto-wipes the overlay
+        // via the existing $('.contract-content').html(successMsg) call below,
+        // so no manual call is needed on success.
+        const restoreSignatureUI = function () {
+            $('#loading-signature').fadeOut(300);
+            $('.contract-actions').fadeIn(300);
+            $button.prop('disabled', false).text(originalText);
+        };
 
         // Get signature data from correct canvas based on mode
         let signatureData;
@@ -500,7 +511,7 @@ function initializeSignatureHandler() {
         } catch (error) {
             console.error('SUBZZ SIGNATURE ERROR: Failed to capture signature data:', error);
             showSignatureError('Failed to capture signature. Please try again.');
-            $button.prop('disabled', false).text(originalText);
+            restoreSignatureUI();
             return;
         }
 
@@ -514,7 +525,7 @@ function initializeSignatureHandler() {
         if (!billingDayOfMonth) {
             console.error('SUBZZ SIGNATURE ERROR: Billing day not found - contract may not have been generated properly');
             showSignatureError('Billing date information missing. Please refresh and try again.');
-            $button.prop('disabled', false).text(originalText);
+            restoreSignatureUI();
             return;
         }
 
@@ -660,7 +671,7 @@ function initializeSignatureHandler() {
                         console.error('SUBZZ SIGNATURE ERROR: No redirect URL provided in successful response');
                         console.error('SUBZZ SIGNATURE ERROR: Full response:', response);
                         showSignatureError('Signature saved but redirect failed. Please return to checkout manually.');
-                        $button.prop('disabled', false).text(originalText);
+                        restoreSignatureUI();
                     }
                 } else {
                     console.error('SUBZZ SIGNATURE ERROR: Server returned error response');
@@ -676,7 +687,7 @@ function initializeSignatureHandler() {
                     }
                     
                     showSignatureError(errorMessage);
-                    $button.prop('disabled', false).text(originalText);
+                    restoreSignatureUI();
                 }
             },
             error: function(xhr, status, error) {
@@ -701,7 +712,7 @@ function initializeSignatureHandler() {
                 }
                 
                 showSignatureError(errorMessage);
-                $button.prop('disabled', false).text(originalText);
+                restoreSignatureUI();
             }
         });
     });

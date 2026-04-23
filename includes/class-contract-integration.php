@@ -1217,6 +1217,12 @@ class Subzz_Contract_Integration {
                             </button>
                         </div>
 
+                        <!-- Loading State (signature submit) -->
+                        <div id="loading-signature" class="loading-state" style="display: none;">
+                            <div class="loading-spinner"></div>
+                            <p>Saving your signature...</p>
+                        </div>
+
                     </div> <!-- End step-2-3-container -->
 
                 </div>

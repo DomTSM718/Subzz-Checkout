@@ -52,8 +52,20 @@ foreach (WC()->cart->get_cart() as $cart_item) {
     if (isset($cart_item['variation']) && !empty($cart_item['variation'])) {
         foreach ($cart_item['variation'] as $attr_key => $attr_value) {
             $attr_name = wc_attribute_label(str_replace('attribute_', '', $attr_key));
-            // Skip Duration attribute (shown separately as term)
-            if (strtolower($attr_name) === 'duration') continue;
+            // Skip duration-related attributes (shown separately as term selector)
+            $attr_lower = strtolower($attr_name);
+            if ($attr_lower === 'duration' || strpos($attr_lower, 'duration') !== false || strpos($attr_lower, 'subscription') !== false) continue;
+            if (!empty($attr_value)) {
+                $variation_attributes[$attr_name] = $attr_value;
+            }
+        }
+    }
+
+    // Merge non-variation attribute tile selections (Hand, Flex, Loft, Bounce, etc.)
+    // These are captured by Subzz_Product_Attribute_Tiles via woocommerce_add_cart_item_data
+    if (isset($cart_item['subzz_attributes']) && !empty($cart_item['subzz_attributes'])) {
+        foreach ($cart_item['subzz_attributes'] as $attr_slug => $attr_value) {
+            $attr_name = wc_attribute_label($attr_slug);
             if (!empty($attr_value)) {
                 $variation_attributes[$attr_name] = $attr_value;
             }
@@ -158,7 +170,7 @@ get_header();
             <button id="retry-plans" class="btn-secondary">Retry</button>
         </div>
 
-        <!-- Product Details card -->
+        <!-- Product Details card (matches Zane's Figma) -->
         <section id="product-details-card" class="checkout-card" style="display:none;">
             <h2 class="card-heading">Product Details</h2>
             <div class="product-details-row">
@@ -261,6 +273,16 @@ get_header();
             </div>
         </section>
 
+        <!-- Coupon Code card -->
+        <section id="coupon-card" class="checkout-card" style="display:none;">
+            <h2 class="card-heading">Have a Coupon Code?</h2>
+            <div class="coupon-input-row">
+                <input type="text" id="coupon-code" name="coupon_code" placeholder="Enter code (e.g. FNF10)" maxlength="50" autocomplete="off">
+                <button type="button" id="btn-apply-coupon" class="btn-secondary">Apply</button>
+            </div>
+            <div id="coupon-message" class="coupon-message"></div>
+        </section>
+
         <!-- Order Summary card -->
         <section id="summary-card" class="checkout-card" style="display:none;">
             <h2 class="card-heading">Order Summary</h2>
@@ -299,6 +321,12 @@ get_header();
 
             <p class="continue-hint">You'll review and sign your subscription agreement next.</p>
         </section>
+
+        <!-- Loading State (order storage / redirect to contract) -->
+        <div id="loading-checkout" class="loading-state" style="display: none;">
+            <div class="loading-spinner"></div>
+            <p>Processing your order...</p>
+        </div>
 
         <!-- Screen reader announcements -->
         <div class="sr-only" aria-live="polite" id="form-announcer"></div>

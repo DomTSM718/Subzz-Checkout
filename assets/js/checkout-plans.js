@@ -468,6 +468,11 @@
         $('#continue-section').fadeOut(300);
         $('#loading-checkout').fadeIn(300);
 
+        // Scroll the overlay into view (mirrors billing-date-handler.js pattern)
+        $('html, body').animate({
+            scrollTop: $('#loading-checkout').offset().top - 100
+        }, 500);
+
         var plan = state.selectedPlan;
         var totalValue = plan.standardMonthlyAmount * plan.termMonths;
         var remainingMonths = plan.termMonths - 1;

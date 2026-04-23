@@ -122,6 +122,7 @@ class Subzz_Payment_Handler {
         // PHASE 5: Checkout subscription AJAX handlers (logged-in only — checkout page requires login)
         add_action('wp_ajax_subzz_get_plan_cards', [$this, 'ajax_get_plan_cards']);
         add_action('wp_ajax_subzz_store_checkout_order', [$this, 'ajax_store_checkout_order']);
+        add_action('wp_ajax_subzz_validate_coupon', [$this, 'ajax_validate_coupon']);
 
         // PRESERVED: Traditional checkout process fallback
         add_action('woocommerce_checkout_process', [$this, 'traditional_checkout_fallback'], 1);
@@ -165,21 +166,49 @@ class Subzz_Payment_Handler {
 
         $email = sanitize_email($_POST['email'] ?? '');
         $price = floatval($_POST['product_price_incl_vat'] ?? 0);
+        $coupon_code = sanitize_text_field($_POST['coupon_code'] ?? '');
 
         if (empty($email) || $price <= 0) {
             wp_send_json_error(array('message' => 'Missing email or product price'));
             return;
         }
 
-        subzz_log('SUBZZ CHECKOUT AJAX: Fetching plan cards for ' . $email . ' price=' . $price);
+        subzz_log('SUBZZ CHECKOUT AJAX: Fetching plan cards for ' . $email . ' price=' . $price . ' coupon=' . ($coupon_code ?: '(none)'));
 
         $azure_client = new Subzz_Azure_API_Client();
-        $result = $azure_client->get_plan_cards($email, $price);
+        $result = $azure_client->get_plan_cards($email, $price, $coupon_code);
 
         if ($result) {
             wp_send_json_success($result);
         } else {
             wp_send_json_error(array('message' => 'Unable to load plan cards from backend'));
+        }
+    }
+
+    /**
+     * AJAX: Validate a discount/coupon code via Azure API
+     */
+    public function ajax_validate_coupon() {
+        if (!wp_verify_nonce($_POST['nonce'] ?? '', 'subzz_checkout_subscription')) {
+            wp_send_json_error(array('message' => 'Security check failed'));
+            return;
+        }
+
+        $code = sanitize_text_field($_POST['coupon_code'] ?? '');
+        if (empty($code)) {
+            wp_send_json_error(array('message' => 'Please enter a coupon code'));
+            return;
+        }
+
+        subzz_log('SUBZZ CHECKOUT AJAX: Validating coupon code: ' . $code);
+
+        $azure_client = new Subzz_Azure_API_Client();
+        $result = $azure_client->validate_coupon($code);
+
+        if ($result !== false) {
+            wp_send_json_success($result);
+        } else {
+            wp_send_json_error(array('message' => 'Unable to validate coupon code'));
         }
     }
 
@@ -207,6 +236,14 @@ class Subzz_Payment_Handler {
         $address_city = sanitize_text_field($_POST['address_city'] ?? '');
         $address_province = sanitize_text_field($_POST['address_province'] ?? '');
         $address_postal = sanitize_text_field($_POST['address_postal'] ?? '');
+        $discount_code = sanitize_text_field($_POST['discount_code'] ?? '');
+        $discount_percentage = floatval($_POST['discount_percentage'] ?? 0);
+        $pre_discount_monthly = floatval($_POST['pre_discount_monthly_amount'] ?? 0);
+        $product_attributes_raw = $_POST['product_attributes'] ?? '{}';
+        $product_attributes = json_decode(stripslashes($product_attributes_raw), true);
+        if (!is_array($product_attributes)) {
+            $product_attributes = array();
+        }
 
         if (empty($customer_email) || $product_id <= 0) {
             wp_send_json_error(array('message' => 'Missing required order data'));
@@ -215,10 +252,16 @@ class Subzz_Payment_Handler {
 
         subzz_log('SUBZZ CHECKOUT AJAX: Storing order — email=' . $customer_email . ' term=' . $selected_term . ' initial=' . $initial_payment);
 
-        // Get current user for name
+        // Get current user for name + phone
         $user = get_user_by('email', $customer_email);
         $first_name = $user ? $user->first_name : '';
         $last_name = $user ? $user->last_name : '';
+        $customer_phone = $user ? (get_user_meta($user->ID, 'billing_phone', true) ?: '') : '';
+
+        // Build full billing address string for contract rendering
+        $full_billing_address = trim(implode(', ', array_filter(array(
+            $address_street, $address_city, $address_province, $address_postal
+        ))));
 
         // Create WooCommerce order programmatically
         $wc_order = wc_create_order(array('status' => 'pending'));
@@ -250,6 +293,22 @@ class Subzz_Payment_Handler {
         $wc_order->add_meta_data('_subzz_reduced_monthly_amount', $reduced_monthly);
         $wc_order->add_meta_data('_subzz_total_subscription_value', $total_sub_value);
         $wc_order->add_meta_data('_subzz_billing_day', $billing_day);
+        if (!empty($discount_code)) {
+            $wc_order->add_meta_data('_subzz_discount_code', $discount_code);
+            $wc_order->add_meta_data('_subzz_discount_percentage', $discount_percentage);
+            $wc_order->add_meta_data('_subzz_pre_discount_monthly', $pre_discount_monthly);
+        }
+        // Store product attributes (Hand, Flex, Loft, etc.) on order + line items
+        if (!empty($product_attributes)) {
+            $wc_order->add_meta_data('_subzz_product_attributes', $product_attributes);
+            // Also add as line item meta so they show in WC order admin and emails
+            foreach ($wc_order->get_items() as $item) {
+                foreach ($product_attributes as $attr_name => $attr_value) {
+                    $item->add_meta_data($attr_name, sanitize_text_field($attr_value), true);
+                }
+                $item->save();
+            }
+        }
         $wc_order->add_meta_data('_subzz_contract_required', 'yes');
         $wc_order->save();
 
@@ -263,7 +322,13 @@ class Subzz_Payment_Handler {
             'customer_data' => array(
                 'first_name' => $first_name,
                 'last_name' => $last_name,
-                'email' => $customer_email
+                'email' => $customer_email,
+                'phone_number' => $customer_phone,
+                'phone' => $customer_phone, // alias for Azure ContractController which reads 'phone'
+                'billing_address' => $full_billing_address,
+                'city' => $address_city,
+                'province' => $address_province,
+                'postal_code' => $address_postal
             ),
             'billing_address' => array(
                 'address_1' => $address_street,
@@ -278,7 +343,8 @@ class Subzz_Payment_Handler {
                     'name' => $product_name,
                     'quantity' => 1,
                     'price' => $product_price,
-                    'is_subscription' => true
+                    'is_subscription' => true,
+                    'attributes' => !empty($product_attributes) ? $product_attributes : new \stdClass()
                 )
             ),
             'order_totals' => array(
@@ -292,6 +358,9 @@ class Subzz_Payment_Handler {
             'selected_term_months' => $selected_term,
             'total_subscription_value' => $total_sub_value,
             'billing_day_of_month' => $billing_day,
+            'discount_code' => $discount_code ?: null,
+            'discount_percentage' => $discount_percentage > 0 ? $discount_percentage : null,
+            'pre_discount_monthly_amount' => $pre_discount_monthly > 0 ? $pre_discount_monthly : null,
             'created_at' => current_time('mysql'),
             'wordpress_site' => home_url(),
             'order_status' => 'pending'

@@ -25,7 +25,12 @@
         billingDay: null,
         submitting: false,
         maxAffordable: 0,        // from affordability check
-        availableBudget: 0
+        availableBudget: 0,
+        // Discount state
+        discountCode: '',
+        discountPercentage: 0,
+        discountValid: false,
+        discountDescription: ''
     };
 
     var cfg = window.subzzCheckout;
@@ -155,6 +160,7 @@
         showSection('product-details-card');
         showSection('customise-card');
         showSection('address-card');
+        showSection('coupon-card');
         showSection('summary-card');
         showSection('continue-section');
 
@@ -484,7 +490,11 @@
             address_street: $('#address-street').val().trim(),
             address_city: $('#address-city').val().trim(),
             address_province: $('#address-province').val(),
-            address_postal: $('#address-postal').val().trim()
+            address_postal: $('#address-postal').val().trim(),
+            discount_code: state.discountValid ? state.discountCode : '',
+            discount_percentage: state.discountValid ? state.discountPercentage : 0,
+            pre_discount_monthly_amount: state.discountValid && plan.preDiscountMonthlyAmount ? plan.preDiscountMonthlyAmount : 0,
+            product_attributes: JSON.stringify(cfg.variationAttributes || {})
         };
 
         console.log('SUBZZ CHECKOUT: Storing order', orderData);
@@ -518,11 +528,125 @@
         });
     }
 
+    // -- 13. Coupon/discount code ---------------------------------------------
+    function initCouponHandler() {
+        $('#btn-apply-coupon').on('click', function () {
+            var code = $('#coupon-code').val().trim();
+            if (!code) {
+                showCouponMessage('Please enter a coupon code', 'error');
+                return;
+            }
+            applyCoupon(code);
+        });
+
+        // Allow Enter key in coupon input
+        $('#coupon-code').on('keypress', function (e) {
+            if (e.which === 13) {
+                e.preventDefault();
+                $('#btn-apply-coupon').click();
+            }
+        });
+    }
+
+    function applyCoupon(code) {
+        var $btn = $('#btn-apply-coupon');
+        $btn.prop('disabled', true).text('Checking...');
+
+        $.ajax({
+            url: cfg.ajaxUrl,
+            method: 'POST',
+            data: {
+                action: 'subzz_validate_coupon',
+                nonce: cfg.nonce,
+                coupon_code: code
+            },
+            success: function (resp) {
+                if (resp.success && resp.data && resp.data.valid) {
+                    state.discountCode = resp.data.code;
+                    state.discountPercentage = parseFloat(resp.data.discountPercentage);
+                    state.discountValid = true;
+                    state.discountDescription = resp.data.description || '';
+
+                    showCouponMessage(state.discountPercentage + '% discount applied (' + state.discountDescription + ')', 'success');
+                    $('#coupon-code').prop('disabled', true);
+                    $btn.text('Applied').prop('disabled', true);
+
+                    console.log('SUBZZ CHECKOUT: Coupon applied -', state.discountCode, state.discountPercentage + '%');
+
+                    // Recalculate plan cards with discount
+                    applyDiscountToPlanCards();
+                } else {
+                    var reason = (resp.data && resp.data.reason) ? resp.data.reason : 'Invalid code';
+                    showCouponMessage(reason, 'error');
+                    $btn.prop('disabled', false).text('Apply');
+                }
+            },
+            error: function () {
+                showCouponMessage('Unable to validate code. Please try again.', 'error');
+                $btn.prop('disabled', false).text('Apply');
+            }
+        });
+    }
+
+    function showCouponMessage(message, type) {
+        var $msg = $('#coupon-message');
+        $msg.text(message)
+            .removeClass('coupon-success coupon-error')
+            .addClass(type === 'success' ? 'coupon-success' : 'coupon-error')
+            .show();
+    }
+
+    function applyDiscountToPlanCards() {
+        if (!state.discountValid || state.discountPercentage <= 0) return;
+
+        var multiplier = 1 - (state.discountPercentage / 100);
+
+        state.planCards.forEach(function (card) {
+            // Store pre-discount amount
+            card.preDiscountMonthlyAmount = card.standardMonthlyAmount;
+            // Apply discount to monthly and recalculate
+            card.standardMonthlyAmount = Math.ceil(card.standardMonthlyAmount * multiplier);
+            card.monthlyAmount = card.standardMonthlyAmount;
+        });
+
+        // Re-evaluate affordability with discounted prices
+        var budget = state.availableBudget;
+        state.planCards.forEach(function (card) {
+            card.isViable = card.monthlyAmount <= budget;
+            card.requiresInitialPayment = false;
+            card.initialPaymentAmount = 0;
+
+            if (!card.isViable) {
+                var totalValue = card.standardMonthlyAmount * card.termMonths;
+                var remainingMonths = card.termMonths - 1;
+                var requiredInitial = totalValue - (budget * remainingMonths);
+                requiredInitial = Math.max(Math.ceil(requiredInitial), Math.ceil(card.standardMonthlyAmount));
+                var maxAllowedInitial = totalValue * 0.5;
+
+                if (requiredInitial <= maxAllowedInitial && remainingMonths > 0) {
+                    var reducedMonthly = Math.ceil((totalValue - requiredInitial) / remainingMonths);
+                    if (reducedMonthly <= budget) {
+                        card.isViable = true;
+                        card.requiresInitialPayment = true;
+                        card.initialPaymentAmount = requiredInitial;
+                        card.monthlyAmount = reducedMonthly;
+                    }
+                }
+            }
+        });
+
+        // Re-select current term to refresh UI
+        if (state.selectedTerm) {
+            selectTerm(state.selectedTerm);
+        }
+    }
+
     // -- Init -----------------------------------------------------------------
     $(document).ready(function () {
         fetchAffordabilityAndInit();
         initAddressValidation();
         initBillingDateButtons();
+        initCouponHandler();
 
         // Term button clicks
         $('#term-buttons').on('click', '.term-btn', function () {

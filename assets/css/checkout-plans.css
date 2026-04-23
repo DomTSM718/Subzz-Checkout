@@ -592,3 +592,49 @@
         height: 64px;
     }
 }
+
+/* -- Coupon Code --------------------------------------------------------- */
+.coupon-input-row {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+}
+
+.coupon-input-row input {
+    flex: 1;
+    padding: 10px 14px;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    font-size: 15px;
+    text-transform: uppercase;
+}
+
+.coupon-input-row input:disabled {
+    background: #f5f5f5;
+    color: #888;
+}
+
+.coupon-input-row .btn-secondary {
+    white-space: nowrap;
+    min-width: 80px;
+}
+
+.coupon-message {
+    display: none;
+    margin-top: 10px;
+    padding: 8px 12px;
+    border-radius: 6px;
+    font-size: 14px;
+}
+
+.coupon-success {
+    background: #e8f5e9;
+    color: #2e7d32;
+    border: 1px solid #a5d6a7;
+}
+
+.coupon-error {
+    background: #fce4ec;
+    color: #c62828;
+    border: 1px solid #ef9a9a;
+}

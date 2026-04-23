@@ -152,7 +152,8 @@ get_header();
             var subzzPaymentData = {
                 token: <?php echo wp_json_encode($token); ?>,
                 subscriptionId: <?php echo wp_json_encode($subscription_data['subscriptionId']); ?>,
-                apiUrl: <?php echo wp_json_encode(defined('SUBZZ_AZURE_API_URL') ? SUBZZ_AZURE_API_URL : 'http://localhost:5000/api'); ?>
+                apiUrl: <?php echo wp_json_encode(defined('SUBZZ_AZURE_API_URL') ? SUBZZ_AZURE_API_URL : 'http://localhost:5000/api'); ?>,
+                apiKey: <?php echo wp_json_encode(defined('SUBZZ_AZURE_API_KEY') ? SUBZZ_AZURE_API_KEY : ''); ?>
             };
         </script>
 

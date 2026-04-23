@@ -14,13 +14,16 @@ if (!defined('ABSPATH')) {
 
 get_header();
 
-// Capture all LekkaPay return parameters
-$reference_id = isset($_GET['reference_id']) ? sanitize_text_field($_GET['reference_id']) : '';
-$session_id = isset($_GET['session_id']) ? sanitize_text_field($_GET['session_id']) : '';
-$response_code = isset($_GET['response_code']) ? sanitize_text_field($_GET['response_code']) : '';
-$response_message = isset($_GET['response']) ? sanitize_text_field($_GET['response']) : '';
-$transaction_result = isset($_GET['transaction_result']) ? sanitize_text_field($_GET['transaction_result']) : '';
-$transaction_id = isset($_GET['transaction_id']) ? sanitize_text_field($_GET['transaction_id']) : '';
+// Capture all LekkaPay return parameters.
+// Merge $_GET + $_POST because LekkaPay's HPP may POST-redirect (params land in $_POST, not $_GET).
+// See payment-success.php for context.
+$subzz_return_params = array_merge(is_array($_GET) ? $_GET : array(), is_array($_POST) ? $_POST : array());
+$reference_id = isset($subzz_return_params['reference_id']) ? sanitize_text_field($subzz_return_params['reference_id']) : '';
+$session_id = isset($subzz_return_params['session_id']) ? sanitize_text_field($subzz_return_params['session_id']) : '';
+$response_code = isset($subzz_return_params['response_code']) ? sanitize_text_field($subzz_return_params['response_code']) : '';
+$response_message = isset($subzz_return_params['response']) ? sanitize_text_field($subzz_return_params['response']) : '';
+$transaction_result = isset($subzz_return_params['transaction_result']) ? sanitize_text_field($subzz_return_params['transaction_result']) : '';
+$transaction_id = isset($subzz_return_params['transaction_id']) ? sanitize_text_field($subzz_return_params['transaction_id']) : '';
 
 // Log the cancellation
 subzz_log('SUBZZ PAYMENT CANCELLED: User cancelled payment at LekkaPay');
@@ -44,7 +47,7 @@ if (class_exists('Subzz_Azure_API_Client')) {
         'responseMessage'   => $response_message ?: null,
         'transactionResult' => $transaction_result ?: null,
         'transactionId'     => $transaction_id ?: null,
-        'rawParams'         => wp_json_encode($_GET),
+        'rawParams'         => wp_json_encode($subzz_return_params),
         'source'            => 'wordpress'
     ));
 }

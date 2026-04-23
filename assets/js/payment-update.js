@@ -66,7 +66,7 @@
                 type: 'POST',
                 contentType: 'application/json',
                 headers: {
-                    'X-Subzz-API-Key': '' // API key will be sent from WordPress server-side in production
+                    'X-Subzz-API-Key': data.apiKey || ''
                 },
                 data: JSON.stringify({
                     orderReferenceId: data.subscriptionId,

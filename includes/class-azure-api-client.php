@@ -147,13 +147,17 @@ class Subzz_Azure_API_Client {
      * @param float $price Product price incl VAT
      * @return array|false Plan cards data or false on failure
      */
-    public function get_plan_cards($email, $price) {
+    public function get_plan_cards($email, $price, $coupon_code = '') {
         subzz_log('=== SUBZZ AZURE API: GET PLAN CARDS REQUEST ===');
 
-        $endpoint = $this->azure_base_url . '/customer/lead/affordability/plan-cards?' . http_build_query(array(
+        $params = array(
             'email' => $email,
             'productPriceInclVat' => $price
-        ));
+        );
+        if (!empty($coupon_code)) {
+            $params['couponCode'] = $coupon_code;
+        }
+        $endpoint = $this->azure_base_url . '/customer/lead/affordability/plan-cards?' . http_build_query($params);
         subzz_log('SUBZZ AZURE REQUEST: GET ' . $endpoint);
 
         $response = wp_remote_get($endpoint, $this->get_default_request_args());
@@ -180,6 +184,50 @@ class Subzz_Azure_API_Client {
         }
 
         subzz_log('SUBZZ AZURE ERROR: Plan cards failed with HTTP ' . $response_code . ' - ' . $response_body);
+        return false;
+    }
+
+    /**
+     * Validate a discount/coupon code via Azure API
+     *
+     * @param string $code The coupon code to validate
+     * @return array|false Validation result or false on failure
+     */
+    public function validate_coupon($code) {
+        subzz_log('=== SUBZZ AZURE API: VALIDATE COUPON REQUEST ===');
+
+        $endpoint = $this->azure_base_url . '/customer/lead/affordability/validate-coupon';
+        subzz_log('SUBZZ AZURE REQUEST: POST ' . $endpoint . ' code=' . $code);
+
+        $args = $this->get_default_request_args();
+        $args['method'] = 'POST';
+        $args['headers']['Content-Type'] = 'application/json';
+        $args['body'] = wp_json_encode(array('code' => $code));
+
+        $response = wp_remote_post($endpoint, $args);
+
+        if (is_wp_error($response)) {
+            subzz_log('SUBZZ AZURE ERROR: Coupon validation failed - ' . $response->get_error_message());
+            return false;
+        }
+
+        $response_code = wp_remote_retrieve_response_code($response);
+        $response_body = wp_remote_retrieve_body($response);
+
+        subzz_log('SUBZZ AZURE RESPONSE: HTTP ' . $response_code);
+
+        if ($response_code === 200) {
+            $data = json_decode($response_body, true);
+            if ($data === null) {
+                subzz_log('SUBZZ AZURE ERROR: Coupon JSON decode failed');
+                return false;
+            }
+            $inner = $data['data'] ?? $data;
+            subzz_log('SUBZZ AZURE SUCCESS: Coupon validated - valid=' . ($inner['valid'] ? 'true' : 'false'));
+            return $inner;
+        }
+
+        subzz_log('SUBZZ AZURE ERROR: Coupon validation failed with HTTP ' . $response_code . ' - ' . $response_body);
         return false;
     }
 

@@ -361,6 +361,14 @@ function subzz_enqueue_checkout_subscription_assets() {
         '2.1.0'
     );
 
+    // Required for #loading-checkout overlay (.loading-state / .loading-spinner / @keyframes spin)
+    wp_enqueue_style(
+        'subzz-contract-styles',
+        $plugin_url . 'assets/contract-styles.css',
+        array('subzz-base'),
+        '2.1.0'
+    );
+
     wp_enqueue_script(
         'subzz-checkout-plans',
         $plugin_url . 'assets/js/checkout-plans.js',

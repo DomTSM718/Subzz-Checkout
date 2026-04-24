@@ -322,8 +322,8 @@ get_header();
             <p class="continue-hint">You'll review and sign your subscription agreement next.</p>
         </section>
 
-        <!-- Loading State (order storage / redirect to contract) -->
-        <div id="loading-checkout" class="loading-state" style="display: none;">
+        <!-- Loading State (order storage / redirect to contract) — modal variant for AJAX-then-navigate race -->
+        <div id="loading-checkout" class="loading-state loading-state-modal" style="display: none;">
             <div class="loading-spinner"></div>
             <p>Processing your order...</p>
         </div>

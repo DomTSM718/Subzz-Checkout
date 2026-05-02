@@ -1158,13 +1158,87 @@ class Subzz_Azure_API_Client {
             subzz_log('SUBZZ AZURE SUCCESS: Session ID: ' . $response_data['sessionId']);
             subzz_log('SUBZZ AZURE SUCCESS: Checkout URL: ' . $response_data['checkoutUrl']);
             subzz_log('SUBZZ AZURE SUCCESS: Total processing time: ' . $request_duration . 'ms');
-            
+
             return $response_data;
         } else {
             subzz_log('SUBZZ AZURE ERROR: Create LekkaPay session failed with HTTP ' . $response_code);
             subzz_log('SUBZZ AZURE ERROR: Response body: ' . $response_body);
             return false;
         }
+    }
+
+    /**
+     * Check whether a customer is eligible to proceed through WC checkout.
+     * Calls GET /api/invite-codes/checkout-eligibility on the Azure API.
+     *
+     * Honours Decision 3 from FF-Gating-Mechanism-Design-2026-05-01.md §17.7:
+     * fail-closed + 1 retry after 1.5s on timeout/5xx. Single attempt is the happy path;
+     * retry only fires on transient transport failure or server 5xx.
+     *
+     * @param string $email Customer email (sanitize_email'd by caller)
+     * @return array|false On success, associative array with keys eligible (bool),
+     *                    reason (string), profileId (string|null), gateEnabled (bool).
+     *                    Returns false on hard failure after retry — caller must fail-closed
+     *                    (block checkout with a "service unavailable" notice).
+     */
+    public function check_checkout_eligibility($email) {
+        subzz_log('=== SUBZZ AZURE API: CHECKOUT ELIGIBILITY REQUEST ===');
+
+        $endpoint = $this->azure_base_url . '/invite-codes/checkout-eligibility?' . http_build_query(array('email' => $email));
+        subzz_log('SUBZZ AZURE REQUEST: GET ' . $endpoint);
+
+        $result = $this->do_eligibility_request($endpoint, 'first attempt');
+        if ($result !== false) {
+            return $result;
+        }
+
+        // Decision 3: 1 retry after 1.5s delay before fail-closed
+        subzz_log('SUBZZ AZURE: Eligibility first attempt failed, sleeping 1.5s before retry');
+        usleep(1500000);
+
+        $result = $this->do_eligibility_request($endpoint, 'retry attempt');
+        if ($result !== false) {
+            return $result;
+        }
+
+        subzz_log('SUBZZ AZURE ERROR: Eligibility check hard-fail after retry — caller must fail-closed');
+        return false;
+    }
+
+    /**
+     * Single eligibility request attempt. Returns parsed array on 200, false on any other
+     * outcome (transport error, non-200 status, JSON decode failure). Caller orchestrates retry.
+     */
+    private function do_eligibility_request($endpoint, $attempt_label) {
+        $response = wp_remote_get($endpoint, $this->get_default_request_args());
+
+        if (is_wp_error($response)) {
+            subzz_log('SUBZZ AZURE ERROR: Eligibility ' . $attempt_label . ' transport failure - ' . $response->get_error_message());
+            return false;
+        }
+
+        $response_code = wp_remote_retrieve_response_code($response);
+        $response_body = wp_remote_retrieve_body($response);
+
+        subzz_log('SUBZZ AZURE RESPONSE: Eligibility ' . $attempt_label . ' HTTP ' . $response_code);
+
+        if ($response_code !== 200) {
+            subzz_log('SUBZZ AZURE ERROR: Eligibility ' . $attempt_label . ' non-200 - body: ' . $response_body);
+            return false;
+        }
+
+        $data = json_decode($response_body, true);
+        if ($data === null || !isset($data['eligible'])) {
+            subzz_log('SUBZZ AZURE ERROR: Eligibility ' . $attempt_label . ' JSON decode failed or missing eligible key - body: ' . $response_body);
+            return false;
+        }
+
+        return array(
+            'eligible'    => (bool) $data['eligible'],
+            'reason'      => isset($data['reason']) ? (string) $data['reason'] : '',
+            'profileId'   => isset($data['profileId']) ? $data['profileId'] : null,
+            'gateEnabled' => isset($data['gateEnabled']) ? (bool) $data['gateEnabled'] : true,
+        );
     }
 }
 ?>

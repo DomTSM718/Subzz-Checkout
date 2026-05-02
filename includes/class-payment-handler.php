@@ -127,6 +127,13 @@ class Subzz_Payment_Handler {
         // PRESERVED: Traditional checkout process fallback
         add_action('woocommerce_checkout_process', [$this, 'traditional_checkout_fallback'], 1);
 
+        // Plan 4 (2026-05-02): F&F gate check — call Azure to confirm customer is allowed
+        // past the gate before WC accepts the order. Priority 5 fires after the priority-1
+        // bypass-fallback above but before default-priority hooks. Fail-closed on API error.
+        // Note: this hook is classic-checkout only. Block-based checkout (Store API) is NOT
+        // gated here — staging is verified-classic per 2026-03-05 frontend-patterns.md fix.
+        add_action('woocommerce_checkout_process', [$this, 'verify_checkout_eligibility'], 5);
+
         subzz_log('SUBZZ HOOKS: Server-side redirect control hooks registered');
     }
 
@@ -1041,6 +1048,89 @@ class Subzz_Payment_Handler {
     /**
      * PRESERVED: Traditional checkout fallback (safety net)
      */
+    /**
+     * Plan 4 (2026-05-02): F&F gate eligibility check on classic WC checkout.
+     *
+     * Calls GET /api/invite-codes/checkout-eligibility on the Azure API. On eligible:false
+     * or hard-fail (API down, retry exhausted), adds a wc_add_notice('error') which causes
+     * WC to abort the checkout with the message visible to the customer.
+     *
+     * Honours Decision 3 (FF-Gating-Mechanism-Design-2026-05-01.md §17.7): fail-closed + 1
+     * retry handled by Subzz_Azure_API_Client::check_checkout_eligibility. Hard-fail returns
+     * false — we treat that as "service unavailable, please try again" rather than guess.
+     *
+     * Email source: classic checkout posts billing_email; fall back to current logged-in user
+     * email if the POST field is missing (logged-in customer with stored billing).
+     *
+     * No-op when WC()->cart is unavailable or empty (defence — shouldn't happen in real
+     * checkout submission, but guards against odd reentry edge cases).
+     */
+    public function verify_checkout_eligibility() {
+        if (!WC()->cart || WC()->cart->is_empty()) {
+            return;
+        }
+
+        // Resolve email: classic checkout submits billing_email in $_POST. Fallback to current
+        // user's email for logged-in customers whose billing_email field may be empty on submit.
+        $email = '';
+        if (isset($_POST['billing_email'])) {
+            $email = sanitize_email(wp_unslash($_POST['billing_email']));
+        }
+        if (empty($email)) {
+            $current_user = wp_get_current_user();
+            if ($current_user && $current_user->ID > 0 && !empty($current_user->user_email)) {
+                $email = sanitize_email($current_user->user_email);
+            }
+        }
+
+        if (empty($email)) {
+            // No email — let WC's own validation handle it (don't double-error).
+            subzz_log('SUBZZ ELIGIBILITY: No billing email available, skipping (WC validation will catch)');
+            return;
+        }
+
+        $azure_client = new Subzz_Azure_API_Client();
+        $result = $azure_client->check_checkout_eligibility($email);
+
+        // Hard fail (API down, retry exhausted) — fail-closed per Decision 3
+        if ($result === false) {
+            subzz_log('SUBZZ ELIGIBILITY: Hard-fail after retry — blocking checkout for ' . $email);
+            wc_add_notice(
+                'Service temporarily unavailable, please try again in a moment, or contact us if this persists.',
+                'error'
+            );
+            return;
+        }
+
+        // Eligible — pass through silently
+        if (!empty($result['eligible']) && $result['eligible'] === true) {
+            subzz_log('SUBZZ ELIGIBILITY: Pass — ' . $email . ' reason=' . ($result['reason'] ?? 'eligible'));
+            return;
+        }
+
+        // Ineligible — block checkout with reason-specific copy
+        $reason = isset($result['reason']) ? $result['reason'] : '';
+        $message = $this->ineligibility_message_for($reason);
+        subzz_log('SUBZZ ELIGIBILITY: Block — ' . $email . ' reason=' . $reason);
+        wc_add_notice($message, 'error');
+    }
+
+    /**
+     * Map an eligibility reason code to customer-visible copy.
+     * Default falls through to a generic message — tightening copy is a content-pass concern.
+     */
+    private function ineligibility_message_for($reason) {
+        switch ($reason) {
+            case 'ineligible_awaiting_invite':
+                return 'Your account is awaiting activation. We\'ll email you once your invite is active.';
+            case 'ineligible_no_profile':
+                return 'We could not find your account. Please complete signup before checkout.';
+            case 'ineligible_other_stage':
+            default:
+                return 'Your account is not currently eligible for checkout. Please contact us if you believe this is in error.';
+        }
+    }
+
     public function traditional_checkout_fallback() {
         if (!WC()->cart) {
             return;

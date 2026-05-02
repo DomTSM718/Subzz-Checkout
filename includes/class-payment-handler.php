@@ -127,12 +127,12 @@ class Subzz_Payment_Handler {
         // PRESERVED: Traditional checkout process fallback
         add_action('woocommerce_checkout_process', [$this, 'traditional_checkout_fallback'], 1);
 
-        // Plan 4 (2026-05-02): F&F gate check — call Azure to confirm customer is allowed
-        // past the gate before WC accepts the order. Priority 5 fires after the priority-1
-        // bypass-fallback above but before default-priority hooks. Fail-closed on API error.
-        // Note: this hook is classic-checkout only. Block-based checkout (Store API) is NOT
-        // gated here — staging is verified-classic per 2026-03-05 frontend-patterns.md fix.
-        add_action('woocommerce_checkout_process', [$this, 'verify_checkout_eligibility'], 5);
+        // Plan 4 (2026-05-02): F&F gate eligibility check is wired inside ajax_get_plan_cards,
+        // NOT on woocommerce_checkout_process — Subzz subscription customers go through
+        // /checkout-subscription/ which uses programmatic wc_create_order (does NOT fire
+        // woocommerce_checkout_process). The plan cards AJAX is the first server call from
+        // the checkout page and is the natural choke point — same surface as the existing
+        // isVerified gate.
 
         subzz_log('SUBZZ HOOKS: Server-side redirect control hooks registered');
     }
@@ -183,6 +183,40 @@ class Subzz_Payment_Handler {
         subzz_log('SUBZZ CHECKOUT AJAX: Fetching plan cards for ' . $email . ' price=' . $price . ' coupon=' . ($coupon_code ?: '(none)'));
 
         $azure_client = new Subzz_Azure_API_Client();
+
+        // Plan 4 (2026-05-02): F&F gate check — runs BEFORE plan-cards fetch so ineligible
+        // customers are blocked with a clear message before any further checkout work.
+        // Mirrors the existing isVerified gate pattern (line ~76-79 in checkout-plans.js).
+        // Honours Decision 3 (FF-Gating-Mechanism-Design-2026-05-01.md §17.7):
+        //   * fail-closed + 1 retry handled inside check_checkout_eligibility ($result === false)
+        //   * <500ms target — single JOIN against User+CustomerProfile on Azure side
+        $eligibility = $azure_client->check_checkout_eligibility($email);
+
+        if ($eligibility === false) {
+            // Hard fail (API down, retry exhausted) — surface a generic service-unavailable
+            // message via wp_send_json_error so the JS error handler shows plan-error UI.
+            subzz_log('SUBZZ ELIGIBILITY: Hard-fail after retry — blocking checkout for ' . $email);
+            wp_send_json_error(array(
+                'message' => 'Service temporarily unavailable, please try again in a moment, or contact us if this persists.'
+            ));
+            return;
+        }
+
+        if (empty($eligibility['eligible']) || $eligibility['eligible'] !== true) {
+            // Ineligible — return success:true with gateBlocked flag so JS shows the
+            // existing #not-verified-message surface with reason-specific copy.
+            $reason = isset($eligibility['reason']) ? $eligibility['reason'] : '';
+            subzz_log('SUBZZ ELIGIBILITY: Block — ' . $email . ' reason=' . $reason);
+            wp_send_json_success(array(
+                'gateBlocked' => true,
+                'gateBlockedReason' => $reason,
+                'gateBlockedMessage' => $this->ineligibility_message_for($reason)
+            ));
+            return;
+        }
+
+        subzz_log('SUBZZ ELIGIBILITY: Pass — ' . $email . ' reason=' . ($eligibility['reason'] ?? 'eligible'));
+
         $result = $azure_client->get_plan_cards($email, $price, $coupon_code);
 
         if ($result) {
@@ -1049,74 +1083,9 @@ class Subzz_Payment_Handler {
      * PRESERVED: Traditional checkout fallback (safety net)
      */
     /**
-     * Plan 4 (2026-05-02): F&F gate eligibility check on classic WC checkout.
-     *
-     * Calls GET /api/invite-codes/checkout-eligibility on the Azure API. On eligible:false
-     * or hard-fail (API down, retry exhausted), adds a wc_add_notice('error') which causes
-     * WC to abort the checkout with the message visible to the customer.
-     *
-     * Honours Decision 3 (FF-Gating-Mechanism-Design-2026-05-01.md §17.7): fail-closed + 1
-     * retry handled by Subzz_Azure_API_Client::check_checkout_eligibility. Hard-fail returns
-     * false — we treat that as "service unavailable, please try again" rather than guess.
-     *
-     * Email source: classic checkout posts billing_email; fall back to current logged-in user
-     * email if the POST field is missing (logged-in customer with stored billing).
-     *
-     * No-op when WC()->cart is unavailable or empty (defence — shouldn't happen in real
-     * checkout submission, but guards against odd reentry edge cases).
-     */
-    public function verify_checkout_eligibility() {
-        if (!WC()->cart || WC()->cart->is_empty()) {
-            return;
-        }
-
-        // Resolve email: classic checkout submits billing_email in $_POST. Fallback to current
-        // user's email for logged-in customers whose billing_email field may be empty on submit.
-        $email = '';
-        if (isset($_POST['billing_email'])) {
-            $email = sanitize_email(wp_unslash($_POST['billing_email']));
-        }
-        if (empty($email)) {
-            $current_user = wp_get_current_user();
-            if ($current_user && $current_user->ID > 0 && !empty($current_user->user_email)) {
-                $email = sanitize_email($current_user->user_email);
-            }
-        }
-
-        if (empty($email)) {
-            // No email — let WC's own validation handle it (don't double-error).
-            subzz_log('SUBZZ ELIGIBILITY: No billing email available, skipping (WC validation will catch)');
-            return;
-        }
-
-        $azure_client = new Subzz_Azure_API_Client();
-        $result = $azure_client->check_checkout_eligibility($email);
-
-        // Hard fail (API down, retry exhausted) — fail-closed per Decision 3
-        if ($result === false) {
-            subzz_log('SUBZZ ELIGIBILITY: Hard-fail after retry — blocking checkout for ' . $email);
-            wc_add_notice(
-                'Service temporarily unavailable, please try again in a moment, or contact us if this persists.',
-                'error'
-            );
-            return;
-        }
-
-        // Eligible — pass through silently
-        if (!empty($result['eligible']) && $result['eligible'] === true) {
-            subzz_log('SUBZZ ELIGIBILITY: Pass — ' . $email . ' reason=' . ($result['reason'] ?? 'eligible'));
-            return;
-        }
-
-        // Ineligible — block checkout with reason-specific copy
-        $reason = isset($result['reason']) ? $result['reason'] : '';
-        $message = $this->ineligibility_message_for($reason);
-        subzz_log('SUBZZ ELIGIBILITY: Block — ' . $email . ' reason=' . $reason);
-        wc_add_notice($message, 'error');
-    }
-
-    /**
-     * Map an eligibility reason code to customer-visible copy.
+     * Plan 4 (2026-05-02): map an eligibility reason code to customer-visible copy.
+     * Used by ajax_get_plan_cards to format the gate-blocked message returned to the
+     * frontend, which renders it in the existing #not-verified-message UI surface.
      * Default falls through to a generic message — tightening copy is a content-pass concern.
      */
     private function ineligibility_message_for($reason) {

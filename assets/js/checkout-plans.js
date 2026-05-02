@@ -73,6 +73,24 @@
                 if (resp.success && resp.data) {
                     console.log('SUBZZ CHECKOUT: Affordability received', resp.data);
 
+                    // Plan 4 (2026-05-02): F&F gate check — server returns gateBlocked:true
+                    // with a reason-specific message when the customer is not eligible to
+                    // proceed through checkout. Reuses the #not-verified-message surface
+                    // with swapped copy so customers see a clear blocking state.
+                    if (resp.data.gateBlocked === true) {
+                        console.log('SUBZZ CHECKOUT: F&F gate blocked', resp.data.gateBlockedReason);
+                        $('#not-verified-message h3').text('Account Not Eligible');
+                        $('#not-verified-message p').text(
+                            resp.data.gateBlockedMessage ||
+                            'Your account is not currently eligible for checkout.'
+                        );
+                        $('#not-verified-message a.btn-primary')
+                            .attr('href', '/contact/')
+                            .text('Contact Us');
+                        showSection('not-verified-message');
+                        return;
+                    }
+
                     if (resp.data.isVerified === false) {
                         showSection('not-verified-message');
                         return;

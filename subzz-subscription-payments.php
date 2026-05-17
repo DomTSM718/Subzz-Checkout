@@ -93,6 +93,8 @@ function subzz_add_rewrite_rules() {
     add_rewrite_rule('^payment-cancelled/?$', 'index.php?subzz_payment_cancelled=1', 'top');
     add_rewrite_rule('^checkout-subscription/?$', 'index.php?subzz_checkout_subscription=1', 'top');
     add_rewrite_rule('^payment-update/?$', 'index.php?subzz_payment_update=1', 'top');
+    // Phase 5 (2026-05-17) — multi-vendor picker page (Stitch Parallel Rail Plan).
+    add_rewrite_rule('^payment-redirect-page/?$', 'index.php?subzz_payment_redirect_page=1', 'top');
 }
 
 add_filter('query_vars', 'subzz_custom_query_vars');
@@ -103,6 +105,7 @@ function subzz_custom_query_vars($vars) {
     $vars[] = 'subzz_payment_cancelled';
     $vars[] = 'subzz_checkout_subscription';
     $vars[] = 'subzz_payment_update';
+    $vars[] = 'subzz_payment_redirect_page'; // Phase 5 multi-vendor picker (2026-05-17)
     return $vars;
 }
 
@@ -115,7 +118,8 @@ function subzz_ensure_rewrite_rules() {
         !isset($rules['^payment-success/?$']) ||
         !isset($rules['^payment-cancelled/?$']) ||
         !isset($rules['^checkout-subscription/?$']) ||
-        !isset($rules['^payment-update/?$'])) {
+        !isset($rules['^payment-update/?$']) ||
+        !isset($rules['^payment-redirect-page/?$'])) { // Phase 5 (2026-05-17)
         flush_rewrite_rules(false);
     }
 }
@@ -249,6 +253,63 @@ function subzz_handle_checkout_subscription_page() {
         subzz_log('SUBZZ CHECKOUT SUBSCRIPTION ERROR: Template not found');
         wp_die('Checkout page template not found. Please contact support.');
     }
+}
+
+// Handle multi-vendor payment-redirect picker page (Phase 5 — Stitch Parallel Rail Plan 2026-05-17).
+// Customer arrives here between contract-signed and HPP redirect to pick a payment vendor.
+// Route: /payment-redirect-page/ (standalone page; order context in URL params).
+add_action('template_redirect', 'subzz_handle_payment_redirect_page');
+function subzz_handle_payment_redirect_page() {
+    global $wp;
+
+    if (!isset($wp->request) || $wp->request !== 'payment-redirect-page') {
+        return;
+    }
+
+    subzz_log('=== SUBZZ PAYMENT REDIRECT (PICKER): Request received ===');
+
+    add_action('wp_enqueue_scripts', 'subzz_enqueue_payment_redirect_assets', 1);
+
+    $template_path = plugin_dir_path(__FILE__) . 'templates/payment-redirect-page.php';
+    if (file_exists($template_path)) {
+        include $template_path;
+        exit;
+    }
+    subzz_log('SUBZZ PAYMENT REDIRECT ERROR: Template not found');
+    wp_die('Payment redirect page template not found. Please contact support.');
+}
+
+function subzz_enqueue_payment_redirect_assets() {
+    $plugin_url = plugin_dir_url(__FILE__);
+
+    wp_enqueue_style(
+        'subzz-base',
+        $plugin_url . 'assets/css/subzz-base.css',
+        array(),
+        '2.1.0'
+    );
+
+    wp_enqueue_style(
+        'subzz-picker',
+        $plugin_url . 'assets/css/picker.css',
+        array('subzz-base'),
+        '5.0.0' // Phase 5 v1
+    );
+
+    wp_enqueue_script(
+        'subzz-picker',
+        $plugin_url . 'assets/js/picker.js',
+        array(), // No jQuery dependency — vanilla fetch API only
+        '5.0.0',
+        true
+    );
+
+    // Pass API URL + WP API key for the picker's vendor lookup + create-session calls.
+    // CHK-002: X-Subzz-API-Key header required by WordPressApiKeyMiddleware on /payment/create-session.
+    wp_localize_script('subzz-picker', 'subzzPicker', array(
+        'apiUrl' => defined('SUBZZ_AZURE_API_URL') ? SUBZZ_AZURE_API_URL : 'http://localhost:5000/api',
+        'apiKey' => defined('SUBZZ_AZURE_API_KEY') ? SUBZZ_AZURE_API_KEY : '',
+    ));
 }
 
 // Handle payment update page routing (standalone page, no login required)

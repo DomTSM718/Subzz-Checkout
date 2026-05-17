@@ -101,6 +101,64 @@ class Subzz_Azure_API_Client {
     }
     
     /**
+     * Get the list of payment vendors available to render in the Phase 5 picker UI.
+     * Reads from the Azure /api/payment/vendors endpoint which honours RS-2 cohort gating
+     * + RS-3 kill-switch. Server-side fires the AN-1 payment_picker_shown event on every
+     * successful call (customerEmail attribution if provided).
+     *
+     * Response shape: array of arrays - [{ vendorId, displayName, logoUrl }, ...]
+     * (or false on transport failure). Empty array is a valid response indicating no
+     * vendors enabled for this customer/cohort - picker UI handles the empty-state.
+     *
+     * @param string|null $cohort_id Optional cohort ID for RS-2 gated rollout (e.g. "fnf-2026-05")
+     * @param string|null $customer_email Optional - attached to picker_shown event for funnel attribution
+     * @return array|false List of vendor DTOs or false on transport failure
+     */
+    public function get_payment_vendors($cohort_id = null, $customer_email = null) {
+        subzz_log('=== SUBZZ AZURE API: GET PAYMENT VENDORS REQUEST ===');
+
+        $params = array();
+        if (!empty($cohort_id)) {
+            $params['cohortId'] = $cohort_id;
+        }
+        if (!empty($customer_email)) {
+            $params['customerEmail'] = $customer_email;
+        }
+
+        $endpoint = $this->azure_base_url . '/payment/vendors';
+        if (!empty($params)) {
+            $endpoint .= '?' . http_build_query($params);
+        }
+        subzz_log('SUBZZ AZURE REQUEST: GET ' . $endpoint);
+
+        $response = wp_remote_get($endpoint, $this->get_default_request_args());
+
+        if (is_wp_error($response)) {
+            subzz_log('SUBZZ AZURE ERROR: Payment vendors request failed - ' . $response->get_error_message());
+            return false;
+        }
+
+        $response_code = wp_remote_retrieve_response_code($response);
+        $response_body = wp_remote_retrieve_body($response);
+
+        subzz_log('SUBZZ AZURE RESPONSE: HTTP ' . $response_code);
+
+        if ($response_code === 200) {
+            $data = json_decode($response_body, true);
+            if ($data === null) {
+                subzz_log('SUBZZ AZURE ERROR: Payment vendors JSON decode failed');
+                return false;
+            }
+            $vendors = $data['vendors'] ?? array();
+            subzz_log('SUBZZ AZURE SUCCESS: ' . count($vendors) . ' payment vendor(s) retrieved');
+            return $vendors;
+        }
+
+        subzz_log('SUBZZ AZURE ERROR: Payment vendors failed with HTTP ' . $response_code . ' - ' . $response_body);
+        return false;
+    }
+
+    /**
      * Get customer affordability data.
      * Returns maxAffordableSubscription, isVerified, etc.
      *

@@ -1,0 +1,175 @@
+/**
+ * Subzz Phase 5 — Multi-Vendor Payment Picker styles.
+ *
+ * Locked decisions (Docs/Planning/Stitch-Parallel-Rail-Plan-2026-05-17.md):
+ *   UX-1: branded vendor names + logos, "secondary visual weight" — logos are not
+ *         louder than the page; radio buttons clearly single-select.
+ *   UX-4: header "Pay by card"; radio (NOT side-by-side big buttons) so it reads
+ *         as a single-choice form not two competing CTAs; trust copy below choice
+ *         with padlock + reassurance line; "Subzz never sees them" load-bearing.
+ *
+ * Mobile-first. Inherits Subzz brand tokens from subzz-base.css when present;
+ * falls back to charcoal/coral defaults so the page renders standalone if a theme
+ * dropped the base stylesheet.
+ *
+ * Frontend-patterns.md #1232: Astra theme overrides .button — use .btn-primary
+ * (already a Subzz brand class) for CTA buttons.
+ */
+
+.subzz-payment-redirect-page {
+    padding: clamp(20px, 5vw, 48px) 16px;
+    max-width: 100%;
+}
+
+.subzz-picker-container {
+    max-width: 480px;
+    margin: 0 auto;
+    background: #ffffff;
+    border-radius: 8px;
+    padding: clamp(24px, 5vw, 40px);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08), 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+.subzz-picker-heading {
+    font-family: "Montserrat", system-ui, -apple-system, sans-serif;
+    font-size: clamp(20px, 4vw, 24px);
+    font-weight: 600;
+    color: var(--subzz-charcoal, #545454);
+    margin: 0 0 24px 0;
+    letter-spacing: -0.3px;
+}
+
+.subzz-picker-form {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.subzz-picker-vendors {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.subzz-picker-loading {
+    padding: 20px;
+    text-align: center;
+    color: var(--subzz-charcoal, #545454);
+    font-size: 14px;
+    opacity: 0.7;
+}
+
+.subzz-picker-empty {
+    padding: 24px;
+    text-align: center;
+    color: var(--subzz-charcoal, #545454);
+    font-size: 14px;
+    border: 1px dashed rgba(84, 84, 84, 0.25);
+    border-radius: 6px;
+}
+
+/* Vendor radio rows. UX-1: branded + secondary visual weight - logo small (80x32),
+   name in body text size, NOT competing for attention with the CTA. */
+.subzz-picker-vendor {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 14px 16px;
+    border: 1.5px solid rgba(84, 84, 84, 0.15);
+    border-radius: 6px;
+    cursor: pointer;
+    transition: border-color 0.15s ease, background-color 0.15s ease;
+    background: #ffffff;
+}
+
+.subzz-picker-vendor:hover {
+    border-color: rgba(84, 84, 84, 0.35);
+    background: rgba(84, 84, 84, 0.02);
+}
+
+.subzz-picker-vendor.is-selected {
+    border-color: var(--subzz-coral, #F73C5C);
+    background: rgba(247, 60, 92, 0.04);
+}
+
+.subzz-picker-vendor input[type="radio"] {
+    flex-shrink: 0;
+    width: 18px;
+    height: 18px;
+    margin: 0;
+    accent-color: var(--subzz-coral, #F73C5C);
+    cursor: pointer;
+}
+
+.subzz-picker-vendor-logo {
+    flex-shrink: 0;
+    width: 80px;
+    height: 32px;
+    object-fit: contain;
+    display: block;
+}
+
+.subzz-picker-vendor-logo-fallback {
+    /* Empty span used when logoUrl is null - keeps row layout consistent. */
+    flex-shrink: 0;
+    width: 80px;
+    height: 32px;
+}
+
+.subzz-picker-vendor-name {
+    flex: 1;
+    font-family: "Montserrat", system-ui, -apple-system, sans-serif;
+    font-size: 15px;
+    font-weight: 500;
+    color: var(--subzz-charcoal, #545454);
+}
+
+/* UX-4 trust copy. Stays under the choice (not above) — customer sees options first,
+   then reassurance, then CTA. */
+.subzz-picker-trust {
+    margin: 4px 0 0 0;
+    font-size: 13px;
+    line-height: 1.5;
+    color: var(--subzz-charcoal, #545454);
+    opacity: 0.75;
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+}
+
+.subzz-picker-trust-icon {
+    flex-shrink: 0;
+    margin-top: 1px;
+    font-size: 14px;
+}
+
+/* Submit CTA. Phase-5 picker uses Subzz brand .btn-primary (Astra-safe per
+   frontend-patterns.md #1232). Disabled state is the load-bearing "no vendor
+   picked yet" signal. */
+.subzz-picker-submit {
+    margin-top: 8px;
+    width: 100%;
+    min-height: 48px;
+    font-size: 15px;
+    font-weight: 600;
+}
+
+.subzz-picker-submit:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* Error surface (Step 7 fills in the retry/re-pick CTAs). */
+.subzz-picker-error {
+    margin-top: 20px;
+    padding: 16px;
+    background: rgba(247, 60, 92, 0.08);
+    border: 1px solid rgba(247, 60, 92, 0.2);
+    border-radius: 6px;
+    color: var(--subzz-charcoal, #545454);
+    font-size: 14px;
+}
+
+.subzz-picker-error[hidden] {
+    display: none;
+}

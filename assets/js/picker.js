@@ -48,6 +48,17 @@
     }
 
     var selectedVendor = null;
+    var availableVendors = [];
+    // UX-3 sub-case 3 — if customer returned from a failed vendor HPP, the failedVendor URL
+    // param surfaces here (PHP reads ?failedVendor=X). Persists in this module-scope only
+    // (UX-2 no localStorage lock); fresh navigation away clears it.
+    var lastAttemptedVendor = orderContext.failedVendor || null;
+
+    // UX-3 lock — bounded retry on session-create: 2 retries, 1s + 2s backoff (total 3 attempts).
+    // Retryable: HTTP 5xx + network errors. Non-retryable: HTTP 4xx (vendor rejected / customer
+    // not found). On retry exhaustion OR non-retryable error -> showRetryScreen with both CTAs.
+    var BACKOFF_MS = [0, 1000, 2000]; // delay before attempt N (1-indexed: 0/1/2 -> 0ms/1000ms/2000ms)
+    var MAX_ATTEMPTS = BACKOFF_MS.length;
 
     /**
      * GET /payment/vendors and render the radio group.
@@ -75,8 +86,14 @@
                 return res.json();
             })
             .then(function (data) {
-                var vendors = (data && data.vendors) || [];
-                renderVendors(vendors);
+                availableVendors = (data && data.vendors) || [];
+                renderVendors(availableVendors);
+                // UX-3 sub-case 3 mid-flow return: if failedVendor was supplied on page load,
+                // show the last-attempt note now that vendors are rendered.
+                if (lastAttemptedVendor) {
+                    var failed = findVendor(lastAttemptedVendor);
+                    showLastAttemptNote((failed && failed.displayName) || lastAttemptedVendor);
+                }
             })
             .catch(function (err) {
                 console.error('[subzz-picker] Vendor fetch error', err);
@@ -137,74 +154,188 @@
     }
 
     /**
-     * Submit handler — POST /payment/create-session with the chosen vendor.
-     * Step 7 wraps this in the bounded-retry + re-pick UX. For Step 6 (happy path):
-     * single attempt, redirect on success, surface generic error otherwise.
+     * Submit handler — kicks off the bounded-retry sequence (UX-3 lock).
      */
     function handleSubmit(event) {
         event.preventDefault();
+        if (!selectedVendor) return;
+        submitWithRetry(selectedVendor, 1);
+    }
 
-        if (!selectedVendor) {
-            return;
-        }
-
-        elements.submitButton.disabled = true;
-        elements.submitButton.textContent = 'Connecting…';
+    /**
+     * Bounded-retry session-create. Recurses up to MAX_ATTEMPTS times with backoff.
+     * Per UX-3: retryable failures (5xx + network) keep trying within budget; non-retryable
+     * (4xx) shortcuts straight to the re-pick screen. On retry exhaustion -> re-pick screen.
+     */
+    function submitWithRetry(vendorId, attempt) {
+        setSubmittingState(vendorId, attempt);
         hideError();
 
+        var delay = BACKOFF_MS[attempt - 1] || 0;
+        setTimeout(function () {
+            sendCreateSession(vendorId)
+                .then(function (result) {
+                    if (result.ok && result.body && result.body.checkoutUrl) {
+                        // Happy path - redirect to vendor HPP.
+                        window.location.href = result.body.checkoutUrl;
+                        return;
+                    }
+
+                    // Non-retryable: 4xx (vendor rejected, customer not found, etc.) - skip to re-pick.
+                    var nonRetryable = result.status >= 400 && result.status < 500;
+                    if (nonRetryable) {
+                        showRetryScreen(
+                            vendorId,
+                            (result.body && (result.body.error || result.body.message))
+                                || 'Payment request was rejected by the provider.'
+                        );
+                        return;
+                    }
+
+                    // Retryable: 5xx or unexpected non-OK. Try again within budget.
+                    if (attempt < MAX_ATTEMPTS) {
+                        console.warn('[subzz-picker] Attempt ' + attempt + ' failed (HTTP ' + result.status + '), retrying…');
+                        submitWithRetry(vendorId, attempt + 1);
+                    } else {
+                        showRetryScreen(
+                            vendorId,
+                            (result.body && (result.body.error || result.body.message))
+                                || 'We could not reach the payment provider after multiple attempts.'
+                        );
+                    }
+                })
+                .catch(function (err) {
+                    // Network error / fetch rejection = retryable.
+                    console.error('[subzz-picker] Network error attempt ' + attempt, err);
+                    if (attempt < MAX_ATTEMPTS) {
+                        submitWithRetry(vendorId, attempt + 1);
+                    } else {
+                        showRetryScreen(
+                            vendorId,
+                            'We could not reach our payment system. Please check your connection.'
+                        );
+                    }
+                });
+        }, delay);
+    }
+
+    function sendCreateSession(vendorId) {
         var payload = {
-            vendor: selectedVendor,
+            vendor: vendorId,
             customerEmail: orderContext.customerEmail || '',
             orderReferenceId: orderContext.orderReferenceId || null,
             signatureId: orderContext.signatureId || null,
             amount: orderContext.amount || 0,
             currency: 'ZAR'
         };
-
         var headers = { 'Content-Type': 'application/json' };
         if (apiKey) {
             headers['X-Subzz-API-Key'] = apiKey;
         }
-
-        fetch(apiUrl + '/payment/create-session', {
+        return fetch(apiUrl + '/payment/create-session', {
             method: 'POST',
             headers: headers,
             body: JSON.stringify(payload)
-        })
-            .then(function (res) {
-                return res.json().then(function (data) {
-                    return { status: res.status, ok: res.ok, body: data };
-                });
-            })
-            .then(function (result) {
-                if (result.ok && result.body && result.body.checkoutUrl) {
-                    window.location.href = result.body.checkoutUrl;
-                    return;
-                }
-                // Step 7 will branch here on errorCode for retry vs re-pick.
-                var msg = (result.body && (result.body.error || result.body.message))
-                    || 'We could not start your payment. Please try again.';
-                showError(msg);
-                elements.submitButton.disabled = false;
-                elements.submitButton.textContent = 'Continue to payment';
-            })
-            .catch(function (err) {
-                console.error('[subzz-picker] Create-session error', err);
-                showError('We could not reach our payment system. Please check your connection and try again.');
-                elements.submitButton.disabled = false;
-                elements.submitButton.textContent = 'Continue to payment';
-            });
+        }).then(function (res) {
+            return res.json().then(
+                function (data) { return { status: res.status, ok: res.ok, body: data }; },
+                // JSON parse failure (e.g. 502 gateway HTML response) - still surface the status.
+                function () { return { status: res.status, ok: res.ok, body: null }; }
+            );
+        });
     }
 
-    function showError(message) {
-        if (!elements.errorBox) return;
-        elements.errorBox.textContent = message;
+    function setSubmittingState(vendorId, attempt) {
+        elements.submitButton.disabled = true;
+        if (attempt > 1) {
+            elements.submitButton.textContent = 'Retrying… (attempt ' + attempt + ' of ' + MAX_ATTEMPTS + ')';
+        } else {
+            elements.submitButton.textContent = 'Connecting…';
+        }
+    }
+
+    /**
+     * UX-3 re-pick error screen. Hides the picker form, shows the error message + two CTAs:
+     *   [Try Again {vendor}] — fresh retry sequence (3 attempts again)
+     *   [Use {other vendor} instead] — switches selection to the other available vendor,
+     *      re-shows picker pre-selected to the other, with a "Last attempt: X" note above.
+     *
+     * Single-vendor environments (only LekkaPay enabled, no Stitch) get the Try Again CTA only.
+     */
+    function showRetryScreen(failedVendorId, errorMessage) {
+        lastAttemptedVendor = failedVendorId;
+        var failedVendor = findVendor(failedVendorId) || { vendorId: failedVendorId, displayName: failedVendorId };
+        var otherVendor = availableVendors.find(function (v) { return v.vendorId !== failedVendorId; });
+
+        var html = '';
+        html += '<p class="subzz-picker-error-detail">';
+        html += 'We could not reach <strong>' + escapeHtml(failedVendor.displayName) + '</strong> right now.';
+        html += '</p>';
+        html += '<p class="subzz-picker-error-message">' + escapeHtml(errorMessage) + '</p>';
+        html += '<div class="subzz-picker-error-actions">';
+        html += '<button type="button" class="btn-primary subzz-picker-retry-cta" data-action="retry">';
+        html += 'Try Again with ' + escapeHtml(failedVendor.displayName);
+        html += '</button>';
+        if (otherVendor) {
+            html += '<button type="button" class="subzz-picker-switch-cta" data-action="switch">';
+            html += 'Use ' + escapeHtml(otherVendor.displayName) + ' instead';
+            html += '</button>';
+        }
+        html += '</div>';
+
+        elements.errorBox.innerHTML = html;
         elements.errorBox.hidden = false;
+        elements.form.hidden = true;
+
+        var retryBtn = elements.errorBox.querySelector('[data-action="retry"]');
+        if (retryBtn) {
+            retryBtn.addEventListener('click', function () {
+                hideError();
+                elements.form.hidden = false;
+                submitWithRetry(failedVendorId, 1);
+            });
+        }
+        var switchBtn = elements.errorBox.querySelector('[data-action="switch"]');
+        if (switchBtn && otherVendor) {
+            switchBtn.addEventListener('click', function () {
+                hideError();
+                elements.form.hidden = false;
+                showLastAttemptNote(failedVendor.displayName);
+                preSelectVendor(otherVendor.vendorId);
+                // Per UX-3 lock: customer in control, no surprise switch -> don't auto-submit.
+                // They must click Continue to confirm the new vendor choice.
+            });
+        }
+    }
+
+    function preSelectVendor(vendorId) {
+        selectedVendor = vendorId;
+        var radio = elements.vendorsList.querySelector('input[type="radio"][value="' + vendorId + '"]');
+        if (radio) {
+            radio.checked = true;
+            updateSelectionVisuals();
+            elements.submitButton.disabled = false;
+            elements.submitButton.textContent = 'Continue to payment';
+        }
+    }
+
+    function showLastAttemptNote(failedVendorDisplayName) {
+        var existing = document.getElementById('subzz-picker-last-attempt');
+        if (existing) existing.remove();
+        var note = document.createElement('p');
+        note.id = 'subzz-picker-last-attempt';
+        note.className = 'subzz-picker-last-attempt';
+        note.textContent = 'Last attempt: ' + failedVendorDisplayName;
+        elements.vendorsList.parentNode.insertBefore(note, elements.vendorsList);
+    }
+
+    function findVendor(vendorId) {
+        return availableVendors.find(function (v) { return v.vendorId === vendorId; });
     }
 
     function hideError() {
         if (!elements.errorBox) return;
-        elements.errorBox.textContent = '';
+        elements.errorBox.innerHTML = '';
         elements.errorBox.hidden = true;
     }
 

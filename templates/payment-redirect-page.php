@@ -32,6 +32,10 @@ $customer_email = isset($_GET['email']) ? sanitize_email($_GET['email']) : '';
 $signature_id = isset($_GET['signatureId']) ? sanitize_text_field($_GET['signatureId']) : '';
 $amount = isset($_GET['amount']) ? floatval($_GET['amount']) : 0;
 $cohort_id = isset($_GET['cohortId']) ? sanitize_text_field($_GET['cohortId']) : '';
+// UX-3 sub-case 3 — when customer returns from a failed vendor HPP, vendor-side redirects
+// here with ?failedVendor=X. JS surfaces a "Last attempt: X" context note above the picker.
+// Sanitized as plain text (vendor identifiers are alpha-only, e.g. lekkapay/stitch).
+$failed_vendor = isset($_GET['failedVendor']) ? sanitize_text_field($_GET['failedVendor']) : '';
 ?>
 
 <main id="primary" class="site-main subzz-payment-redirect-page">
@@ -69,6 +73,7 @@ $cohort_id = isset($_GET['cohortId']) ? sanitize_text_field($_GET['cohortId']) :
     'signatureId' => $signature_id,
     'amount' => $amount,
     'cohortId' => $cohort_id,
+    'failedVendor' => $failed_vendor,
 )); ?>
 </script>
 

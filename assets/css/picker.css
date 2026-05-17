@@ -159,17 +159,85 @@
     cursor: not-allowed;
 }
 
-/* Error surface (Step 7 fills in the retry/re-pick CTAs). */
+/* UX-3 re-pick error screen (Step 7). Replaces the picker form on retry exhaustion or
+   non-retryable failure. Two CTAs let the customer choose: retry same vendor OR switch.
+   No surprise auto-switch (preserves UX-1/UX-4 trust ground). */
 .subzz-picker-error {
     margin-top: 20px;
-    padding: 16px;
-    background: rgba(247, 60, 92, 0.08);
+    padding: 20px;
+    background: rgba(247, 60, 92, 0.04);
     border: 1px solid rgba(247, 60, 92, 0.2);
     border-radius: 6px;
-    color: var(--subzz-charcoal, #545454);
-    font-size: 14px;
 }
 
 .subzz-picker-error[hidden] {
     display: none;
+}
+
+/* When the error screen shows, the original form is hidden so the customer sees
+   one decision surface at a time (not picker + error competing). */
+.subzz-picker-form[hidden] {
+    display: none;
+}
+
+.subzz-picker-error-detail {
+    font-size: 16px;
+    font-weight: 500;
+    color: var(--subzz-charcoal, #545454);
+    margin: 0 0 8px 0;
+}
+
+.subzz-picker-error-message {
+    font-size: 14px;
+    color: var(--subzz-charcoal, #545454);
+    opacity: 0.8;
+    margin: 0 0 20px 0;
+}
+
+.subzz-picker-error-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.subzz-picker-retry-cta {
+    /* Primary - inherits .btn-primary styles, kept full-width here */
+    width: 100%;
+    min-height: 48px;
+    font-size: 15px;
+    font-weight: 600;
+}
+
+/* Secondary CTA - lower visual weight than retry so the default action reads as
+   "retry same vendor". Customer can still switch if they want. */
+.subzz-picker-switch-cta {
+    width: 100%;
+    min-height: 48px;
+    padding: 12px 24px;
+    background: transparent;
+    border: 1.5px solid var(--subzz-charcoal, #545454);
+    border-radius: 6px;
+    color: var(--subzz-charcoal, #545454);
+    font-family: "Montserrat", system-ui, -apple-system, sans-serif;
+    font-size: 15px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background-color 0.15s ease;
+}
+
+.subzz-picker-switch-cta:hover {
+    background: rgba(84, 84, 84, 0.04);
+}
+
+/* UX-3 sub-case 3: "Last attempt: X" context note above the picker when customer arrives
+   via the re-pick switch CTA OR via the mid-flow-failure return path with ?failedVendor=X. */
+.subzz-picker-last-attempt {
+    margin: 0 0 14px 0;
+    padding: 8px 12px;
+    background: rgba(84, 84, 84, 0.04);
+    border-left: 3px solid rgba(84, 84, 84, 0.25);
+    border-radius: 4px;
+    font-size: 12px;
+    color: var(--subzz-charcoal, #545454);
+    opacity: 0.85;
 }

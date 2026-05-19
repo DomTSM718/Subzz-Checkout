@@ -825,4 +825,57 @@ function subzz_create_missing_assets() {
         }
     }
 }
+
+/**
+ * Set browser tab title for Subzz-Checkout plugin routes.
+ *
+ * Default WP fallback shows "Blog - Subzz" on plugin-registered routes because
+ * there is no WP post/page object for them. This filter provides route-aware titles.
+ *
+ * Priority PHP_INT_MAX so this filter runs LAST and wins against Rank Math /
+ * Yoast / other SEO plugins that hook pre_get_document_title at higher
+ * priorities (Rank Math hooks at default priority 10 in some places + others).
+ *
+ * Wp_title fallback for older themes that bypass pre_get_document_title.
+ *
+ * Added 2026-05-19 after surfacing during first prod LekkaPay smoke walk.
+ */
+add_filter('pre_get_document_title', 'subzz_route_document_title', PHP_INT_MAX);
+add_filter('wp_title', 'subzz_route_wp_title_fallback', PHP_INT_MAX, 2);
+
+function subzz_route_titles_map() {
+    return array(
+        'checkout-subscription'  => 'Checkout',
+        'subscription-payment'   => 'Payment',
+        'payment-redirect-page'  => 'Redirecting to Payment',
+        'payment-success'        => 'Payment Successful',
+        'payment-cancelled'      => 'Payment Cancelled',
+        'payment-update'         => 'Update Payment Method',
+        'contract-signature'     => 'Sign Your Contract',
+    );
+}
+
+function subzz_route_document_title($title) {
+    global $wp;
+    if (!isset($wp->request)) {
+        return $title;
+    }
+    $map = subzz_route_titles_map();
+    if (isset($map[$wp->request])) {
+        return $map[$wp->request] . ' - Subzz';
+    }
+    return $title;
+}
+
+function subzz_route_wp_title_fallback($title, $sep = '-') {
+    global $wp;
+    if (!isset($wp->request)) {
+        return $title;
+    }
+    $map = subzz_route_titles_map();
+    if (isset($map[$wp->request])) {
+        return $map[$wp->request] . ' ' . $sep . ' Subzz';
+    }
+    return $title;
+}
 ?>

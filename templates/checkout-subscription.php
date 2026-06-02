@@ -235,6 +235,17 @@ get_header();
             </div>
         </section>
 
+        <!-- Band→Checkout Phase 2d: bank-link uplift CTA.
+             Shown by checkout-plans.js ONLY when the affordability response sets
+             bankLinkUpliftAvailable===true (limit is the band cap, no bank linked yet).
+             Copy is placeholder pending Zane sign-off. Reuses existing card/button classes. -->
+        <section id="banklink-upsell-card" class="checkout-card" style="display:none;">
+            <h2 class="card-heading">Increase Your Spending Limit</h2>
+            <p class="field-hint">Link your bank account to unlock a higher monthly limit — it takes about 2 minutes. Your current limit still applies if you skip this.</p>
+            <button type="button" id="btn-banklink-upsell" class="btn-secondary">Link bank to unlock more</button>
+            <div class="subzz-error-bar" id="banklink-upsell-error"></div>
+        </section>
+
         <!-- Delivery Address card -->
         <section id="address-card" class="checkout-card" style="display:none;">
             <h2 class="card-heading">Delivery Address</h2>

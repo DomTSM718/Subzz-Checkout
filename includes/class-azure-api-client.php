@@ -232,6 +232,62 @@ class Subzz_Azure_API_Client {
     }
 
     /**
+     * Mint a single-use bank-link hand-off code for a band customer (Band→Checkout Phase 2d).
+     * POSTs to the 2a mint endpoint /customer/lead/issue-banklink-handoff. API-key authed via
+     * get_default_request_args() (X-Subzz-API-Key already attached). The signup SPA later exchanges
+     * the returned code for a real session and runs the bank-link flow.
+     *
+     * SECURITY: $email MUST be the authenticated WC user's email (wp_get_current_user) — the calling
+     * AJAX handler is responsible for sourcing it server-side; this method only relays it.
+     *
+     * Contract (BankLinkHandoffController.IssueBankLinkHandoff): 200 -> {success, code, expiresAt,
+     * expiresInSeconds}; 404 PROFILE_NOT_FOUND / 409 INELIGIBLE_STATE / 400 EMAIL_MISSING -> false.
+     *
+     * @param string $email Authenticated WC user email
+     * @return array|false ['code' => string, 'expiresAt' => string|null] on 200; false otherwise
+     */
+    public function issue_banklink_handoff($email) {
+        subzz_log('=== SUBZZ AZURE API: ISSUE BANKLINK HANDOFF REQUEST ===');
+
+        $endpoint = $this->azure_base_url . '/customer/lead/issue-banklink-handoff';
+        subzz_log('SUBZZ AZURE REQUEST: POST ' . $endpoint . ' email=' . $email);
+
+        $args = $this->get_default_request_args();
+        $args['method'] = 'POST';
+        $args['headers']['Content-Type'] = 'application/json';
+        $args['body'] = wp_json_encode(array('email' => $email));
+
+        $response = wp_remote_post($endpoint, $args);
+
+        if (is_wp_error($response)) {
+            subzz_log('SUBZZ AZURE ERROR: Bank-link handoff mint failed - ' . $response->get_error_message());
+            return false;
+        }
+
+        $response_code = wp_remote_retrieve_response_code($response);
+        $response_body = wp_remote_retrieve_body($response);
+
+        subzz_log('SUBZZ AZURE RESPONSE: HTTP ' . $response_code);
+
+        if ($response_code === 200) {
+            $data = json_decode($response_body, true);
+            if ($data === null || empty($data['code'])) {
+                subzz_log('SUBZZ AZURE ERROR: Bank-link handoff JSON decode failed or missing code - ' . $response_body);
+                return false;
+            }
+            subzz_log('SUBZZ AZURE SUCCESS: Bank-link handoff code minted (expires ' . ($data['expiresAt'] ?? '?') . ')');
+            return array(
+                'code'      => $data['code'],
+                'expiresAt' => isset($data['expiresAt']) ? $data['expiresAt'] : null,
+            );
+        }
+
+        // 404 PROFILE_NOT_FOUND / 409 INELIGIBLE_STATE / other — log + false (caller surfaces a friendly message)
+        subzz_log('SUBZZ AZURE ERROR: Bank-link handoff mint HTTP ' . $response_code . ' - ' . $response_body);
+        return false;
+    }
+
+    /**
      * Store order data - COMPREHENSIVE REQUEST/RESPONSE LOGGING
      */
     public function store_order_data($order_data) {

@@ -34,6 +34,7 @@ class Subzz_Customer_Portal {
         add_action('wp_ajax_subzz_load_invoices', array($this, 'ajax_load_invoices'));
         add_action('wp_ajax_subzz_get_invoice_pdf', array($this, 'ajax_get_invoice_pdf'));
         add_action('wp_ajax_subzz_generate_payment_token', array($this, 'ajax_generate_payment_token'));
+        add_action('wp_ajax_subzz_banklink_handoff_portal', array($this, 'ajax_banklink_handoff_portal'));
     }
 
     /**
@@ -90,6 +91,11 @@ class Subzz_Customer_Portal {
         $user = wp_get_current_user();
         $email = $user ? $user->user_email : '';
         $subscriptions = $email ? $this->api_client->get_customer_subscriptions($email) : array();
+
+        // Band→Checkout Phase 3 (Lever 3): the customer's governing spending limit + uplift flag,
+        // for the Dashboard panel above "Your Subscriptions". Independent of $subscriptions so a
+        // band-approved customer with no purchase yet still gets a panel.
+        $spending_limit = $email ? $this->api_client->get_spending_limit($email) : false;
 
         // Get featured products via WC_Product_Query
         $featured_products = $this->get_featured_products(4);
@@ -295,5 +301,69 @@ class Subzz_Customer_Portal {
         $payment_update_url = home_url('/payment-update/?token=' . urlencode($body['token']));
 
         wp_send_json_success(array('redirectUrl' => $payment_update_url));
+    }
+
+    /**
+     * AJAX: mint a bank-link hand-off code for the logged-in band customer and return a redirect
+     * URL into the signup SPA's bank-link flow — the PORTAL "Link bank to unlock more" entry point
+     * (Band→Checkout Phase 3 / Lever 3). Mirrors the checkout 2d handler
+     * (class-payment-handler.php::ajax_banklink_handoff) but uses the portal nonce, a portal-specific
+     * analytics eventType, and returns the customer to their My-Account Dashboard.
+     *
+     * SECURITY (2a review HARD requirements):
+     *  - email is sourced from wp_get_current_user() SERVER-SIDE ONLY — never from the request.
+     *  - logged-in only (registered wp_ajax_ without _nopriv); bail defensively.
+     *  - return URL is built server-side to the My-Account Dashboard (this site); the SPA also
+     *    allowlists shop origins before honouring it.
+     *  - nonce-protected (subzz_portal_nonce, same as the other portal AJAX handlers).
+     */
+    public function ajax_banklink_handoff_portal() {
+        check_ajax_referer('subzz_portal_nonce', 'nonce');
+
+        if (!is_user_logged_in()) {
+            wp_send_json_error('Please log in to continue.');
+        }
+
+        // SECURITY: email strictly from the authenticated WC user — never request-supplied.
+        $user = wp_get_current_user();
+        $email = $user ? $user->user_email : '';
+        if (empty($email)) {
+            wp_send_json_error('Unable to determine your account email.');
+        }
+
+        $handoff = $this->api_client->issue_banklink_handoff($email);
+
+        if (!$handoff || empty($handoff['code'])) {
+            subzz_log('SUBZZ PORTAL BANKLINK: mint failed for ' . $email);
+            wp_send_json_error('We could not start the bank-linking step right now. Please try again in a moment.');
+        }
+
+        // Analytics-First: distinct eventType so portal-lever uptake is separable from checkout-lever (2d).
+        $this->api_client->log_payment_event(array(
+            'eventType'       => 'banklink_handoff_minted_portal',
+            'customerEmail'   => $email,
+            'responseMessage' => 'Bank-link handoff code minted for band uplift (portal)',
+            'source'          => 'wordpress_portal'
+        ));
+
+        // Resolve the signup app origin. Prod sets SUBZZ_SIGNUP_APP_URL in wp-config; the fallback is
+        // the STAGING SWA, never prod — a missing constant must not silently route a staging code to prod.
+        $signup_origin = (defined('SUBZZ_SIGNUP_APP_URL') && !empty(SUBZZ_SIGNUP_APP_URL))
+            ? SUBZZ_SIGNUP_APP_URL
+            : 'https://polite-smoke-0f5cf7603.6.azurestaticapps.net';
+        if (!defined('SUBZZ_SIGNUP_APP_URL')) {
+            subzz_log('SUBZZ PORTAL BANKLINK: SUBZZ_SIGNUP_APP_URL not defined — using staging SWA fallback');
+        }
+
+        // Return the customer to their My-Account Dashboard on completion (on this site;
+        // origin is on the SPA's shop-origin allowlist).
+        $return_url = wc_get_account_endpoint_url('dashboard');
+
+        $redirect_url = trailingslashit($signup_origin) . 'link-bank?handoff=' . rawurlencode($handoff['code'])
+            . '&return=' . rawurlencode($return_url);
+
+        subzz_log('SUBZZ PORTAL BANKLINK: minted — redirecting into signup bank-link flow (return=' . $return_url . ')');
+
+        wp_send_json_success(array('redirectUrl' => $redirect_url));
     }
 }

@@ -880,6 +880,37 @@ class Subzz_Azure_API_Client {
     }
 
     /**
+     * Get the customer's spending-limit snapshot for the portal Dashboard panel
+     * (Band→Checkout Phase 3 / Lever 3). Single-sourced from GetAffordabilityAsync, so it
+     * reflects exactly the governing number checkout enforces.
+     *
+     * @param string $email Customer email
+     * @return array|false { effectiveLimit, availableBudget, existingCommitments,
+     *                       bankLinkUpliftAvailable, isVerified, customerName } or false on failure
+     */
+    public function get_spending_limit($email) {
+        $endpoint = $this->azure_base_url . '/portal/spending-limit?' . http_build_query(array('email' => $email));
+
+        $response = wp_remote_get($endpoint, $this->get_default_request_args());
+
+        if (is_wp_error($response)) {
+            subzz_log('SUBZZ PORTAL: Spending-limit request failed - ' . $response->get_error_message());
+            return false;
+        }
+
+        $response_code = wp_remote_retrieve_response_code($response);
+        $response_body = wp_remote_retrieve_body($response);
+
+        if ($response_code === 200) {
+            $data = json_decode($response_body, true);
+            return ($data && isset($data['success']) && $data['success']) ? $data['data'] : false;
+        }
+
+        subzz_log('SUBZZ PORTAL: Spending-limit failed HTTP ' . $response_code);
+        return false;
+    }
+
+    /**
      * Log a payment event to Azure API for tracking/debugging.
      * Fire-and-forget — failures are logged but don't block the page.
      *

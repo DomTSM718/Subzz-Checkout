@@ -20,6 +20,55 @@ if (!defined('ABSPATH')) exit;
         <h2>Welcome back<?php echo $user && $user->first_name ? ', ' . esc_html($user->first_name) : ''; ?></h2>
     </div>
 
+    <?php
+    // ── Spending-limit panel (Band→Checkout Phase 3 / Lever 3) ──────────────────────
+    // Render ONLY when a positive governing limit resolved (EffectiveMonthlyLimit > 0).
+    // No bespoke no-limit state — that population is empty by design. No band-tier label.
+    $has_limit = is_array($spending_limit)
+        && isset($spending_limit['effectiveLimit'])
+        && (float) $spending_limit['effectiveLimit'] > 0;
+    if ($has_limit) :
+        $sl_effective = (float) $spending_limit['effectiveLimit'];
+        $sl_available = isset($spending_limit['availableBudget']) ? (float) $spending_limit['availableBudget'] : $sl_effective;
+        $sl_inuse     = isset($spending_limit['existingCommitments']) ? (float) $spending_limit['existingCommitments'] : 0;
+    ?>
+        <div class="dashboard-spending-limit-section">
+            <h3>Your Spending Limit</h3>
+            <div class="dashboard-subscription-card dashboard-limit-card">
+                <div class="dashboard-card-header">
+                    <div class="dashboard-card-title">
+                        <span class="dashboard-product-title">R <?php echo number_format(ceil($sl_effective), 0); ?> <span class="dsl-per">/ month</span></span>
+                        <span class="dashboard-term-label">Your monthly spending limit</span>
+                    </div>
+                </div>
+
+                <?php if ($sl_inuse > 0) : ?>
+                    <div class="dashboard-summary-grid">
+                        <div class="dashboard-summary-item">
+                            <span class="dashboard-summary-label">Available</span>
+                            <span class="dashboard-summary-value">R <?php echo number_format(ceil($sl_available), 0); ?></span>
+                        </div>
+                        <div class="dashboard-summary-item">
+                            <span class="dashboard-summary-label">In Use</span>
+                            <span class="dashboard-summary-value">R <?php echo number_format(ceil($sl_inuse), 0); ?></span>
+                        </div>
+                    </div>
+                <?php endif; ?>
+
+                <?php
+                // Band→Checkout Phase 3 (Lever 3): uplift CTA — band-derived limit, no bank linked yet.
+                // Flips off automatically once a bank link writes affordability (BankLinkUpliftAvailable=false).
+                if (!empty($spending_limit['bankLinkUpliftAvailable'])) : ?>
+                    <div class="dashboard-card-actions">
+                        <button type="button" id="portal-banklink-uplift" class="portal-btn portal-btn-primary portal-btn-sm">
+                            Link bank to unlock more
+                        </button>
+                    </div>
+                <?php endif; ?>
+            </div>
+        </div>
+    <?php endif; ?>
+
     <?php if (!empty($subscriptions)) : ?>
 
         <!-- Subscription Cards -->

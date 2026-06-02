@@ -679,7 +679,8 @@
     function handleBankLinkUpsell() {
         var $btn = $('#btn-banklink-upsell');
         if ($btn.prop('disabled')) return;
-        $btn.prop('disabled', true).text('Starting…');
+        // Flip to the blue .active state on click (per step-2 CSS) before going in-flight.
+        $btn.addClass('active').prop('disabled', true).text('Starting…');
         $('#banklink-upsell-error').removeClass('visible').text('');
 
         $.ajax({
@@ -696,12 +697,12 @@
                 } else {
                     var msg = (resp.data && resp.data.message) ? resp.data.message : 'Unable to start bank linking. Please try again.';
                     $('#banklink-upsell-error').text(msg).addClass('visible');
-                    $btn.prop('disabled', false).text('Link bank to unlock more');
+                    $btn.removeClass('active').prop('disabled', false).text('Link bank to unlock more');
                 }
             },
             error: function () {
                 $('#banklink-upsell-error').text('Network error. Please try again.').addClass('visible');
-                $btn.prop('disabled', false).text('Link bank to unlock more');
+                $btn.removeClass('active').prop('disabled', false).text('Link bank to unlock more');
             }
         });
     }

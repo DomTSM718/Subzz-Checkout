@@ -70,6 +70,9 @@
                 product_price_incl_vat: cfg.productPriceInclVat
             },
             success: function (resp) {
+                // Clear the initial-load throbber the moment a response arrives — each branch below
+                // renders its own state (cards / F&F gate / not-verified / error).
+                hideSection('initial-loading');
                 if (resp.success && resp.data) {
                     console.log('SUBZZ CHECKOUT: Affordability received', resp.data);
 
@@ -115,6 +118,7 @@
                 }
             },
             error: function (xhr, status, err) {
+                hideSection('initial-loading');
                 console.error('SUBZZ CHECKOUT: AJAX error', status, err);
                 showSection('plan-error');
             }

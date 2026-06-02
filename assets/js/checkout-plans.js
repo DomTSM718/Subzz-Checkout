@@ -102,6 +102,13 @@
 
                     buildPlanCards();
                     initAfterVerification();
+
+                    // Band→Checkout Phase 2d: show the "Link bank to unlock more" CTA ONLY when the
+                    // customer's limit is their band cap with no bank linked yet (backend-gated flag).
+                    // Never shown to bank-linked/affordability customers (flag is false for them).
+                    if (resp.data.bankLinkUpliftAvailable === true) {
+                        showSection('banklink-upsell-card');
+                    }
                 } else {
                     console.error('SUBZZ CHECKOUT: Affordability error', resp);
                     showSection('plan-error');
@@ -665,12 +672,49 @@
         }
     }
 
+    // -- Band→Checkout Phase 2d: bank-link uplift CTA -------------------------
+    // Mints a hand-off code server-side (email never leaves the server) and redirects into the
+    // signup SPA's bank-link flow. return_url is this page; the SPA validates it against its
+    // shop-origin allowlist (and the handler also constrains it to this site).
+    function handleBankLinkUpsell() {
+        var $btn = $('#btn-banklink-upsell');
+        if ($btn.prop('disabled')) return;
+        $btn.prop('disabled', true).text('Starting…');
+        $('#banklink-upsell-error').removeClass('visible').text('');
+
+        $.ajax({
+            url: cfg.ajaxUrl,
+            method: 'POST',
+            data: {
+                action: 'subzz_banklink_handoff',
+                nonce: cfg.nonce,
+                return_url: window.location.href
+            },
+            success: function (resp) {
+                if (resp.success && resp.data && resp.data.redirectUrl) {
+                    window.location.href = resp.data.redirectUrl;
+                } else {
+                    var msg = (resp.data && resp.data.message) ? resp.data.message : 'Unable to start bank linking. Please try again.';
+                    $('#banklink-upsell-error').text(msg).addClass('visible');
+                    $btn.prop('disabled', false).text('Link bank to unlock more');
+                }
+            },
+            error: function () {
+                $('#banklink-upsell-error').text('Network error. Please try again.').addClass('visible');
+                $btn.prop('disabled', false).text('Link bank to unlock more');
+            }
+        });
+    }
+
     // -- Init -----------------------------------------------------------------
     $(document).ready(function () {
         fetchAffordabilityAndInit();
         initAddressValidation();
         initBillingDateButtons();
         initCouponHandler();
+
+        // Bank-link uplift CTA (Phase 2d)
+        $('#btn-banklink-upsell').on('click', handleBankLinkUpsell);
 
         // Term button clicks
         $('#term-buttons').on('click', '.term-btn', function () {

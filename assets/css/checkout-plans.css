@@ -512,6 +512,39 @@
     color: #fff;
 }
 
+/* Band→Checkout Phase 2d CTA button — grey-default → blue-on-click, mirrors .term-btn
+   (Dom 2026-06-02). Deliberately NOT .btn-secondary (which is solid-blue). The .active
+   class is toggled on click by checkout-plans.js so it flips blue before the redirect. */
+#btn-banklink-upsell {
+    display: inline-block;
+    padding: 12px 20px;
+    background: var(--subzz-white);
+    color: var(--subzz-gray);
+    border: 2px solid var(--subzz-border);
+    border-radius: var(--subzz-radius-lg);
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-family: inherit;
+}
+
+#btn-banklink-upsell:hover {
+    border-color: var(--subzz-blue);
+    color: var(--subzz-blue);
+}
+
+#btn-banklink-upsell.active {
+    border-color: var(--subzz-blue);
+    background: rgba(42, 139, 234, 0.05);
+    color: var(--subzz-blue);
+}
+
+#btn-banklink-upsell:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
 /* -- Errors / Not verified ----------------------------------------------- */
 .plan-error,
 .not-verified {

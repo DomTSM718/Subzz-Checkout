@@ -184,6 +184,17 @@ get_header();
             </div>
         </section>
 
+        <!-- Band→Checkout Phase 2d: bank-link uplift CTA (between Product Details + Customise per Dom 2026-06-02).
+             Shown by checkout-plans.js ONLY when bankLinkUpliftAvailable===true (limit is the band cap, no bank
+             linked yet). Copy mirrors signup VerificationMethodChooser 'increase' variant. Button styled grey→blue
+             via #btn-banklink-upsell (no btn-secondary). Reuses card classes. -->
+        <section id="banklink-upsell-card" class="checkout-card" style="display:none;">
+            <h2 class="card-heading">Increase Your Spending Limit</h2>
+            <p class="field-hint">A quick, secure look at your bank statements is all we need to increase your personal spending limit.</p>
+            <button type="button" id="btn-banklink-upsell">Link bank to unlock more</button>
+            <div class="subzz-error-bar" id="banklink-upsell-error"></div>
+        </section>
+
         <!-- Customise Your Subscription card -->
         <section id="customise-card" class="checkout-card" style="display:none;">
             <h2 class="card-heading">Customise Your Subscription</h2>
@@ -233,17 +244,6 @@ get_header();
                 </div>
                 <span class="field-error-message" id="error-billing-day">Please select a billing date</span>
             </div>
-        </section>
-
-        <!-- Band→Checkout Phase 2d: bank-link uplift CTA.
-             Shown by checkout-plans.js ONLY when the affordability response sets
-             bankLinkUpliftAvailable===true (limit is the band cap, no bank linked yet).
-             Copy is placeholder pending Zane sign-off. Reuses existing card/button classes. -->
-        <section id="banklink-upsell-card" class="checkout-card" style="display:none;">
-            <h2 class="card-heading">Increase Your Spending Limit</h2>
-            <p class="field-hint">Link your bank account to unlock a higher monthly limit — it takes about 2 minutes. Your current limit still applies if you skip this.</p>
-            <button type="button" id="btn-banklink-upsell" class="btn-secondary">Link bank to unlock more</button>
-            <div class="subzz-error-bar" id="banklink-upsell-error"></div>
         </section>
 
         <!-- Delivery Address card -->

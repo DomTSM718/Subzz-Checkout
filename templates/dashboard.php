@@ -60,7 +60,7 @@ if (!defined('ABSPATH')) exit;
                 // Flips off automatically once a bank link writes affordability (BankLinkUpliftAvailable=false).
                 if (!empty($spending_limit['bankLinkUpliftAvailable'])) : ?>
                     <div class="dashboard-card-actions">
-                        <button type="button" id="portal-banklink-uplift" class="portal-btn portal-btn-primary portal-btn-sm">
+                        <button type="button" id="portal-banklink-uplift" class="portal-btn portal-btn-secondary portal-btn-sm">
                             Link bank to unlock more
                         </button>
                     </div>

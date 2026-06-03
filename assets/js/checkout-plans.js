@@ -24,6 +24,8 @@
         initialPayment: 0,
         billingDay: null,
         submitting: false,
+        overlimitLogged: false,  // P4: gate the over-limit-shown analytics beacon to once per page
+        upliftAvailable: false,  // P4: bankLinkUpliftAvailable — drives both the CTA and the "raise your limit" copy
         maxAffordable: 0,        // from affordability check
         availableBudget: 0,
         // Discount state
@@ -106,11 +108,17 @@
                     buildPlanCards();
                     initAfterVerification();
 
-                    // Band→Checkout Phase 2d: show the "Link bank to unlock more" CTA ONLY when the
-                    // customer's limit is their band cap with no bank linked yet (backend-gated flag).
-                    // Never shown to bank-linked/affordability customers (flag is false for them).
-                    if (resp.data.bankLinkUpliftAvailable === true) {
-                        showSection('banklink-upsell-card');
+                    // P4 over-limit redesign: reveal the always-on spending-limit status panel for
+                    // every verified customer (green within-limit / red gap, recomputes live).
+                    showSection('limit-status-panel');
+
+                    // Band→Checkout: the in-panel "Increase my limit" CTA AND the "raise your limit" message
+                    // clause show ONLY when the customer's limit is their band cap with no bank linked yet
+                    // (backend-gated flag). A bank-linked customer can't raise their limit further, so both
+                    // the CTA and the clause are suppressed for them.
+                    state.upliftAvailable = resp.data.bankLinkUpliftAvailable === true;
+                    if (state.upliftAvailable) {
+                        showSection('banklink-upsell-cta');
                     }
                 } else {
                     console.error('SUBZZ CHECKOUT: Affordability error', resp);
@@ -196,20 +204,24 @@
         // Render product attributes
         renderProductAttributes();
 
-        // Auto-select term: from cart first, or default to 18m, or first viable
+        // P4: per-term monthly under each term button + initial paint of the status panel
+        renderPerTermMonthly();
+        updateLimitPanel();
+
+        // P4: ALWAYS select a term so the panel + levers are live — the cart-chosen term first
+        // (cfg.selectedTerm, picked on the product page), else 18mo, else the first available. No longer
+        // requires the term to be viable; over-limit just shows a red gap and Continue stays disabled
+        // until a lever (longer term / bigger upfront / raise limit) brings the monthly within budget.
+        // The old "no subscription plans within your budget" dead-end is removed (that was the empty
+        // over-limit state P4 fixes).
         var targetTerm = cfg.selectedTerm || 18;
-        var match = state.planCards.find(function (c) { return c.termMonths === targetTerm && c.isViable; });
+        var match = state.planCards.find(function (c) { return c.termMonths === targetTerm; });
         if (!match) {
-            match = state.planCards.find(function (c) { return c.isViable; });
+            match = state.planCards[0];
         }
 
         if (match) {
             selectTerm(match.termMonths);
-        } else {
-            // No viable plans — show message in customise card
-            $('#customise-card .card-heading').after(
-                '<p class="no-plans-msg" style="text-align:center;color:rgba(84,84,84,0.6);padding:20px;">No subscription plans available within your budget for this product.</p>'
-            );
         }
 
         validateForm();
@@ -233,7 +245,11 @@
 
     // -- 5. Term selection ----------------------------------------------------
     function selectTerm(term) {
-        var match = state.planCards.find(function (c) { return c.termMonths === term && c.isViable; });
+        // P4: ANY term is selectable now, even when over-limit — this is the one real behaviour change.
+        // The status panel shows the live gap, and Continue stays gated on within-limit (validateForm),
+        // so a selectable-but-over plan can never check out. Removing the isViable filter is what
+        // un-freezes the term lever + lets the gap recompute; everything else is additive.
+        var match = state.planCards.find(function (c) { return c.termMonths === term; });
         if (!match) return;
 
         state.selectedPlan = match;
@@ -298,6 +314,93 @@
 
         $('#display-upfront').text(formatZAR(state.initialPayment));
         $('#display-monthly').text(formatZAR(monthly));
+
+        // P4: keep the live status panel in sync (this path fires on every term + slider change)
+        updateLimitPanel();
+    }
+
+    // -- 7b. P4 over-limit status panel + per-term monthly --------------------
+    // Always-on awareness hub. "This plan vs Your limit" + bar + gap message, recomputing live off
+    // the current selected plan + deposit. Limit = state.availableBudget (the number viability is
+    // actually checked against). ADDITIVE — display only; no decision/limit logic lives here.
+    function renderPerTermMonthly() {
+        (state.planCards || []).forEach(function (card) {
+            $('#term-monthly-' + card.termMonths).text(formatZAR(card.standardMonthlyAmount) + '/mo');
+        });
+    }
+
+    // Live monthly for the currently selected plan + deposit (mirrors updatePaymentDisplay's math).
+    function currentMonthly() {
+        if (!state.selectedPlan) return 0;
+        var totalValue = state.selectedPlan.standardMonthlyAmount * state.selectedTerm;
+        var remainingMonths = state.selectedTerm - 1;
+        var m = remainingMonths > 0 ? Math.ceil((totalValue - state.initialPayment) / remainingMonths) : 0;
+        return m < 0 ? 0 : m;
+    }
+
+    // True when the live monthly is within the customer's available budget (the Continue gate too).
+    function isWithinLimit() {
+        return currentMonthly() <= (state.availableBudget || 0);
+    }
+
+    function updateLimitPanel() {
+        var limit = state.availableBudget || 0;
+        var monthly = currentMonthly();
+        var withinLimit = monthly <= limit;
+
+        $('#limit-status-plan-amount').text(formatZAR(monthly));
+        $('#limit-status-cap-amount').text(formatZAR(limit));
+
+        // Bar: over → scale by monthly (limit marker sits at limit/monthly); within → scale by limit
+        // (fill shows how much of the limit this plan uses).
+        var scaleMax = (withinLimit ? limit : monthly) || 1;
+        var fillPct = (withinLimit ? monthly : limit) / scaleMax * 100;
+        var overPct = withinLimit ? 0 : (monthly - limit) / scaleMax * 100;
+        var markPct = limit / scaleMax * 100;
+        $('#limit-bar-fill').css('width', fillPct + '%');
+        $('#limit-bar-over').css({ left: fillPct + '%', width: overPct + '%' });
+        $('#limit-bar-mark').css('left', markPct + '%');
+
+        $('#limit-status-panel')
+            .toggleClass('within-limit', withinLimit)
+            .toggleClass('over-limit', !withinLimit);
+
+        if (!state.selectedPlan) {
+            $('#limit-status-msg-main').text('');
+            $('#limit-status-msg-sub').html('');
+        } else if (!withinLimit) {
+            $('#limit-status-msg-main').text("You're " + formatZAR(monthly - limit) + "/mo over your limit.");
+            // Only offer "raise your limit" when the bank-link uplift is actually available (band, no bank
+            // linked). A bank-linked customer can't raise it further — don't dangle a route they can't take.
+            var overSub = 'Bring it down with a <b>longer term</b> or a <b>bigger upfront</b> below';
+            overSub += state.upliftAvailable ? ' — or <b>raise your limit</b>:' : '.';
+            $('#limit-status-msg-sub').html(overSub);
+        } else {
+            $('#limit-status-msg-main').text('✓ This plan is within your limit.');
+            $('#limit-status-msg-sub').html('');
+        }
+
+        // Analytics-First: log the FIRST time this customer is shown the over-limit state (once/page).
+        if (state.selectedPlan && !withinLimit && !state.overlimitLogged) {
+            state.overlimitLogged = true;
+            logOverlimitShown();
+        }
+    }
+
+    // Fire-and-forget over-limit-shown beacon (never blocks the UI). Backend writes a
+    // checkout_overlimit_shown PaymentLogs row (see ajax_log_overlimit_shown in class-payment-handler).
+    function logOverlimitShown() {
+        $.ajax({
+            url: cfg.ajaxUrl,
+            method: 'POST',
+            data: {
+                action: 'subzz_log_overlimit_shown',
+                nonce: cfg.nonce,
+                limit: state.availableBudget,
+                monthly: currentMonthly(),
+                product_name: cfg.productName || ''
+            }
+        });
     }
 
     // -- 8. Order summary -----------------------------------------------------
@@ -426,7 +529,10 @@
     function validateForm() {
         var addressOk = isAddressValid();
         var billingOk = !!state.billingDay;
-        var valid = state.selectedPlan && addressOk && billingOk;
+        // P4 SAFETY BELT: now that any term is selectable, Continue must also require the live monthly
+        // to be within the customer's available budget — otherwise an over-limit plan could check out.
+        var withinLimit = isWithinLimit();
+        var valid = state.selectedPlan && withinLimit && addressOk && billingOk;
 
         $('#btn-continue').prop('disabled', !valid);
 
@@ -442,6 +548,9 @@
         var $announcer = $('#form-announcer');
         if (state.selectedPlan && !valid) {
             var hints = [];
+            if (!withinLimit) hints.push(state.upliftAvailable
+                ? 'bring your monthly within your limit (a longer term, a bigger upfront, or raise your limit above)'
+                : 'bring your monthly within your limit (try a longer term or a bigger upfront)');
             if (!addressOk) hints.push('complete your address');
             if (!billingOk) hints.push('select a billing date');
             var msg = 'Please ' + hints.join(' and ') + ' to continue';
@@ -670,6 +779,9 @@
             }
         });
 
+        // P4: refresh per-term monthly labels with the discounted amounts
+        renderPerTermMonthly();
+
         // Re-select current term to refresh UI
         if (state.selectedTerm) {
             selectTerm(state.selectedTerm);
@@ -701,12 +813,12 @@
                 } else {
                     var msg = (resp.data && resp.data.message) ? resp.data.message : 'Unable to start bank linking. Please try again.';
                     $('#banklink-upsell-error').text(msg).addClass('visible');
-                    $btn.removeClass('active').prop('disabled', false).text('Link bank to unlock more');
+                    $btn.removeClass('active').prop('disabled', false).text('Increase my limit');
                 }
             },
             error: function () {
                 $('#banklink-upsell-error').text('Network error. Please try again.').addClass('visible');
-                $btn.removeClass('active').prop('disabled', false).text('Link bank to unlock more');
+                $btn.removeClass('active').prop('disabled', false).text('Increase my limit');
             }
         });
     }

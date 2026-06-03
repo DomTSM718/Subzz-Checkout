@@ -512,37 +512,186 @@
     color: #fff;
 }
 
-/* Band→Checkout Phase 2d CTA button — grey-default → blue-on-click, mirrors .term-btn
-   (Dom 2026-06-02). Deliberately NOT .btn-secondary (which is solid-blue). The .active
-   class is toggled on click by checkout-plans.js so it flips blue before the redirect. */
-#btn-banklink-upsell {
-    display: inline-block;
-    padding: 12px 20px;
-    background: var(--subzz-white);
-    color: var(--subzz-gray);
-    border: 2px solid var(--subzz-border);
+/* ===== P4 over-limit status panel (Zane-approved 2026-06-03) ============== */
+/* Always-on awareness hub at the top of the Customise card: live "This plan vs Your limit",
+   a green/coral bar with a limit marker, a gap message, and the in-panel "Increase my limit"
+   CTA (which absorbs the old standalone 2d card). Green when within budget (.within-limit on
+   the panel), coral gap when over (.over-limit). Matches checkout-unified-additive-mockup-v2.html. */
+.limit-status-panel {
+    border: 1px solid rgba(42, 139, 234, 0.22);
     border-radius: var(--subzz-radius-lg);
-    font-size: 14px;
+    padding: 16px 16px 17px;
+    margin-bottom: 22px;
+    background: linear-gradient(180deg, #fbfdff, #ffffff 70%);
+}
+
+.limit-status-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 10px;
+    font-size: 13px;
+    margin-bottom: 10px;
+}
+
+.limit-status-plan {
+    color: rgba(84, 84, 84, 0.75);
+}
+
+.limit-status-plan strong {
+    color: var(--subzz-gray);
+    font-weight: 700;
+}
+
+.limit-status-cap {
+    color: var(--subzz-gray);
+    font-weight: 700;
+    white-space: nowrap;
+}
+
+/* The gap bar */
+.limit-bar {
+    position: relative;
+    height: 8px;
+    border-radius: 5px;
+    background: #edf0f3;
+    overflow: hidden;
+}
+
+.limit-bar-fill {
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 0;
+    background: #2f9e54;
+    transition: width 0.2s;
+}
+
+.limit-bar-over {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: 0;
+    background: var(--subzz-red);
+    transition: width 0.2s, left 0.2s;
+}
+
+.limit-bar-mark {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    margin-left: -1px;
+    background: var(--subzz-gray);
+}
+
+/* Gap message — coral when over, green when within */
+.limit-status-msg {
+    font-size: 13px;
+    margin-top: 11px;
+    line-height: 1.5;
+}
+
+.limit-status-msg-main {
+    display: block;
     font-weight: 600;
+}
+
+.limit-status-msg-main:empty {
+    display: none;
+}
+
+.over-limit .limit-status-msg-main {
+    color: var(--subzz-red);
+}
+
+.within-limit .limit-status-msg-main {
+    color: #2f9e54;
+}
+
+.limit-status-msg-sub {
+    display: block;
+    margin-top: 3px;
+    font-size: 12px;
+    font-weight: 400;
+    color: var(--subzz-gray);
+}
+
+.limit-status-msg-sub b {
+    color: var(--subzz-gray);
+    font-weight: 600;
+}
+
+.limit-status-msg-sub:empty {
+    display: none;
+}
+
+/* In-panel "Increase my limit" CTA (absorbs the old standalone 2d card). Solid-blue full-width
+   per the v2 mockup — distinct from the red Continue .btn-primary. */
+.limit-cta {
+    margin-top: 14px;
+    padding-top: 14px;
+    border-top: 1px dashed rgba(42, 139, 234, 0.25);
+}
+
+#btn-banklink-upsell {
+    display: block;
+    width: 100%;
+    padding: 13px 0;
+    background: var(--subzz-blue);
+    color: #fff;
+    border: none;
+    border-radius: 9px;
+    font-size: 14px;
+    font-weight: 700;
     cursor: pointer;
-    transition: all 0.2s;
+    box-shadow: 0 5px 13px rgba(42, 139, 234, 0.26);
+    transition: all var(--subzz-transition-fast);
     font-family: inherit;
 }
 
-#btn-banklink-upsell:hover {
-    border-color: var(--subzz-blue);
-    color: var(--subzz-blue);
-}
-
-#btn-banklink-upsell.active {
-    border-color: var(--subzz-blue);
-    background: rgba(42, 139, 234, 0.05);
-    color: var(--subzz-blue);
+#btn-banklink-upsell:hover:not(:disabled) {
+    opacity: 0.92;
+    transform: translateY(-1px);
 }
 
 #btn-banklink-upsell:disabled {
     opacity: 0.6;
     cursor: not-allowed;
+}
+
+.limit-cta-trust {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    font-size: 10.5px;
+    color: rgba(84, 84, 84, 0.6);
+    margin-top: 9px;
+}
+
+/* Per-term monthly under each term button (P4) */
+.term-btn-label {
+    display: block;
+}
+
+.term-btn-monthly {
+    display: block;
+    margin-top: 3px;
+    font-size: 11px;
+    font-weight: 500;
+    color: rgba(84, 84, 84, 0.6);
+}
+
+.term-btn-monthly:empty {
+    display: none;
+}
+
+.term-btn.active .term-btn-monthly {
+    color: var(--subzz-blue);
 }
 
 /* -- Errors / Not verified ----------------------------------------------- */

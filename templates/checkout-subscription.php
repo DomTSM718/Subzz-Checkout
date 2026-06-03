@@ -193,28 +193,49 @@ get_header();
             </div>
         </section>
 
-        <!-- Band→Checkout Phase 2d: bank-link uplift CTA (between Product Details + Customise per Dom 2026-06-02).
-             Shown by checkout-plans.js ONLY when bankLinkUpliftAvailable===true (limit is the band cap, no bank
-             linked yet). Copy mirrors signup VerificationMethodChooser 'increase' variant. Button styled grey→blue
-             via #btn-banklink-upsell (no btn-secondary). Reuses card classes. -->
-        <section id="banklink-upsell-card" class="checkout-card" style="display:none;">
-            <h2 class="card-heading">Increase Your Spending Limit</h2>
-            <p class="field-hint">A quick, secure look at your bank statements is all we need to increase your personal spending limit.</p>
-            <button type="button" id="btn-banklink-upsell">Link bank to unlock more</button>
-            <div class="subzz-error-bar" id="banklink-upsell-error"></div>
-        </section>
+        <!-- NOTE: the standalone Phase-2d "Increase Your Spending Limit" card was absorbed into the
+             P4 over-limit status panel inside the Customise card below (Zane-approved 2026-06-03). The
+             #btn-banklink-upsell button + its mint handler are reused verbatim from there. -->
 
         <!-- Customise Your Subscription card -->
         <section id="customise-card" class="checkout-card" style="display:none;">
             <h2 class="card-heading">Customise Your Subscription</h2>
 
-            <!-- Term buttons -->
+            <!-- P4 over-limit redesign (Zane-approved 2026-06-03): always-on spending-limit status panel
+                 (awareness hub). Live "This plan vs Your limit" + bar + gap message, recomputing on every
+                 term/deposit change (checkout-plans.js). Red gap when over, green "within your limit" when
+                 in budget. The "Increase my limit" CTA lives inside (#banklink-upsell-cta) and is shown ONLY
+                 when bankLinkUpliftAvailable===true (band cap, no bank linked) — it absorbs the old standalone
+                 #banklink-upsell-card. ADDITIVE: the only behaviour change in this card is that all terms are
+                 now selectable even when over-limit (see selectTerm); Continue still gates on within-limit. -->
+            <div id="limit-status-panel" class="limit-status-panel" style="display:none;">
+                <div class="limit-status-row">
+                    <span class="limit-status-plan">This plan: <strong id="limit-status-plan-amount">R 0</strong>/mo</span>
+                    <span class="limit-status-cap">Your limit: <strong id="limit-status-cap-amount">R 0</strong>/mo</span>
+                </div>
+                <div class="limit-bar" id="limit-status-bar">
+                    <div class="limit-bar-fill" id="limit-bar-fill"></div>
+                    <div class="limit-bar-over" id="limit-bar-over"></div>
+                    <div class="limit-bar-mark" id="limit-bar-mark"></div>
+                </div>
+                <div class="limit-status-msg" id="limit-status-msg">
+                    <span class="limit-status-msg-main" id="limit-status-msg-main"></span>
+                    <span class="limit-status-msg-sub" id="limit-status-msg-sub"></span>
+                </div>
+                <div class="limit-cta" id="banklink-upsell-cta" style="display:none;">
+                    <button type="button" id="btn-banklink-upsell">Increase my limit</button>
+                    <div class="limit-cta-trust">🔒 2-min, read-only bank check · we never store your login</div>
+                    <div class="subzz-error-bar" id="banklink-upsell-error"></div>
+                </div>
+            </div>
+
+            <!-- Term buttons (+ P4 per-term monthly under each label) -->
             <div class="term-toggle">
                 <label class="field-label">Subscription Term:</label>
                 <div class="term-buttons" id="term-buttons">
-                    <button type="button" class="term-btn" data-term="12">12 months</button>
-                    <button type="button" class="term-btn" data-term="18">18 months</button>
-                    <button type="button" class="term-btn" data-term="24">24 months</button>
+                    <button type="button" class="term-btn" data-term="12"><span class="term-btn-label">12 months</span><span class="term-btn-monthly" id="term-monthly-12"></span></button>
+                    <button type="button" class="term-btn" data-term="18"><span class="term-btn-label">18 months</span><span class="term-btn-monthly" id="term-monthly-18"></span></button>
+                    <button type="button" class="term-btn" data-term="24"><span class="term-btn-label">24 months</span><span class="term-btn-monthly" id="term-monthly-24"></span></button>
                 </div>
             </div>
 

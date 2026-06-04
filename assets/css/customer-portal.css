@@ -818,3 +818,25 @@
         align-items: flex-start;
     }
 }
+
+/* ── Spending-limit panel (Band→Checkout Phase 3 / Lever 3) ───────────────────
+   Styled to match the subscription cards for consistency: the markup reuses
+   .dashboard-subscription-card + .dashboard-card-header + .dashboard-summary-grid
+   + .dashboard-card-actions, so only the section heading and the "/ month"
+   suffix need their own rules (mirrors the .dashboard-subscriptions block). */
+.dashboard-spending-limit-section {
+    margin-bottom: var(--subzz-space-8);
+}
+
+.dashboard-spending-limit-section h3 {
+    font-size: var(--subzz-font-lg);
+    font-weight: var(--subzz-weight-semibold);
+    color: var(--subzz-gray);
+    margin-bottom: var(--subzz-space-4);
+}
+
+.dashboard-spending-limit-section .dsl-per {
+    font-size: var(--subzz-font-sm);
+    font-weight: var(--subzz-weight-medium);
+    color: color-mix(in srgb, var(--subzz-gray) 60%, transparent);
+}

@@ -22,6 +22,7 @@
         initInvoicePagination();
         initInvoiceDownload();
         initPaymentUpdate();
+        initBankLinkUplift();
     });
 
     // ── Tab switching ─────────────────────────────────────────
@@ -128,6 +129,38 @@
                 error: function() {
                     alert('An error occurred. Please try again.');
                     $btn.prop('disabled', false).text(originalText);
+                }
+            });
+        });
+    }
+
+    // ── Bank-link uplift redirect (Band→Checkout Phase 3 / Lever 3) ───────────
+    // Mints a hand-off code server-side and redirects into the signup SPA's bank-link flow.
+    function initBankLinkUplift() {
+        $('#portal-banklink-uplift').on('click', function() {
+            var $btn = $(this);
+            var originalHtml = $btn.html();
+
+            $btn.prop('disabled', true).html('<span class="portal-loading"></span> Starting secure bank link...');
+
+            $.ajax({
+                url: subzzPortal.ajaxurl,
+                type: 'POST',
+                data: {
+                    action: 'subzz_banklink_handoff_portal',
+                    nonce: subzzPortal.nonce
+                },
+                success: function(response) {
+                    if (response.success && response.data && response.data.redirectUrl) {
+                        window.location.href = response.data.redirectUrl;
+                    } else {
+                        alert('Could not start the bank-linking step. Please try again.');
+                        $btn.prop('disabled', false).html(originalHtml);
+                    }
+                },
+                error: function() {
+                    alert('An error occurred. Please try again.');
+                    $btn.prop('disabled', false).html(originalHtml);
                 }
             });
         });

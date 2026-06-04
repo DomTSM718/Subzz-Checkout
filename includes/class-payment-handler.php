@@ -124,6 +124,14 @@ class Subzz_Payment_Handler {
         add_action('wp_ajax_subzz_store_checkout_order', [$this, 'ajax_store_checkout_order']);
         add_action('wp_ajax_subzz_validate_coupon', [$this, 'ajax_validate_coupon']);
 
+        // Band→Checkout Phase 2d: bank-link hand-off mint (logged-in ONLY — deliberately NO _nopriv;
+        // email is taken from wp_get_current_user server-side, so an anonymous caller has no identity).
+        add_action('wp_ajax_subzz_banklink_handoff', [$this, 'ajax_banklink_handoff']);
+
+        // Band→Checkout P4: log when the over-limit status panel is shown (Analytics-First — the
+        // over-limit funnel logs nothing today). Logged-in only; email server-side.
+        add_action('wp_ajax_subzz_log_overlimit_shown', [$this, 'ajax_log_overlimit_shown']);
+
         // PRESERVED: Traditional checkout process fallback
         add_action('woocommerce_checkout_process', [$this, 'traditional_checkout_fallback'], 1);
 
@@ -251,6 +259,137 @@ class Subzz_Payment_Handler {
         } else {
             wp_send_json_error(array('message' => 'Unable to validate coupon code'));
         }
+    }
+
+    /**
+     * Band→Checkout Phase 2d AJAX: mint a bank-link hand-off code for the logged-in band customer
+     * and return a redirect URL into the signup SPA's bank-link flow ("Increase Your Spending Limit").
+     *
+     * SECURITY (2a review HARD requirements):
+     *  - email is sourced from wp_get_current_user() SERVER-SIDE ONLY — never from the request — so a
+     *    caller can never mint a hand-off for someone else's account.
+     *  - logged-in only (registered wp_ajax_ without _nopriv); we still bail defensively.
+     *  - the return URL is constrained to THIS site server-side (defence-in-depth; the SPA also
+     *    allowlists shop origins before honouring it).
+     *  - nonce-protected (reuses the checkout-subscription nonce already localized on the page).
+     */
+    public function ajax_banklink_handoff() {
+        if (!wp_verify_nonce($_POST['nonce'] ?? '', 'subzz_checkout_subscription')) {
+            wp_send_json_error(array('message' => 'Security check failed'));
+            return;
+        }
+
+        if (!is_user_logged_in()) {
+            wp_send_json_error(array('message' => 'Please log in to continue.'));
+            return;
+        }
+
+        // SECURITY: email strictly from the authenticated WC user — never request-supplied.
+        $current_user = wp_get_current_user();
+        $email = $current_user ? $current_user->user_email : '';
+        if (empty($email)) {
+            wp_send_json_error(array('message' => 'Unable to determine your account email.'));
+            return;
+        }
+
+        subzz_log('SUBZZ BANKLINK HANDOFF: mint requested for logged-in user ' . $email);
+
+        $azure_client = new Subzz_Azure_API_Client();
+        $handoff = $azure_client->issue_banklink_handoff($email);
+
+        if (!$handoff || empty($handoff['code'])) {
+            subzz_log('SUBZZ BANKLINK HANDOFF: mint failed for ' . $email);
+            wp_send_json_error(array(
+                'message' => 'We could not start the bank-linking step right now. Please try again in a moment.'
+            ));
+            return;
+        }
+
+        // Analytics-First: record the mint outcome so the offered→minted funnel is queryable.
+        $azure_client->log_payment_event(array(
+            'eventType'       => 'banklink_handoff_minted',
+            'customerEmail'   => $email,
+            'responseMessage' => 'Bank-link handoff code minted for band uplift',
+            'source'          => 'wordpress'
+        ));
+
+        // Resolve the signup app origin. Prod sets SUBZZ_SIGNUP_APP_URL in wp-config; fallback is the
+        // STAGING SWA, never prod — a missing constant must not silently route a staging code to prod.
+        $signup_origin = (defined('SUBZZ_SIGNUP_APP_URL') && !empty(SUBZZ_SIGNUP_APP_URL))
+            ? SUBZZ_SIGNUP_APP_URL
+            : 'https://polite-smoke-0f5cf7603.6.azurestaticapps.net';
+        if (!defined('SUBZZ_SIGNUP_APP_URL')) {
+            subzz_log('SUBZZ BANKLINK HANDOFF: SUBZZ_SIGNUP_APP_URL not defined — using staging SWA fallback');
+        }
+
+        // Return-to-shop URL: prefer the page the customer came from, constrained to THIS site
+        // (defence-in-depth; the SPA also validates against its shop-origin allowlist).
+        $return_url = isset($_POST['return_url']) ? esc_url_raw(wp_unslash($_POST['return_url'])) : '';
+        if (empty($return_url)) {
+            $return_url = wp_get_referer() ?: home_url('/shop/');
+        }
+        if (strpos($return_url, home_url()) !== 0) {
+            $return_url = home_url('/shop/');
+        }
+
+        $redirect_url = trailingslashit($signup_origin) . 'link-bank?handoff=' . rawurlencode($handoff['code'])
+            . '&return=' . rawurlencode($return_url);
+
+        subzz_log('SUBZZ BANKLINK HANDOFF: minted — redirecting into signup bank-link flow (return=' . $return_url . ')');
+
+        wp_send_json_success(array('redirectUrl' => $redirect_url));
+    }
+
+    /**
+     * Band→Checkout P4 AJAX: record that a band/affordability customer was shown the over-limit
+     * status panel (their chosen plan exceeds their available budget). Analytics-First — the
+     * over-limit state logs nothing today, so the funnel (offered → adjusted-to-fit → linked-bank →
+     * abandoned) is currently un-measurable. Fired once per checkout page by checkout-plans.js.
+     *
+     * eventType 'checkout_overlimit_shown' is the queryable discriminator in PaymentLogs; the plan
+     * vs limit figures + product ride along in responseMessage for funnel analysis. Email is taken
+     * SERVER-SIDE from the authenticated WC user (never request-supplied), mirroring the 2d handler.
+     */
+    public function ajax_log_overlimit_shown() {
+        if (!wp_verify_nonce($_POST['nonce'] ?? '', 'subzz_checkout_subscription')) {
+            wp_send_json_error(array('message' => 'Security check failed'));
+            return;
+        }
+
+        if (!is_user_logged_in()) {
+            wp_send_json_error(array('message' => 'Please log in to continue.'));
+            return;
+        }
+
+        $current_user = wp_get_current_user();
+        $email = $current_user ? $current_user->user_email : '';
+        if (empty($email)) {
+            wp_send_json_error(array('message' => 'Unable to determine your account email.'));
+            return;
+        }
+
+        // Optional context for funnel analysis (the panel's two numbers + the product).
+        $limit        = isset($_POST['limit']) ? floatval($_POST['limit']) : null;
+        $monthly      = isset($_POST['monthly']) ? floatval($_POST['monthly']) : null;
+        $product_name = isset($_POST['product_name']) ? sanitize_text_field(wp_unslash($_POST['product_name'])) : '';
+
+        $msg = 'Checkout over-limit panel shown';
+        if ($limit !== null && $monthly !== null) {
+            $msg .= sprintf(' (plan R%s/mo vs limit R%s/mo)', round($monthly), round($limit));
+        }
+        if ($product_name !== '') {
+            $msg .= ' — ' . $product_name;
+        }
+
+        $azure_client = new Subzz_Azure_API_Client();
+        $azure_client->log_payment_event(array(
+            'eventType'       => 'checkout_overlimit_shown',
+            'customerEmail'   => $email,
+            'responseMessage' => $msg,
+            'source'          => 'wordpress'
+        ));
+
+        wp_send_json_success(array('logged' => true));
     }
 
     /**

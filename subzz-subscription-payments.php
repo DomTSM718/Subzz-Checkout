@@ -275,6 +275,19 @@ function subzz_handle_payment_update_page() {
     }
 }
 
+/**
+ * Cache-bust version for OUR editable plugin assets = the file's mtime.
+ * Prevents the "forgot to bump the hardcoded enqueue version" stale-cache trap
+ * (2026-06-03: a new customer-portal.js shipped but kept ?ver=2.0.0 -> the browser
+ * replayed the cached old file -> the portal "Link bank" button was dead).
+ * Falls back to the plugin version if the file is ever missing. Third-party libs
+ * (e.g. signature-pad) keep their own semver -> only OUR assets use this.
+ */
+function subzz_asset_ver($relpath) {
+    $full = plugin_dir_path(__FILE__) . ltrim($relpath, '/');
+    return file_exists($full) ? (string) filemtime($full) : '2.1.0';
+}
+
 function subzz_enqueue_payment_update_assets() {
     $plugin_url = plugin_dir_url(__FILE__);
 
@@ -282,21 +295,21 @@ function subzz_enqueue_payment_update_assets() {
         'subzz-base',
         $plugin_url . 'assets/css/subzz-base.css',
         array(),
-        '2.1.0'
+        subzz_asset_ver('assets/css/subzz-base.css')
     );
 
     wp_enqueue_style(
         'subzz-customer-portal',
         $plugin_url . 'assets/css/customer-portal.css',
         array('subzz-base'),
-        '2.1.0'
+        subzz_asset_ver('assets/css/customer-portal.css')
     );
 
     wp_enqueue_script(
         'subzz-payment-update',
         $plugin_url . 'assets/js/payment-update.js',
         array('jquery'),
-        '2.0.0',
+        subzz_asset_ver('assets/js/payment-update.js'),
         true
     );
 
@@ -319,21 +332,21 @@ function subzz_enqueue_portal_assets() {
         'subzz-base',
         $plugin_url . 'assets/css/subzz-base.css',
         array(),
-        '2.1.0'
+        subzz_asset_ver('assets/css/subzz-base.css')
     );
 
     wp_enqueue_style(
         'subzz-customer-portal',
         $plugin_url . 'assets/css/customer-portal.css',
         array('subzz-base'),
-        '2.1.0'
+        subzz_asset_ver('assets/css/customer-portal.css')
     );
 
     wp_enqueue_script(
         'subzz-customer-portal',
         $plugin_url . 'assets/js/customer-portal.js',
         array('jquery'),
-        '2.0.0',
+        subzz_asset_ver('assets/js/customer-portal.js'),
         true
     );
 
@@ -351,14 +364,14 @@ function subzz_enqueue_checkout_subscription_assets() {
         'subzz-base',
         $plugin_url . 'assets/css/subzz-base.css',
         array(),
-        '2.1.0'
+        subzz_asset_ver('assets/css/subzz-base.css')
     );
 
     wp_enqueue_style(
         'subzz-checkout-plans',
         $plugin_url . 'assets/css/checkout-plans.css',
         array('subzz-base'),
-        '2.1.0'
+        subzz_asset_ver('assets/css/checkout-plans.css')
     );
 
     // Required for #loading-checkout overlay (.loading-state / .loading-spinner / @keyframes spin)
@@ -366,14 +379,14 @@ function subzz_enqueue_checkout_subscription_assets() {
         'subzz-contract-styles',
         $plugin_url . 'assets/contract-styles.css',
         array('subzz-base'),
-        '2.1.0'
+        subzz_asset_ver('assets/contract-styles.css')
     );
 
     wp_enqueue_script(
         'subzz-checkout-plans',
         $plugin_url . 'assets/js/checkout-plans.js',
         array('jquery'),
-        '2.0.0',
+        subzz_asset_ver('assets/js/checkout-plans.js'),
         true
     );
 }
@@ -424,7 +437,7 @@ function subzz_force_load_signature_assets_early() {
             'subzz-base',
             $plugin_url . 'assets/css/subzz-base.css',
             array(),
-            '2.1.0'
+            subzz_asset_ver('assets/css/subzz-base.css')
         );
 
         // Enqueue contract styles
@@ -432,26 +445,26 @@ function subzz_force_load_signature_assets_early() {
             'subzz-contract-styles',
             $plugin_url . 'assets/contract-styles.css',
             array('subzz-base'),
-            '2.1.0'
+            subzz_asset_ver('assets/contract-styles.css')
         );
         subzz_log('SUBZZ DEBUG: contract-styles.css enqueued');
-        
+
         // Step 1: Billing date selection (HYBRID architecture)
         wp_enqueue_script(
             'subzz-billing-date-handler',
             $plugin_url . 'assets/billing-date-handler.js',
             array('jquery'),
-            '1.4.0',
+            subzz_asset_ver('assets/billing-date-handler.js'),
             true
         );
         subzz_log('SUBZZ DEBUG: billing-date-handler.js enqueued (HYBRID Step 1)');
-        
+
         // Step 2 & 3: Signature handling (depends on billing date completion)
         wp_enqueue_script(
             'subzz-signature-handler',
             $plugin_url . 'assets/signature-handler.js',
             array('jquery', 'subzz-billing-date-handler'), // CRITICAL: Depends on billing handler
-            '1.4.0',
+            subzz_asset_ver('assets/signature-handler.js'),
             true
         );
         subzz_log('SUBZZ DEBUG: signature-handler.js enqueued (HYBRID Steps 2 & 3, depends on billing handler)');
@@ -501,7 +514,7 @@ function subzz_enqueue_base_on_payment_templates() {
                 'subzz-base',
                 plugin_dir_url(__FILE__) . 'assets/css/subzz-base.css',
                 array(),
-                '2.1.0'
+                subzz_asset_ver('assets/css/subzz-base.css')
             );
         }, 1);
     }

@@ -1478,24 +1478,13 @@ class Subzz_Contract_Integration {
                     $order->save();
                 }
 
-                // 6. Create LekkaPay session via Azure API (single session creation point)
-                subzz_log('SUBZZ SIGNATURE: Creating LekkaPay session via Azure API');
-                $session_data = array(
-                    'orderReferenceId' => $reference_id,
-                    'customerEmail' => $customer_data['email'],
-                    'customerName' => $customer_data['full_name'],
-                    'amount' => floatval($payment_amount),
-                    'currency' => $currency
-                );
-
-                $session_response = $this->azure_client->create_lekkapay_session($session_data);
-
-                if ($session_response && isset($session_response['checkoutUrl'])) {
-                    $checkout_url = $session_response['checkoutUrl'];
-                    subzz_log('SUBZZ SIGNATURE: LekkaPay session created — direct checkout URL ready');
-                } else {
-                    subzz_log('SUBZZ SIGNATURE WARNING: LekkaPay session creation failed — falling back to subscription-payment page');
-                }
+                // 6. Multi-vendor (Phase 5): do NOT create a gateway session here. The customer picks
+                // a vendor on the picker page (/payment-redirect-page/), which POSTs /payment/create-session
+                // with the chosen vendor and redirects to the returned checkoutUrl. Leaving $checkout_url
+                // null makes signature-handler.js follow redirect_url (the picker URL built below).
+                // (Was: a direct, vendorless create_lekkapay_session call — now 400 INVALID_VENDOR since the
+                //  API requires a vendor — which also bypassed the picker entirely. Fix B, 2026-06-08.)
+                subzz_log('SUBZZ SIGNATURE: Multi-vendor — deferring session creation to the picker page');
 
                 // Build order summary for success page display
                 $order_summary = array(
@@ -1514,14 +1503,19 @@ class Subzz_Contract_Integration {
             // Fall through to fallback redirect_url below
         }
 
-        // Fallback: redirect to subscription-payment.php (used when LekkaPay session creation fails)
+        // Phase 5 multi-vendor: redirect to the picker page (/payment-redirect-page/). The template
+        // reads orderRef/email/amount from these URL params, renders the vendor radio group, then
+        // POSTs /payment/create-session with the chosen vendor. (signatureId optional — omitted; no
+        // standalone signature id exists at this point. cohortId not threaded here yet.)
+        // $payment_amount is only set if the try above reached it; fall back to the order-meta values.
+        $picker_amount = (isset($payment_amount) && floatval($payment_amount) > 0)
+            ? floatval($payment_amount)
+            : (($initial_payment_amount > 0) ? $initial_payment_amount : $monthly_amount);
         $fallback_url = add_query_arg(array(
-            'reference_id' => $reference_id,
-            'signature_confirmed' => 'yes',
-            'billing_day' => $billing_day_of_month,
-            'subscription_months' => $subscription_months,
-            'initial_payment' => $initial_payment_amount
-        ), home_url('/subscription-payment/'));
+            'orderRef' => $reference_id,
+            'email'    => $customer_email,
+            'amount'   => $picker_amount,
+        ), home_url('/payment-redirect-page/'));
 
         subzz_log('SUBZZ SIGNATURE SUCCESS: Complete workflow finished (HYBRID architecture)');
 
@@ -1539,7 +1533,7 @@ class Subzz_Contract_Integration {
             $response_data['order_summary'] = $order_summary;
             subzz_log('SUBZZ SIGNATURE SUCCESS: Direct LekkaPay redirect ready — skipping subscription-payment page');
         } else {
-            subzz_log('SUBZZ SIGNATURE SUCCESS: Falling back to subscription-payment page: ' . $fallback_url);
+            subzz_log('SUBZZ SIGNATURE SUCCESS: Redirecting to multi-vendor picker: ' . $fallback_url);
         }
 
         wp_send_json_success($response_data);

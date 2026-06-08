@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Subzz Subscription Payments
  * Description: Subscription checkout with plan selection, contract signing, LekkaPay payment, customer portal, and Azure backend integration.
- * Version: 2.5.2
+ * Version: 2.5.3
  * Author: Subzz Team
  *
  * Features:

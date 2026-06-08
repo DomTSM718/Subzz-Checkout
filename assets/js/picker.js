@@ -224,10 +224,16 @@
             vendor: vendorId,
             customerEmail: orderContext.customerEmail || '',
             orderReferenceId: orderContext.orderReferenceId || null,
-            signatureId: orderContext.signatureId || null,
             amount: orderContext.amount || 0,
             currency: 'ZAR'
         };
+        // Only include signatureId when we actually have one. The API binds it to a non-nullable
+        // System.Guid, so sending an explicit null fails model binding (400 before the controller
+        // runs). Omitting it lets the API default to Guid.Empty and skip the signature-based lookup
+        // (the customer is resolved by orderReferenceId). Fix, 2026-06-08.
+        if (orderContext.signatureId) {
+            payload.signatureId = orderContext.signatureId;
+        }
         var headers = { 'Content-Type': 'application/json' };
         if (apiKey) {
             headers['X-Subzz-API-Key'] = apiKey;

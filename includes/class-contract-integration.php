@@ -1511,9 +1511,12 @@ class Subzz_Contract_Integration {
         $picker_amount = (isset($payment_amount) && floatval($payment_amount) > 0)
             ? floatval($payment_amount)
             : (($initial_payment_amount > 0) ? $initial_payment_amount : $monthly_amount);
+        // rawurlencode the email so the "+" in addresses like foo+bar@x.com survives the query
+        // string (a raw "+" decodes to a space and gets stripped by sanitize_email on the picker
+        // page). orderRef is a GUID (no special chars). Fix, 2026-06-08.
         $fallback_url = add_query_arg(array(
             'orderRef' => $reference_id,
-            'email'    => $customer_email,
+            'email'    => rawurlencode($customer_email),
             'amount'   => $picker_amount,
         ), home_url('/payment-redirect-page/'));
 

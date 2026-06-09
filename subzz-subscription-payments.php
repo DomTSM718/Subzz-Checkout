@@ -293,14 +293,14 @@ function subzz_enqueue_payment_redirect_assets() {
         'subzz-picker',
         $plugin_url . 'assets/css/picker.css',
         array('subzz-base'),
-        '5.0.0' // Phase 5 v1
+        '6.0.0' // 2026-06-09 look-and-feel rework
     );
 
     wp_enqueue_script(
         'subzz-picker',
         $plugin_url . 'assets/js/picker.js',
         array(), // No jQuery dependency — vanilla fetch API only
-        '5.0.0',
+        '6.0.0',
         true
     );
 
@@ -847,7 +847,7 @@ function subzz_route_titles_map() {
     return array(
         'checkout-subscription'  => 'Checkout',
         'subscription-payment'   => 'Payment',
-        'payment-redirect-page'  => 'Redirecting to Payment',
+        'payment-redirect-page'  => 'Payment',
         'payment-success'        => 'Payment Successful',
         'payment-cancelled'      => 'Payment Cancelled',
         'payment-update'         => 'Update Payment Method',

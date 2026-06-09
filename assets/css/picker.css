@@ -1,42 +1,52 @@
 /**
- * Subzz Phase 5 — Multi-Vendor Payment Picker styles.
+ * Subzz Multi-Vendor Payment Picker styles — "Choose how to pay" step.
  *
- * Locked decisions (Docs/Planning/Stitch-Parallel-Rail-Plan-2026-05-17.md):
- *   UX-1: branded vendor names + logos, "secondary visual weight" — logos are not
- *         louder than the page; radio buttons clearly single-select.
- *   UX-4: header "Pay by card"; radio (NOT side-by-side big buttons) so it reads
- *         as a single-choice form not two competing CTAs; trust copy below choice
- *         with padlock + reassurance line; "Subzz never sees them" load-bearing.
+ * Rework 2026-06-09 (approved mockup C:/tmp/picker-mockup.html):
+ *   - On the --subzz-* token system (subzz-base.css IS enqueued on this page;
+ *     checkout-plans.css is NOT — so EVERY style, incl. the coral CTA, lives here).
+ *   - Matches the checkout-plans card family: white card / radius 12 / shadow-sm
+ *     on a grey page; BLUE selected-state (checkout convention), CORAL reserved
+ *     for the primary action button.
+ *   - Vendor rows are choice cards; identity = real logoUrl image when present,
+ *     else the vendor NAME shown once (no logo/name duplication).
+ *   - Amount surfaced on the CTA (.amt/.dot), trust badges (Visa/MC/PCI) below.
  *
- * Mobile-first. Inherits Subzz brand tokens from subzz-base.css when present;
- * falls back to charcoal/coral defaults so the page renders standalone if a theme
- * dropped the base stylesheet.
- *
- * Frontend-patterns.md #1232: Astra theme overrides .button — use .btn-primary
- * (already a Subzz brand class) for CTA buttons.
+ * CTA note: .btn-primary is NOT defined on this page (checkout-plans.css absent),
+ * so the coral button look is applied to the custom, theme-safe class
+ * .subzz-picker-submit (+ .subzz-picker-retry-cta). Per frontend-patterns.md #1232
+ * never rely on theme-targeted .button/.btn-primary here.
  */
 
+/* -- Page + card --------------------------------------------------------- */
 .subzz-payment-redirect-page {
-    padding: clamp(20px, 5vw, 48px) 16px;
-    max-width: 100%;
+    background: var(--subzz-page-bg, #F5F5F5);
+    padding: clamp(24px, 5vw, 48px) 16px;
+    font-family: var(--subzz-font-family, 'Montserrat', sans-serif);
 }
 
 .subzz-picker-container {
-    max-width: 480px;
+    max-width: 560px;
     margin: 0 auto;
-    background: #ffffff;
-    border-radius: 8px;
-    padding: clamp(24px, 5vw, 40px);
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08), 0 1px 2px rgba(0, 0, 0, 0.04);
+    background: var(--subzz-white, #fff);
+    border-radius: 12px;
+    box-shadow: var(--subzz-shadow-sm, 0 1px 2px 0 rgba(0,0,0,0.05));
+    padding: clamp(20px, 5vw, 28px);
 }
 
 .subzz-picker-heading {
-    font-family: "Montserrat", system-ui, -apple-system, sans-serif;
-    font-size: clamp(20px, 4vw, 24px);
-    font-weight: 600;
-    color: var(--subzz-charcoal, #545454);
-    margin: 0 0 24px 0;
+    font-family: var(--subzz-font-family, 'Montserrat', sans-serif);
+    font-size: 22px;
+    font-weight: var(--subzz-weight-bold, 700);
+    color: var(--subzz-gray, #545454);
+    margin: 0 0 4px 0;
     letter-spacing: -0.3px;
+}
+
+.subzz-picker-subheading {
+    font-size: var(--subzz-font-sm, 14px);
+    line-height: var(--subzz-leading-normal, 1.5);
+    color: rgba(84, 84, 84, 0.7);
+    margin: 0 0 24px 0;
 }
 
 .subzz-picker-form {
@@ -48,90 +58,109 @@
 .subzz-picker-vendors {
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: 14px;
 }
 
 .subzz-picker-loading {
     padding: 20px;
     text-align: center;
-    color: var(--subzz-charcoal, #545454);
-    font-size: 14px;
+    color: var(--subzz-gray, #545454);
+    font-size: var(--subzz-font-sm, 14px);
     opacity: 0.7;
 }
 
 .subzz-picker-empty {
     padding: 24px;
     text-align: center;
-    color: var(--subzz-charcoal, #545454);
-    font-size: 14px;
+    color: var(--subzz-gray, #545454);
+    font-size: var(--subzz-font-sm, 14px);
     border: 1px dashed rgba(84, 84, 84, 0.25);
-    border-radius: 6px;
+    border-radius: var(--subzz-radius-lg, 10px);
 }
 
-/* Vendor radio rows. UX-1: branded + secondary visual weight - logo small (80x32),
-   name in body text size, NOT competing for attention with the CTA. */
+/* -- Vendor choice cards ------------------------------------------------- */
 .subzz-picker-vendor {
     display: flex;
     align-items: center;
-    gap: 14px;
-    padding: 14px 16px;
-    border: 1.5px solid rgba(84, 84, 84, 0.15);
-    border-radius: 6px;
+    gap: 16px;
+    padding: 16px 18px;
+    border: 2px solid var(--subzz-border, #E0E0E0);
+    border-radius: var(--subzz-radius-lg, 10px);
     cursor: pointer;
-    transition: border-color 0.15s ease, background-color 0.15s ease;
-    background: #ffffff;
+    background: var(--subzz-white, #fff);
+    transition: border-color var(--subzz-transition-fast, 150ms) ease,
+                background-color var(--subzz-transition-fast, 150ms) ease;
 }
 
 .subzz-picker-vendor:hover {
-    border-color: rgba(84, 84, 84, 0.35);
-    background: rgba(84, 84, 84, 0.02);
+    border-color: var(--subzz-blue, #2A8BEA);
 }
 
+/* Selected = BLUE (checkout convention; coral is the action button only). */
 .subzz-picker-vendor.is-selected {
-    border-color: var(--subzz-coral, #F73C5C);
-    background: rgba(247, 60, 92, 0.04);
+    border-color: var(--subzz-blue, #2A8BEA);
+    background: rgba(42, 139, 234, 0.05);
 }
 
 .subzz-picker-vendor input[type="radio"] {
     flex-shrink: 0;
-    width: 18px;
-    height: 18px;
+    width: 20px;
+    height: 20px;
     margin: 0;
-    accent-color: var(--subzz-coral, #F73C5C);
+    accent-color: var(--subzz-blue, #2A8BEA);
     cursor: pointer;
 }
 
+/* Real vendor logo (rendered only when vendor.logoUrl is set). */
 .subzz-picker-vendor-logo {
     flex-shrink: 0;
-    width: 80px;
-    height: 32px;
+    max-width: 110px;
+    max-height: 34px;
+    width: auto;
+    height: auto;
     object-fit: contain;
     display: block;
 }
 
-.subzz-picker-vendor-logo-fallback {
-    /* Empty span used when logoUrl is null - keeps row layout consistent. */
-    flex-shrink: 0;
-    width: 80px;
-    height: 32px;
+.subzz-picker-vendor-text {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
 }
 
 .subzz-picker-vendor-name {
-    flex: 1;
-    font-family: "Montserrat", system-ui, -apple-system, sans-serif;
-    font-size: 15px;
-    font-weight: 500;
-    color: var(--subzz-charcoal, #545454);
+    font-size: 17px;
+    font-weight: var(--subzz-weight-bold, 700);
+    color: var(--subzz-gray, #545454);
+    letter-spacing: -0.2px;
 }
 
-/* UX-4 trust copy. Stays under the choice (not above) — customer sees options first,
-   then reassurance, then CTA. */
+.subzz-picker-vendor-sub {
+    font-size: 12.5px;
+    font-weight: var(--subzz-weight-medium, 500);
+    color: rgba(84, 84, 84, 0.6);
+    margin-top: 3px;
+}
+
+.subzz-picker-vendor-glyph {
+    flex-shrink: 0;
+    color: rgba(84, 84, 84, 0.35);
+    display: flex;
+    align-items: center;
+    transition: color var(--subzz-transition-fast, 150ms) ease;
+}
+
+.subzz-picker-vendor.is-selected .subzz-picker-vendor-glyph {
+    color: var(--subzz-blue, #2A8BEA);
+}
+
+/* -- Trust line --------------------------------------------------------- */
 .subzz-picker-trust {
-    margin: 4px 0 0 0;
+    margin: 0;
     font-size: 13px;
-    line-height: 1.5;
-    color: var(--subzz-charcoal, #545454);
-    opacity: 0.75;
+    line-height: var(--subzz-leading-normal, 1.5);
+    color: rgba(84, 84, 84, 0.75);
     display: flex;
     align-items: flex-start;
     gap: 8px;
@@ -140,56 +169,107 @@
 .subzz-picker-trust-icon {
     flex-shrink: 0;
     margin-top: 1px;
-    font-size: 14px;
+    color: rgba(84, 84, 84, 0.6);
+    display: inline-flex;
 }
 
-/* Submit CTA. Phase-5 picker uses Subzz brand .btn-primary (Astra-safe per
-   frontend-patterns.md #1232). Disabled state is the load-bearing "no vendor
-   picked yet" signal. */
-.subzz-picker-submit {
-    margin-top: 8px;
+/* -- Primary action button (coral; self-contained — no .btn-primary here) */
+.subzz-picker-submit,
+.subzz-picker-retry-cta {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
     width: 100%;
-    min-height: 48px;
-    font-size: 15px;
-    font-weight: 600;
+    min-height: 52px;
+    padding: 16px 32px;
+    background: var(--subzz-red, #F73C5C);
+    color: #fff;
+    border: none;
+    border-radius: var(--subzz-radius-md, 8px);
+    font-family: var(--subzz-font-family, 'Montserrat', sans-serif);
+    font-size: 16px;
+    font-weight: var(--subzz-weight-bold, 700);
+    cursor: pointer;
+    text-align: center;
+    transition: opacity var(--subzz-transition-fast, 150ms) ease,
+                transform var(--subzz-transition-fast, 150ms) ease,
+                box-shadow var(--subzz-transition-fast, 150ms) ease;
 }
 
-.subzz-picker-submit:disabled {
+.subzz-picker-submit:hover:not(:disabled),
+.subzz-picker-retry-cta:hover:not(:disabled) {
+    opacity: 0.92;
+    transform: translateY(-1px);
+    box-shadow: var(--subzz-shadow-lg, 0 10px 15px -3px rgba(0,0,0,0.1));
+}
+
+.subzz-picker-submit:disabled,
+.subzz-picker-retry-cta:disabled {
     opacity: 0.5;
     cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
 }
 
-/* UX-3 re-pick error screen (Step 7). Replaces the picker form on retry exhaustion or
-   non-retryable failure. Two CTAs let the customer choose: retry same vendor OR switch.
-   No surprise auto-switch (preserves UX-1/UX-4 trust ground). */
+/* Amount on the CTA. */
+.subzz-picker-submit .subzz-picker-amt {
+    font-weight: var(--subzz-weight-bold, 800);
+}
+
+.subzz-picker-submit .subzz-picker-dot {
+    opacity: 0.55;
+}
+
+/* -- Payment / security badges ------------------------------------------ */
+.subzz-picker-badges {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 14px;
+    margin-top: 20px;
+    padding-top: 18px;
+    border-top: 1px solid #EFEFEF;
+}
+
+.subzz-picker-badge-card {
+    display: inline-flex;
+    align-items: center;
+}
+
+.subzz-picker-badge-pci {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 11px;
+    font-weight: var(--subzz-weight-semibold, 600);
+    color: rgba(84, 84, 84, 0.55);
+    letter-spacing: 0.2px;
+}
+
+/* -- Re-pick error screen (UX-3) ---------------------------------------- */
 .subzz-picker-error {
     margin-top: 20px;
     padding: 20px;
     background: rgba(247, 60, 92, 0.04);
     border: 1px solid rgba(247, 60, 92, 0.2);
-    border-radius: 6px;
+    border-radius: var(--subzz-radius-lg, 10px);
 }
 
-.subzz-picker-error[hidden] {
-    display: none;
-}
-
-/* When the error screen shows, the original form is hidden so the customer sees
-   one decision surface at a time (not picker + error competing). */
-.subzz-picker-form[hidden] {
-    display: none;
-}
+.subzz-picker-error[hidden] { display: none; }
+.subzz-picker-form[hidden] { display: none; }
 
 .subzz-picker-error-detail {
     font-size: 16px;
-    font-weight: 500;
-    color: var(--subzz-charcoal, #545454);
+    font-weight: var(--subzz-weight-medium, 500);
+    color: var(--subzz-gray, #545454);
     margin: 0 0 8px 0;
 }
 
 .subzz-picker-error-message {
-    font-size: 14px;
-    color: var(--subzz-charcoal, #545454);
+    font-size: var(--subzz-font-sm, 14px);
+    color: var(--subzz-gray, #545454);
     opacity: 0.8;
     margin: 0 0 20px 0;
 }
@@ -200,44 +280,51 @@
     gap: 10px;
 }
 
-.subzz-picker-retry-cta {
-    /* Primary - inherits .btn-primary styles, kept full-width here */
-    width: 100%;
-    min-height: 48px;
-    font-size: 15px;
-    font-weight: 600;
-}
-
-/* Secondary CTA - lower visual weight than retry so the default action reads as
-   "retry same vendor". Customer can still switch if they want. */
+/* Secondary CTA — lower weight than the coral retry so "retry same" reads default. */
 .subzz-picker-switch-cta {
     width: 100%;
-    min-height: 48px;
+    min-height: 52px;
     padding: 12px 24px;
     background: transparent;
-    border: 1.5px solid var(--subzz-charcoal, #545454);
-    border-radius: 6px;
-    color: var(--subzz-charcoal, #545454);
-    font-family: "Montserrat", system-ui, -apple-system, sans-serif;
+    border: 2px solid var(--subzz-blue, #2A8BEA);
+    border-radius: var(--subzz-radius-md, 8px);
+    color: var(--subzz-blue, #2A8BEA);
+    font-family: var(--subzz-font-family, 'Montserrat', sans-serif);
     font-size: 15px;
-    font-weight: 500;
+    font-weight: var(--subzz-weight-semibold, 600);
     cursor: pointer;
-    transition: background-color 0.15s ease;
+    transition: background-color var(--subzz-transition-fast, 150ms) ease,
+                color var(--subzz-transition-fast, 150ms) ease;
 }
 
 .subzz-picker-switch-cta:hover {
-    background: rgba(84, 84, 84, 0.04);
+    background: var(--subzz-blue, #2A8BEA);
+    color: #fff;
 }
 
-/* UX-3 sub-case 3: "Last attempt: X" context note above the picker when customer arrives
-   via the re-pick switch CTA OR via the mid-flow-failure return path with ?failedVendor=X. */
+/* "Last attempt: X" context note. */
 .subzz-picker-last-attempt {
     margin: 0 0 14px 0;
     padding: 8px 12px;
     background: rgba(84, 84, 84, 0.04);
     border-left: 3px solid rgba(84, 84, 84, 0.25);
-    border-radius: 4px;
-    font-size: 12px;
-    color: var(--subzz-charcoal, #545454);
+    border-radius: var(--subzz-radius-sm, 6px);
+    font-size: var(--subzz-font-xs, 12px);
+    color: var(--subzz-gray, #545454);
     opacity: 0.85;
+}
+
+/* -- Redirecting state (single-vendor auto-skip + submit-in-flight) ------ */
+.subzz-picker-redirecting {
+    padding: 32px 20px;
+    text-align: center;
+    color: var(--subzz-gray, #545454);
+    font-size: var(--subzz-font-sm, 14px);
+}
+
+/* -- Responsive --------------------------------------------------------- */
+@media (max-width: 600px) {
+    .subzz-picker-container { padding: 20px; }
+    .subzz-picker-heading { font-size: 20px; }
+    .subzz-picker-vendor-name { font-size: 16px; }
 }

@@ -221,6 +221,10 @@
     opacity: 0.55;
 }
 
+/* Desktop shows the full verb ("Continue to payment · R139"); mobile swaps to
+   the short verb ("Pay R139") so the long copy never wraps awkwardly. */
+.subzz-picker-cta-short { display: none; }
+
 /* -- Payment / security badges ------------------------------------------ */
 .subzz-picker-badges {
     display: flex;
@@ -327,4 +331,6 @@
     .subzz-picker-container { padding: 20px; }
     .subzz-picker-heading { font-size: 20px; }
     .subzz-picker-vendor-name { font-size: 16px; }
+    .subzz-picker-cta-full { display: none; }
+    .subzz-picker-cta-short { display: inline; }
 }

@@ -110,17 +110,25 @@
             return;
         }
 
+        // Card-style glyph (right side) — signals "card payment", colours blue when selected via CSS.
+        var glyph = '<svg class="subzz-picker-vendor-glyph" width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="5" width="20" height="14" rx="2.5"></rect><path d="M2 10h20"></path></svg>';
+
         var html = '';
-        vendors.forEach(function (vendor, index) {
+        vendors.forEach(function (vendor) {
             var rowId = 'subzz-vendor-' + vendor.vendorId;
-            var logoMarkup = vendor.logoUrl
-                ? '<img class="subzz-picker-vendor-logo" src="' + escapeHtml(vendor.logoUrl) + '" alt="' + escapeHtml(vendor.displayName) + ' logo">'
-                : '<span class="subzz-picker-vendor-logo-fallback" aria-hidden="true"></span>';
+            // Identity = real logo image when logoUrl is set, otherwise the vendor name
+            // shown ONCE (no logo/name duplication). Slot stays logoUrl-ready for real logos later.
+            var identity = vendor.logoUrl
+                ? '<img class="subzz-picker-vendor-logo" src="' + escapeHtml(vendor.logoUrl) + '" alt="' + escapeHtml(vendor.displayName) + '">'
+                : '<span class="subzz-picker-vendor-name">' + escapeHtml(vendor.displayName) + '</span>';
 
             html += '<label class="subzz-picker-vendor" for="' + rowId + '">';
-            html += '<input type="radio" name="subzz-picker-vendor" id="' + rowId + '" value="' + escapeHtml(vendor.vendorId) + '"' + (index === 0 ? '' : '') + '>';
-            html += logoMarkup;
-            html += '<span class="subzz-picker-vendor-name">' + escapeHtml(vendor.displayName) + '</span>';
+            html += '<input type="radio" name="subzz-picker-vendor" id="' + rowId + '" value="' + escapeHtml(vendor.vendorId) + '">';
+            html += '<span class="subzz-picker-vendor-text">';
+            html += identity;
+            html += '<span class="subzz-picker-vendor-sub">Pay securely by card</span>';
+            html += '</span>';
+            html += glyph;
             html += '</label>';
         });
 
@@ -321,7 +329,7 @@
             radio.checked = true;
             updateSelectionVisuals();
             elements.submitButton.disabled = false;
-            elements.submitButton.textContent = 'Continue to payment';
+            resetCtaToDefault();
         }
     }
 
@@ -355,7 +363,36 @@
             .replace(/'/g, '&#39;');
     }
 
+    /**
+     * Format the charge amount for display (ZAR; no decimals when whole-rand).
+     */
+    function formatAmount(value) {
+        var n = Number(value) || 0;
+        if (n <= 0) return '';
+        return 'R' + (n % 1 === 0 ? n.toFixed(0) : n.toFixed(2));
+    }
+
+    /**
+     * Default CTA label with the amount surfaced at the point of action.
+     * Full label on desktop ("Continue to payment · R139"); CSS swaps to the
+     * short label ("Pay R139") on narrow screens where the long copy wraps.
+     */
+    function ctaDefaultHtml() {
+        var amt = formatAmount(orderContext.amount);
+        if (!amt) return 'Continue to payment';
+        return '<span class="subzz-picker-cta-full">Continue to payment <span class="subzz-picker-dot">·</span> </span>'
+             + '<span class="subzz-picker-cta-short">Pay </span>'
+             + '<span class="subzz-picker-amt">' + escapeHtml(amt) + '</span>';
+    }
+
+    function resetCtaToDefault() {
+        if (elements.submitButton) {
+            elements.submitButton.innerHTML = ctaDefaultHtml();
+        }
+    }
+
     // Bootstrap.
     elements.form.addEventListener('submit', handleSubmit);
+    resetCtaToDefault();
     fetchAndRenderVendors();
 })();

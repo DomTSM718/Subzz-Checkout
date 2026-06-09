@@ -632,33 +632,20 @@ function initializeSignatureHandler() {
                             '</div>';
                     }
 
-                    // Show a brief "signed" confirmation, then go STRAIGHT to the picker —
-                    // no countdown interstitial (PS-1, 2026-06-09: the "Redirecting in N seconds"
-                    // screen was a redundant step between contract and picker). A short ~800ms beat
-                    // lets the customer register the confirmation without a separate redirect page.
-                    $('.contract-content').html(
-                        '<div class="contract-success">' +
-                        '<h2>Contract Signed Successfully!</h2>' +
-                        '<div class="subzz-dash-divider">' +
-                            '<span style="background:#FF9D00"></span>' +
-                            '<span style="background:#F73C5C"></span>' +
-                            '<span style="background:#2A8BEA"></span>' +
-                            '<span style="background:#48CAED"></span>' +
-                        '</div>' +
-                        '<p>Your subscription agreement has been digitally signed and securely stored.</p>' +
-                        orderSummaryHtml +
-                        '<p>Taking you to payment&hellip;</p>' +
-                        '</div>'
-                    );
-
-                    console.log('SUBZZ SIGNATURE SUCCESS: Confirmation shown, redirecting straight to picker');
-
-                    // Redirect straight to the picker after a short confirmation beat (no countdown).
+                    // PS-1 iteration 2 (2026-06-09): NO confirmation/celebration screen — go STRAIGHT
+                    // to the picker. The contract is already saved server-side at this point. Show only
+                    // a loading throbber (reusing .loading-state/.loading-spinner, which are CSS-backed
+                    // in contract-styles.css) so a slow connection never looks frozen while the picker
+                    // page loads. No artificial delay — navigate immediately.
                     if (redirectUrl) {
-                        setTimeout(function() {
-                            console.log('SUBZZ SIGNATURE REDIRECT: Redirecting to:', redirectUrl);
-                            window.location.href = redirectUrl;
-                        }, 800);
+                        $('.contract-content').html(
+                            '<div class="loading-state">' +
+                            '<div class="loading-spinner"></div>' +
+                            '<p>Taking you to payment&hellip;</p>' +
+                            '</div>'
+                        );
+                        console.log('SUBZZ SIGNATURE REDIRECT: Redirecting straight to picker:', redirectUrl);
+                        window.location.href = redirectUrl;
                     } else {
                         console.error('SUBZZ SIGNATURE ERROR: No redirect URL provided in successful response');
                         console.error('SUBZZ SIGNATURE ERROR: Full response:', response);

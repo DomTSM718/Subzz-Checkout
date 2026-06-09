@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Subzz Subscription Payments
  * Description: Subscription checkout with plan selection, contract signing, LekkaPay payment, customer portal, and Azure backend integration.
- * Version: 2.5.5
+ * Version: 2.5.6
  * Author: Subzz Team
  *
  * Features:
@@ -512,7 +512,7 @@ function subzz_force_load_signature_assets_early() {
             'subzz-signature-handler',
             $plugin_url . 'assets/signature-handler.js',
             array('jquery', 'subzz-billing-date-handler'), // CRITICAL: Depends on billing handler
-            '1.4.0',
+            '1.4.1', // bumped 2026-06-09 (PS-1: removed post-contract countdown) — cache-bust
             true
         );
         subzz_log('SUBZZ DEBUG: signature-handler.js enqueued (HYBRID Steps 2 & 3, depends on billing handler)');

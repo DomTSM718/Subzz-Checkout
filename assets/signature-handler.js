@@ -632,8 +632,10 @@ function initializeSignatureHandler() {
                             '</div>';
                     }
 
-                    // Show success message with order summary and countdown
-                    var countdownSeconds = 3;
+                    // Show a brief "signed" confirmation, then go STRAIGHT to the picker —
+                    // no countdown interstitial (PS-1, 2026-06-09: the "Redirecting in N seconds"
+                    // screen was a redundant step between contract and picker). A short ~800ms beat
+                    // lets the customer register the confirmation without a separate redirect page.
                     $('.contract-content').html(
                         '<div class="contract-success">' +
                         '<h2>Contract Signed Successfully!</h2>' +
@@ -645,28 +647,18 @@ function initializeSignatureHandler() {
                         '</div>' +
                         '<p>Your subscription agreement has been digitally signed and securely stored.</p>' +
                         orderSummaryHtml +
-                        '<p>Redirecting to ' + (isDirect ? 'secure payment' : 'payment summary') + ' in <strong id="countdown-timer">' + countdownSeconds + '</strong> seconds...</p>' +
+                        '<p>Taking you to payment&hellip;</p>' +
                         '</div>'
                     );
 
-                    console.log('SUBZZ SIGNATURE SUCCESS: Success message displayed, starting redirect countdown');
+                    console.log('SUBZZ SIGNATURE SUCCESS: Confirmation shown, redirecting straight to picker');
 
-                    // Countdown timer with visible seconds
-                    var countdownEl = document.getElementById('countdown-timer');
-                    var countdownInterval = setInterval(function() {
-                        countdownSeconds--;
-                        if (countdownEl) countdownEl.textContent = countdownSeconds;
-                        if (countdownSeconds <= 0) {
-                            clearInterval(countdownInterval);
-                        }
-                    }, 1000);
-
-                    // Redirect after countdown
+                    // Redirect straight to the picker after a short confirmation beat (no countdown).
                     if (redirectUrl) {
                         setTimeout(function() {
                             console.log('SUBZZ SIGNATURE REDIRECT: Redirecting to:', redirectUrl);
                             window.location.href = redirectUrl;
-                        }, countdownSeconds * 1000);
+                        }, 800);
                     } else {
                         console.error('SUBZZ SIGNATURE ERROR: No redirect URL provided in successful response');
                         console.error('SUBZZ SIGNATURE ERROR: Full response:', response);

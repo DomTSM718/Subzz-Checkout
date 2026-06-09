@@ -87,6 +87,17 @@
             })
             .then(function (data) {
                 availableVendors = (data && data.vendors) || [];
+
+                // Single-vendor auto-skip: when exactly one gateway is available AND the customer
+                // is NOT returning from a failed attempt, the picker is a zero-value stop — create
+                // the session and go straight to the gateway. (2+ vendors, or a failed-vendor
+                // return, still render the picker so the customer stays in control.)
+                if (availableVendors.length === 1 && !lastAttemptedVendor) {
+                    showRedirectingState(availableVendors[0]);
+                    submitWithRetry(availableVendors[0].vendorId, 1);
+                    return;
+                }
+
                 renderVendors(availableVendors);
                 // UX-3 sub-case 3 mid-flow return: if failedVendor was supplied on page load,
                 // show the last-attempt note now that vendors are rendered.
@@ -147,6 +158,23 @@
 
     function renderEmptyState(message) {
         elements.vendorsList.innerHTML = '<div class="subzz-picker-empty">' + escapeHtml(message) + '</div>';
+    }
+
+    /**
+     * Single-vendor auto-skip view — replaces the choice UI with a calm "redirecting"
+     * message while submitWithRetry creates the session and forwards to the gateway.
+     * Hides the submit button + trust line (no choice to make). If the session-create
+     * fails, the existing showRetryScreen takes over (Try Again, no switch CTA).
+     */
+    function showRedirectingState(vendor) {
+        var name = (vendor && vendor.displayName) || 'your payment provider';
+        elements.vendorsList.innerHTML =
+            '<div class="subzz-picker-redirecting" role="status" aria-live="polite">'
+            + 'Taking you to ' + escapeHtml(name) + ' to complete payment securely&hellip;'
+            + '</div>';
+        if (elements.submitButton) elements.submitButton.style.display = 'none';
+        var trust = document.querySelector('.subzz-picker-trust');
+        if (trust) trust.style.display = 'none';
     }
 
     function updateSelectionVisuals() {

@@ -157,6 +157,14 @@ get_header();
             </div>
         </div>
 
+        <!-- Plan-page initial-load throbber (PS-3, 2026-06-09): VISIBLE by default so a slow
+             connection sees a spinner instead of a blank page while affordability/plan-cards fetch.
+             Hidden by checkout-plans.js $.ajax complete: handler once the fetch settles. -->
+        <div id="loading-plans" class="loading-state">
+            <div class="loading-spinner"></div>
+            <p>Loading your payment options&hellip;</p>
+        </div>
+
         <!-- Not-verified message (shown when customer hasn't completed KYC) -->
         <div id="not-verified-message" class="not-verified" style="display:none;">
             <h3>Verification Required</h3>

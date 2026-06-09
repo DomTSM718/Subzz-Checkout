@@ -110,6 +110,12 @@
             error: function (xhr, status, err) {
                 console.error('SUBZZ CHECKOUT: AJAX error', status, err);
                 showSection('plan-error');
+            },
+            complete: function () {
+                // PS-3 (2026-06-09): hide the initial-load throbber once the affordability fetch
+                // settles — fires on success OR error, so it covers every outcome (plan cards,
+                // not-verified, gate-blocked, plan-error). Slow-connection CX guard.
+                hideSection('loading-plans');
             }
         });
     }

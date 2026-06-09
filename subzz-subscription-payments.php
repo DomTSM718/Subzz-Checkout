@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Subzz Subscription Payments
  * Description: Subscription checkout with plan selection, contract signing, LekkaPay payment, customer portal, and Azure backend integration.
- * Version: 2.5.7
+ * Version: 2.5.8
  * Author: Subzz Team
  *
  * Features:
@@ -434,7 +434,7 @@ function subzz_enqueue_checkout_subscription_assets() {
         'subzz-checkout-plans',
         $plugin_url . 'assets/js/checkout-plans.js',
         array('jquery'),
-        '2.0.0',
+        '2.0.1', // bumped 2026-06-09 (PS-3: plan-page initial-load throbber) — cache-bust
         true
     );
 }

@@ -70,12 +70,14 @@ function subzz_init_plugin() {
     require_once plugin_dir_path(__FILE__) . 'includes/class-contract-integration.php';
     require_once plugin_dir_path(__FILE__) . 'includes/class-customer-portal.php';
     require_once plugin_dir_path(__FILE__) . 'includes/class-product-attribute-tiles.php';
+    require_once plugin_dir_path(__FILE__) . 'includes/class-magic-login.php';
 
     // Initialize classes
     new Subzz_Payment_Handler();
     new Subzz_Contract_Integration();
     new Subzz_Customer_Portal();
     new Subzz_Product_Attribute_Tiles();
+    new Subzz_Magic_Login();
 
     subzz_log('SUBZZ DEBUG: Plugin initialized successfully with Azure integration');
 }

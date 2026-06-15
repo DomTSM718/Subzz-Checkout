@@ -58,6 +58,12 @@ class Subzz_Magic_Login {
      * Always ends in a redirect + exit; never returns a REST body to the browser.
      */
     public function handle(WP_REST_Request $request) {
+        // Auth/redeem endpoint — its response must NEVER be cached. A page cache (LiteSpeed on
+        // staging/prod) would otherwise serve a stale redirect for a token URL, and an email
+        // link-scanner pre-fetch could consume the single-use token before the customer clicks.
+        nocache_headers();
+        do_action('litespeed_control_set_nocache', 'subzz magic-login: auth endpoint, never cache');
+
         $token = (string) $request->get_param('token');
 
         // 1. No token -> normal account page (fail safe).

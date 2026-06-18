@@ -111,14 +111,17 @@
     cursor: pointer;
 }
 
-/* Real vendor logo (rendered only when vendor.logoUrl is set). */
+/* Real vendor logo (rendered only when vendor.logoUrl is set).
+   Sized by HEIGHT only (width auto) so wordmarks of different aspect ratios
+   (Stitch ~7:1, LekkaPay ~4:1) render at equal optical weight — the Stitch
+   brand rule ("same visual weight as competing payment methods"). Setting one
+   dimension + auto avoids the squish from constraining both (frontend-patterns
+   no-distortion rule). 24px clears the row comfortably; widest wordmark (Stitch
+   at h24 ≈ 172px) fits the ~440px identity column with room to spare. */
 .subzz-picker-vendor-logo {
     flex-shrink: 0;
-    max-width: 110px;
-    max-height: 34px;
+    height: 24px;
     width: auto;
-    height: auto;
-    object-fit: contain;
     display: block;
 }
 

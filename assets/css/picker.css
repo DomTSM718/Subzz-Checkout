@@ -120,6 +120,8 @@
    at h24 ≈ 172px) fits the ~440px identity column with room to spare. */
 .subzz-picker-vendor-logo {
     flex-shrink: 0;
+    align-self: flex-start; /* parent is a flex column; without this the img stretches to
+                               full column width and the logo distorts. Keep natural ratio. */
     height: 24px;
     width: auto;
     display: block;

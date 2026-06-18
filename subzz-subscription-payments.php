@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Subzz Subscription Payments
  * Description: Subscription checkout with plan selection, contract signing, LekkaPay payment, customer portal, and Azure backend integration.
- * Version: 2.5.9
+ * Version: 2.5.10
  * Author: Subzz Team
  *
  * Features:
@@ -293,7 +293,7 @@ function subzz_enqueue_payment_redirect_assets() {
         'subzz-picker',
         $plugin_url . 'assets/css/picker.css',
         array('subzz-base'),
-        '6.1.0' // 2026-06-18 logo branding (equal-height vendor logos) — bump cache-busts the height-sizing rule
+        '6.1.1' // 2026-06-18 logo branding — fix flex-stretch (align-self) so logos keep aspect ratio
     );
 
     wp_enqueue_script(

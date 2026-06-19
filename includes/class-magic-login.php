@@ -112,6 +112,17 @@ class Subzz_Magic_Login {
             $this->redirect($this->account_url());
         }
 
+        // 5b. Refuse to auto-login privileged accounts. Magic-login is a customer-only
+        //     convenience; an email collision with an admin/shop-manager must never yield
+        //     an elevated session. Allow ONLY non-privileged shopper roles — any role
+        //     outside the allowlist (or no role at all) fails safe to the account page.
+        $allowed_roles = array('customer', 'subscriber');
+        $user_roles    = (array) $user->roles;
+        if (empty($user_roles) || array_diff($user_roles, $allowed_roles)) {
+            subzz_log('SUBZZ MAGIC-LOGIN: refused non-shopper role for user ' . $user->ID);
+            $this->redirect($this->account_url());
+        }
+
         // 6. Log them in (persistent cookie) and send them shopping.
         wp_set_auth_cookie($user->ID, true);
         wp_set_current_user($user->ID);

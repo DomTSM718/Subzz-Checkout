@@ -2,13 +2,21 @@
 /**
  * Plugin Name: Subzz Subscription Payments
  * Description: Subscription checkout with plan selection, contract signing, LekkaPay payment, customer portal, and Azure backend integration.
- * Version: 2.5.10
+ * Version: 2.5.11
  * Author: Subzz Team
+ *
+ * 2.5.11 (2026-06-20): RECONCILED TRUNK — band→checkout (v2.5.2) + Stitch parallel-rail
+ *   (v2.5.10) re-integrated after the 18-Jun deploy regression, plus magic-login consume.
+ *   Restores band→checkout (spending-limit panel, P4 over-limit redesign, bank-link uplift CTA);
+ *   keeps Stitch (gateway picker — flag-gated OFF); adds magic-login (consume endpoint — DARK).
  *
  * Features:
  * - Checkout flow: plan cards (12/18/24 months), initial payment slider, affordability enforcement
+ * - band→checkout: spending-limit status panel, over-limit recompute, bank-link uplift CTA
  * - Contract signing: draw/type signature, billing date selection, PDF generation via Azure
  * - LekkaPay HPP integration: card-only restriction, webhook processing, token vault
+ * - Stitch parallel-rail: multi-vendor payment picker (flag-gated, default OFF)
+ * - Magic-login: passwordless shop-now consume endpoint (dark until FE + config ready)
  * - Customer portal: My Subscription tab, payment update, invoice history
  * - Abandoned cart recovery: JWT resume links, cohort-based email triggers
  * - Payment logging: success/cancel/error events posted to Azure API

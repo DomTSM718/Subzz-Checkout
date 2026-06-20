@@ -632,41 +632,20 @@ function initializeSignatureHandler() {
                             '</div>';
                     }
 
-                    // Show success message with order summary and countdown
-                    var countdownSeconds = 3;
-                    $('.contract-content').html(
-                        '<div class="contract-success">' +
-                        '<h2>Contract Signed Successfully!</h2>' +
-                        '<div class="subzz-dash-divider">' +
-                            '<span style="background:#FF9D00"></span>' +
-                            '<span style="background:#F73C5C"></span>' +
-                            '<span style="background:#2A8BEA"></span>' +
-                            '<span style="background:#48CAED"></span>' +
-                        '</div>' +
-                        '<p>Your subscription agreement has been digitally signed and securely stored.</p>' +
-                        orderSummaryHtml +
-                        '<p>Redirecting to ' + (isDirect ? 'secure payment' : 'payment summary') + ' in <strong id="countdown-timer">' + countdownSeconds + '</strong> seconds...</p>' +
-                        '</div>'
-                    );
-
-                    console.log('SUBZZ SIGNATURE SUCCESS: Success message displayed, starting redirect countdown');
-
-                    // Countdown timer with visible seconds
-                    var countdownEl = document.getElementById('countdown-timer');
-                    var countdownInterval = setInterval(function() {
-                        countdownSeconds--;
-                        if (countdownEl) countdownEl.textContent = countdownSeconds;
-                        if (countdownSeconds <= 0) {
-                            clearInterval(countdownInterval);
-                        }
-                    }, 1000);
-
-                    // Redirect after countdown
+                    // PS-1 iteration 2 (2026-06-09): NO confirmation/celebration screen — go STRAIGHT
+                    // to the picker. The contract is already saved server-side at this point. Show only
+                    // a loading throbber (reusing .loading-state/.loading-spinner, which are CSS-backed
+                    // in contract-styles.css) so a slow connection never looks frozen while the picker
+                    // page loads. No artificial delay — navigate immediately.
                     if (redirectUrl) {
-                        setTimeout(function() {
-                            console.log('SUBZZ SIGNATURE REDIRECT: Redirecting to:', redirectUrl);
-                            window.location.href = redirectUrl;
-                        }, countdownSeconds * 1000);
+                        $('.contract-content').html(
+                            '<div class="loading-state">' +
+                            '<div class="loading-spinner"></div>' +
+                            '<p>Taking you to payment&hellip;</p>' +
+                            '</div>'
+                        );
+                        console.log('SUBZZ SIGNATURE REDIRECT: Redirecting straight to picker:', redirectUrl);
+                        window.location.href = redirectUrl;
                     } else {
                         console.error('SUBZZ SIGNATURE ERROR: No redirect URL provided in successful response');
                         console.error('SUBZZ SIGNATURE ERROR: Full response:', response);

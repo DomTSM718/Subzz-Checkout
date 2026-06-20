@@ -1,0 +1,97 @@
+<?php
+/**
+ * Payment Redirect Page — Phase 5 Multi-Gateway Picker UI.
+ *
+ * Renders the vendor picker between contract-signed and payment-redirect-to-HPP.
+ * Customer arrives here with order context in URL params (orderRef, email, amount,
+ * signatureId). JS calls the Azure /payment/vendors endpoint, renders the radio
+ * group, then on submit POSTs /payment/create-session with the chosen vendor and
+ * redirects to the returned checkoutUrl.
+ *
+ * Locked decisions (Docs/Planning/Stitch-Parallel-Rail-Plan-2026-05-17.md):
+ *   UX-1: branded vendor names + logos, secondary visual weight
+ *   UX-2: no persistence — customer picks each checkout
+ *   UX-4: header "Pay by card", radio (not side-by-side), shared trust copy below
+ *   UX-3: failure handling (bounded retry + re-pick CTA) — Step 7 wires JS-side
+ *
+ * Assets enqueued by subzz_enqueue_payment_redirect_assets in the main plugin file.
+ * Astra note: use .btn-primary (NOT .button primary) per frontend-patterns.md #1232.
+ */
+
+if (!defined('ABSPATH')) {
+    exit;
+}
+
+get_header();
+
+// Order context from URL params — populated by the contract-success redirect path
+// (Phase 5 follow-up wires the redirect; pre-wire, the page works as a standalone
+// smoke target with params manually appended).
+$order_ref = isset($_GET['orderRef']) ? sanitize_text_field($_GET['orderRef']) : '';
+$customer_email = isset($_GET['email']) ? sanitize_email($_GET['email']) : '';
+$signature_id = isset($_GET['signatureId']) ? sanitize_text_field($_GET['signatureId']) : '';
+$amount = isset($_GET['amount']) ? floatval($_GET['amount']) : 0;
+$cohort_id = isset($_GET['cohortId']) ? sanitize_text_field($_GET['cohortId']) : '';
+// UX-3 sub-case 3 — when customer returns from a failed vendor HPP, vendor-side redirects
+// here with ?failedVendor=X. JS surfaces a "Last attempt: X" context note above the picker.
+// Sanitized as plain text (vendor identifiers are alpha-only, e.g. lekkapay/stitch).
+$failed_vendor = isset($_GET['failedVendor']) ? sanitize_text_field($_GET['failedVendor']) : '';
+?>
+
+<main id="primary" class="site-main subzz-payment-redirect-page">
+    <div class="subzz-picker-container">
+        <h1 class="subzz-picker-heading">Choose how to pay</h1>
+        <p class="subzz-picker-subheading">Select a payment provider to complete your subscription. You&rsquo;ll enter your card details securely on their page.</p>
+
+        <form id="subzz-picker-form" class="subzz-picker-form" novalidate>
+            <div id="subzz-picker-vendors" class="subzz-picker-vendors" role="radiogroup" aria-label="Choose payment provider">
+                <div class="subzz-picker-loading" role="status" aria-live="polite">
+                    Loading payment methods&hellip;
+                </div>
+            </div>
+
+            <p class="subzz-picker-trust">
+                <span class="subzz-picker-trust-icon" aria-hidden="true">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+                </span>
+                <span>PCI-compliant South African payment providers.
+                Your card details are processed securely &mdash; Subzz never sees them.</span>
+            </p>
+
+            <button type="submit" id="subzz-picker-submit" class="btn-primary subzz-picker-submit" disabled>
+                Continue to payment
+            </button>
+        </form>
+
+        <div id="subzz-picker-error" class="subzz-picker-error" hidden role="alert" aria-live="assertive">
+            <!-- Populated by picker.js on session-create failure (bounded retry + re-pick UX). -->
+        </div>
+
+        <div class="subzz-picker-badges" aria-label="Accepted cards and security">
+            <span class="subzz-picker-badge-card" title="Visa">
+                <svg width="46" height="26" viewBox="0 0 48 28" role="img" aria-label="Visa"><rect width="48" height="28" rx="4" fill="#fff" stroke="#ECECEC"></rect><text x="24" y="19" font-family="Arial, sans-serif" font-size="13" font-style="italic" font-weight="700" fill="#1A1F71" text-anchor="middle" letter-spacing="0.5">VISA</text></svg>
+            </span>
+            <span class="subzz-picker-badge-card" title="Mastercard">
+                <svg width="46" height="26" viewBox="0 0 48 28" role="img" aria-label="Mastercard"><rect width="48" height="28" rx="4" fill="#fff" stroke="#ECECEC"></rect><circle cx="20" cy="14" r="7.5" fill="#EB001B"></circle><circle cx="28" cy="14" r="7.5" fill="#F79E1B" fill-opacity="0.85"></circle></svg>
+            </span>
+            <span class="subzz-picker-badge-pci">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="3" y="11" width="18" height="11" rx="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+                PCI DSS Secure
+            </span>
+        </div>
+    </div>
+</main>
+
+<script type="application/json" id="subzz-picker-order-context">
+<?php echo wp_json_encode(array(
+    'orderReferenceId' => $order_ref,
+    'customerEmail' => $customer_email,
+    'signatureId' => $signature_id,
+    'amount' => $amount,
+    'cohortId' => $cohort_id,
+    'failedVendor' => $failed_vendor,
+)); ?>
+</script>
+
+<?php
+get_footer();

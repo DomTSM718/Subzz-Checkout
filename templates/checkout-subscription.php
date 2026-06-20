@@ -157,10 +157,11 @@ get_header();
             </div>
         </div>
 
-        <!-- Initial-load throbber (Dom 2026-06-02): visible on page load while affordability is fetched
-             (the cart→plan-detail gap). checkout-plans.js hideSection('initial-loading') clears it as soon
-             as the response resolves (cards / gate / not-verified / error). Reuses .loading-state +
-             .loading-spinner from contract-styles.css (already enqueued for #loading-checkout). -->
+        <!-- Initial-load throbber (Dom 2026-06-02; merge 2026-06-20): visible on page load while
+             affordability is fetched (the cart→plan-detail gap). checkout-plans.js clears it in the
+             $.ajax success/error AND complete handlers (the latter merged from Stitch PS-3 as a
+             belt-and-braces safety net), so it hides on every outcome (cards / gate / not-verified
+             / error). Reuses .loading-state + .loading-spinner from contract-styles.css. -->
         <div id="initial-loading" class="loading-state">
             <div class="loading-spinner"></div>
             <p>Loading your plans…</p>

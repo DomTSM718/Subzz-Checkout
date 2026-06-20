@@ -1,0 +1,341 @@
+/**
+ * Subzz Multi-Vendor Payment Picker styles — "Choose how to pay" step.
+ *
+ * Rework 2026-06-09 (approved mockup C:/tmp/picker-mockup.html):
+ *   - On the --subzz-* token system (subzz-base.css IS enqueued on this page;
+ *     checkout-plans.css is NOT — so EVERY style, incl. the coral CTA, lives here).
+ *   - Matches the checkout-plans card family: white card / radius 12 / shadow-sm
+ *     on a grey page; BLUE selected-state (checkout convention), CORAL reserved
+ *     for the primary action button.
+ *   - Vendor rows are choice cards; identity = real logoUrl image when present,
+ *     else the vendor NAME shown once (no logo/name duplication).
+ *   - Amount surfaced on the CTA (.amt/.dot), trust badges (Visa/MC/PCI) below.
+ *
+ * CTA note: .btn-primary is NOT defined on this page (checkout-plans.css absent),
+ * so the coral button look is applied to the custom, theme-safe class
+ * .subzz-picker-submit (+ .subzz-picker-retry-cta). Per frontend-patterns.md #1232
+ * never rely on theme-targeted .button/.btn-primary here.
+ */
+
+/* -- Page + card --------------------------------------------------------- */
+.subzz-payment-redirect-page {
+    background: var(--subzz-page-bg, #F5F5F5);
+    padding: clamp(24px, 5vw, 48px) 16px;
+    font-family: var(--subzz-font-family, 'Montserrat', sans-serif);
+}
+
+.subzz-picker-container {
+    max-width: 560px;
+    margin: 0 auto;
+    background: var(--subzz-white, #fff);
+    border-radius: 12px;
+    box-shadow: var(--subzz-shadow-sm, 0 1px 2px 0 rgba(0,0,0,0.05));
+    padding: clamp(20px, 5vw, 28px);
+}
+
+.subzz-picker-heading {
+    font-family: var(--subzz-font-family, 'Montserrat', sans-serif);
+    font-size: 22px;
+    font-weight: var(--subzz-weight-bold, 700);
+    color: var(--subzz-gray, #545454);
+    margin: 0 0 4px 0;
+    letter-spacing: -0.3px;
+}
+
+.subzz-picker-subheading {
+    font-size: var(--subzz-font-sm, 14px);
+    line-height: var(--subzz-leading-normal, 1.5);
+    color: rgba(84, 84, 84, 0.7);
+    margin: 0 0 24px 0;
+}
+
+.subzz-picker-form {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.subzz-picker-vendors {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.subzz-picker-loading {
+    padding: 20px;
+    text-align: center;
+    color: var(--subzz-gray, #545454);
+    font-size: var(--subzz-font-sm, 14px);
+    opacity: 0.7;
+}
+
+.subzz-picker-empty {
+    padding: 24px;
+    text-align: center;
+    color: var(--subzz-gray, #545454);
+    font-size: var(--subzz-font-sm, 14px);
+    border: 1px dashed rgba(84, 84, 84, 0.25);
+    border-radius: var(--subzz-radius-lg, 10px);
+}
+
+/* -- Vendor choice cards ------------------------------------------------- */
+.subzz-picker-vendor {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 16px 18px;
+    border: 2px solid var(--subzz-border, #E0E0E0);
+    border-radius: var(--subzz-radius-lg, 10px);
+    cursor: pointer;
+    background: var(--subzz-white, #fff);
+    transition: border-color var(--subzz-transition-fast, 150ms) ease,
+                background-color var(--subzz-transition-fast, 150ms) ease;
+}
+
+.subzz-picker-vendor:hover {
+    border-color: var(--subzz-blue, #2A8BEA);
+}
+
+/* Selected = BLUE (checkout convention; coral is the action button only). */
+.subzz-picker-vendor.is-selected {
+    border-color: var(--subzz-blue, #2A8BEA);
+    background: rgba(42, 139, 234, 0.05);
+}
+
+.subzz-picker-vendor input[type="radio"] {
+    flex-shrink: 0;
+    width: 20px;
+    height: 20px;
+    margin: 0;
+    accent-color: var(--subzz-blue, #2A8BEA);
+    cursor: pointer;
+}
+
+/* Real vendor logo (rendered only when vendor.logoUrl is set).
+   Sized by HEIGHT only (width auto) so wordmarks of different aspect ratios
+   (Stitch ~7:1, LekkaPay ~4:1) render at equal optical weight — the Stitch
+   brand rule ("same visual weight as competing payment methods"). Setting one
+   dimension + auto avoids the squish from constraining both (frontend-patterns
+   no-distortion rule). 24px clears the row comfortably; widest wordmark (Stitch
+   at h24 ≈ 172px) fits the ~440px identity column with room to spare. */
+.subzz-picker-vendor-logo {
+    flex-shrink: 0;
+    align-self: flex-start; /* parent is a flex column; without this the img stretches to
+                               full column width and the logo distorts. Keep natural ratio. */
+    height: 24px;
+    width: auto;
+    display: block;
+}
+
+.subzz-picker-vendor-text {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.subzz-picker-vendor-name {
+    font-size: 17px;
+    font-weight: var(--subzz-weight-bold, 700);
+    color: var(--subzz-gray, #545454);
+    letter-spacing: -0.2px;
+}
+
+.subzz-picker-vendor-sub {
+    font-size: 12.5px;
+    font-weight: var(--subzz-weight-medium, 500);
+    color: rgba(84, 84, 84, 0.6);
+    margin-top: 3px;
+}
+
+.subzz-picker-vendor-glyph {
+    flex-shrink: 0;
+    color: rgba(84, 84, 84, 0.35);
+    display: flex;
+    align-items: center;
+    transition: color var(--subzz-transition-fast, 150ms) ease;
+}
+
+.subzz-picker-vendor.is-selected .subzz-picker-vendor-glyph {
+    color: var(--subzz-blue, #2A8BEA);
+}
+
+/* -- Trust line --------------------------------------------------------- */
+.subzz-picker-trust {
+    margin: 0;
+    font-size: 13px;
+    line-height: var(--subzz-leading-normal, 1.5);
+    color: rgba(84, 84, 84, 0.75);
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+}
+
+.subzz-picker-trust-icon {
+    flex-shrink: 0;
+    margin-top: 1px;
+    color: rgba(84, 84, 84, 0.6);
+    display: inline-flex;
+}
+
+/* -- Primary action button (coral; self-contained — no .btn-primary here) */
+.subzz-picker-submit,
+.subzz-picker-retry-cta {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    width: 100%;
+    min-height: 52px;
+    padding: 16px 32px;
+    background: var(--subzz-red, #F73C5C);
+    color: #fff;
+    border: none;
+    border-radius: var(--subzz-radius-md, 8px);
+    font-family: var(--subzz-font-family, 'Montserrat', sans-serif);
+    font-size: 16px;
+    font-weight: var(--subzz-weight-bold, 700);
+    cursor: pointer;
+    text-align: center;
+    transition: opacity var(--subzz-transition-fast, 150ms) ease,
+                transform var(--subzz-transition-fast, 150ms) ease,
+                box-shadow var(--subzz-transition-fast, 150ms) ease;
+}
+
+.subzz-picker-submit:hover:not(:disabled),
+.subzz-picker-retry-cta:hover:not(:disabled) {
+    opacity: 0.92;
+    transform: translateY(-1px);
+    box-shadow: var(--subzz-shadow-lg, 0 10px 15px -3px rgba(0,0,0,0.1));
+}
+
+.subzz-picker-submit:disabled,
+.subzz-picker-retry-cta:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+}
+
+/* Amount on the CTA. */
+.subzz-picker-submit .subzz-picker-amt {
+    font-weight: var(--subzz-weight-bold, 800);
+}
+
+.subzz-picker-submit .subzz-picker-dot {
+    opacity: 0.55;
+}
+
+/* Desktop shows the full verb ("Continue to payment · R139"); mobile swaps to
+   the short verb ("Pay R139") so the long copy never wraps awkwardly. */
+.subzz-picker-cta-short { display: none; }
+
+/* -- Payment / security badges ------------------------------------------ */
+.subzz-picker-badges {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 14px;
+    margin-top: 20px;
+    padding-top: 18px;
+    border-top: 1px solid #EFEFEF;
+}
+
+.subzz-picker-badge-card {
+    display: inline-flex;
+    align-items: center;
+}
+
+.subzz-picker-badge-pci {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 11px;
+    font-weight: var(--subzz-weight-semibold, 600);
+    color: rgba(84, 84, 84, 0.55);
+    letter-spacing: 0.2px;
+}
+
+/* -- Re-pick error screen (UX-3) ---------------------------------------- */
+.subzz-picker-error {
+    margin-top: 20px;
+    padding: 20px;
+    background: rgba(247, 60, 92, 0.04);
+    border: 1px solid rgba(247, 60, 92, 0.2);
+    border-radius: var(--subzz-radius-lg, 10px);
+}
+
+.subzz-picker-error[hidden] { display: none; }
+.subzz-picker-form[hidden] { display: none; }
+
+.subzz-picker-error-detail {
+    font-size: 16px;
+    font-weight: var(--subzz-weight-medium, 500);
+    color: var(--subzz-gray, #545454);
+    margin: 0 0 8px 0;
+}
+
+.subzz-picker-error-message {
+    font-size: var(--subzz-font-sm, 14px);
+    color: var(--subzz-gray, #545454);
+    opacity: 0.8;
+    margin: 0 0 20px 0;
+}
+
+.subzz-picker-error-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+/* Secondary CTA — lower weight than the coral retry so "retry same" reads default. */
+.subzz-picker-switch-cta {
+    width: 100%;
+    min-height: 52px;
+    padding: 12px 24px;
+    background: transparent;
+    border: 2px solid var(--subzz-blue, #2A8BEA);
+    border-radius: var(--subzz-radius-md, 8px);
+    color: var(--subzz-blue, #2A8BEA);
+    font-family: var(--subzz-font-family, 'Montserrat', sans-serif);
+    font-size: 15px;
+    font-weight: var(--subzz-weight-semibold, 600);
+    cursor: pointer;
+    transition: background-color var(--subzz-transition-fast, 150ms) ease,
+                color var(--subzz-transition-fast, 150ms) ease;
+}
+
+.subzz-picker-switch-cta:hover {
+    background: var(--subzz-blue, #2A8BEA);
+    color: #fff;
+}
+
+/* "Last attempt: X" context note. */
+.subzz-picker-last-attempt {
+    margin: 0 0 14px 0;
+    padding: 8px 12px;
+    background: rgba(84, 84, 84, 0.04);
+    border-left: 3px solid rgba(84, 84, 84, 0.25);
+    border-radius: var(--subzz-radius-sm, 6px);
+    font-size: var(--subzz-font-xs, 12px);
+    color: var(--subzz-gray, #545454);
+    opacity: 0.85;
+}
+
+/* -- Redirecting state (single-vendor auto-skip + submit-in-flight) ------ */
+.subzz-picker-redirecting {
+    padding: 32px 20px;
+    text-align: center;
+    color: var(--subzz-gray, #545454);
+    font-size: var(--subzz-font-sm, 14px);
+}
+
+/* -- Responsive --------------------------------------------------------- */
+@media (max-width: 600px) {
+    .subzz-picker-container { padding: 20px; }
+    .subzz-picker-heading { font-size: 20px; }
+    .subzz-picker-vendor-name { font-size: 16px; }
+    .subzz-picker-cta-full { display: none; }
+    .subzz-picker-cta-short { display: inline; }
+}

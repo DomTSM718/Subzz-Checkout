@@ -2,8 +2,13 @@
 /**
  * Plugin Name: Subzz Subscription Payments
  * Description: Subscription checkout with plan selection, contract signing, LekkaPay payment, customer portal, and Azure backend integration.
- * Version: 2.5.11
+ * Version: 2.5.12
  * Author: Subzz Team
+ *
+ * 2.5.12 (2026-06-21): MAGIC-LOGIN fires the wp_login action after setting the auth
+ *   cookie, so LiteSpeed Cache (and other login-hooked plugins) set their per-user
+ *   "vary" cookie. Without it a magic-logged-in customer was authenticated but still
+ *   served the cached GUEST header (looked logged-out). Normal login was unaffected.
  *
  * 2.5.11 (2026-06-20): RECONCILED TRUNK — band→checkout (v2.5.2) + Stitch parallel-rail
  *   (v2.5.10) re-integrated after the 18-Jun deploy regression, plus magic-login consume.

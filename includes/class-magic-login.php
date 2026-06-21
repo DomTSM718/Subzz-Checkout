@@ -124,8 +124,18 @@ class Subzz_Magic_Login {
         }
 
         // 6. Log them in (persistent cookie) and send them shopping.
-        wp_set_auth_cookie($user->ID, true);
+        //    Mirror a normal wp_signon(): set current user, set the auth cookie,
+        //    THEN fire the wp_login action. Firing wp_login is what makes this a
+        //    "real" login as far as other plugins are concerned. In particular
+        //    LiteSpeed Cache listens for wp_login to set its per-user "vary"
+        //    cookie; without it the customer is authenticated (valid session) but
+        //    LiteSpeed keeps serving the cached GUEST page — so the header still
+        //    shows logged-out until some later cache-varying request. Normal
+        //    password login fires wp_login and renders correctly; this path did
+        //    not, which is why the magic-login header looked logged-out.
         wp_set_current_user($user->ID);
+        wp_set_auth_cookie($user->ID, true);
+        do_action('wp_login', $user->user_login, $user);
         subzz_log('SUBZZ MAGIC-LOGIN: success for user ' . $user->ID);
 
         $this->redirect($this->destination_url());

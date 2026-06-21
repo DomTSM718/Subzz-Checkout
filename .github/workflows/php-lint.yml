@@ -1,0 +1,38 @@
+name: PHP Lint
+
+# Syntax gate (php -l) for the Subzz subscription-payments WP plugin.
+# This is a SYNTAX check only, NOT a security control. It catches parse
+# errors before a broken plugin build can be deployed to WP.
+#
+# Matrix 7.4 + 8.2: 7.4 catches 8.x-only syntax that would fatal on an
+# older WP host; 8.2 catches legacy constructs removed in modern PHP.
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  php-lint:
+    name: php -l (PHP ${{ matrix.php-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        php-version: ['7.4', '8.2']
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php-version }}
+          coverage: none
+
+      - name: Lint all PHP files
+        run: |
+          echo "Linting all *.php files with PHP $(php -r 'echo PHP_VERSION;')"
+          # xargs exits 123 if any `php -l` invocation reports a syntax error,
+          # which fails the job.
+          find . -name '*.php' -not -path './vendor/*' -print0 \
+            | xargs -0 -n1 php -l

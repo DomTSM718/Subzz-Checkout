@@ -445,6 +445,19 @@ class Subzz_Payment_Handler {
 
         // Create WooCommerce order programmatically
         $wc_order = wc_create_order(array('status' => 'pending'));
+
+        // Link the order to the customer's WC account. Previously this was never set, so every
+        // Subzz order was created as customer_id=0 (guest) — breaking WC-side records, WC native
+        // customer analytics, and the customer's "My Account -> Orders" history. $user is resolved
+        // by billing email above (~line 436); email-based so it works regardless of WP login state
+        // (magic-link auto-login only went live 2026-06-21; most customers were never logged in).
+        if ($user && !empty($user->ID)) {
+            $wc_order->set_customer_id($user->ID);
+            subzz_log('SUBZZ CHECKOUT: Linked order to WC customer_id=' . $user->ID . ' (email=' . $customer_email . ')');
+        } else {
+            subzz_log('SUBZZ CHECKOUT: No WP user for email=' . $customer_email . ' — order left as guest customer_id=0');
+        }
+
         $product = wc_get_product($variation_id ?: $product_id);
 
         if ($product) {

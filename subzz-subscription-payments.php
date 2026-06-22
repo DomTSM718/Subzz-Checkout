@@ -2,8 +2,13 @@
 /**
  * Plugin Name: Subzz Subscription Payments
  * Description: Subscription checkout with plan selection, contract signing, LekkaPay payment, customer portal, and Azure backend integration.
- * Version: 2.5.12
+ * Version: 2.5.13
  * Author: Subzz Team
+ *
+ * 2.5.13 (2026-06-22): ORDER-CUSTOMER LINK — checkout now calls set_customer_id() on the
+ *   programmatically-created WC order (resolved by billing email), so orders link to the
+ *   customer's WC account instead of being created as guest (customer_id=0). Fixes WC-side
+ *   record correctness, WC native customer analytics, and "My Account -> Orders" history.
  *
  * 2.5.12 (2026-06-21): MAGIC-LOGIN fires the wp_login action after setting the auth
  *   cookie, so LiteSpeed Cache (and other login-hooked plugins) set their per-user

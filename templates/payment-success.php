@@ -20,6 +20,14 @@ get_header();
 // every time. The authoritative source of response_code is the webhook handler (C-G7), but this
 // belt-and-braces merge ensures the return page captures params if LekkaPay does POST-redirect.
 $subzz_return_params = array_merge(is_array($_GET) ? $_GET : array(), is_array($_POST) ? $_POST : array());
+// EMBED Ph2 (2026-07-24): Stitch's hosted card-consent returns consent_id + status here, NOT the
+// LekkaPay-shaped params below. Verified against real data — every captured PaymentLogs
+// return_success row with params carries {"consent_id":"…","status":"CONSENTED"}. Note CONSENTED is
+// a consent, NOT a completed payment; the webhook remains authoritative for payment state.
+// Contract: Docs/Planning/Embed-PostMessage-Contract-2026-07-24.md
+$subzz_consent_id     = isset($subzz_return_params['consent_id']) ? sanitize_text_field($subzz_return_params['consent_id']) : '';
+$subzz_consent_status = isset($subzz_return_params['status']) ? sanitize_text_field($subzz_return_params['status']) : '';
+
 $reference_id = isset($subzz_return_params['reference_id']) ? sanitize_text_field($subzz_return_params['reference_id']) : '';
 $response_code = isset($subzz_return_params['response_code']) ? sanitize_text_field($subzz_return_params['response_code']) : '';
 $response_message = isset($subzz_return_params['response']) ? sanitize_text_field($subzz_return_params['response']) : '';
@@ -294,6 +302,55 @@ if (class_exists('Subzz_Azure_API_Client')) {
     </div>
 </div>
 
+<?php
+// ─────────────────────────────────────────────────────────────────────────────
+// EMBED Ph2 return leg (2026-07-24) — hand the gateway result back to the Subzz
+// conductor that opened this window, then close.
+// Contract: Docs/Planning/Embed-PostMessage-Contract-2026-07-24.md (hop 1).
+//
+// Only fires when this page is a CHILD window (window.opener present). The ordinary
+// WooCommerce checkout has no opener, so this is inert on the normal flow.
+//
+// Why an allowlist instead of an origin passed in the URL: Stitch only redirects to
+// EXACT pre-registered URLs, so we cannot append the opener's origin as a param.
+// Emitting to each allowed origin is safe — postMessage with an explicit targetOrigin
+// delivers ONLY to a window whose origin matches exactly, so a non-matching origin
+// receives nothing. Never "*": that would hand the consent id to any opener.
+// The conductor is served by the SIGNUP app, NOT this WordPress site — do not add
+// staging.subzz.co.za / subzz.co.za here; the conductor does not live there and every
+// extra origin is one more window that could receive a consent id.
+// Re-derive rather than trusting these strings: `az staticwebapp list --query "[].{name:name,host:defaultHostname}"`
+// (staging signup SWA has no custom domain; prod is signup.subzz.co.za). Verified 2026-07-24.
+$subzz_conductor_origins = apply_filters('subzz_embed_conductor_origins', array(
+    'https://signup.subzz.co.za',                            // prod
+    'https://polite-smoke-0f5cf7603.6.azurestaticapps.net',  // staging (subzz-signup-stagingSWA)
+));
+?>
+<script>
+(function () {
+    if (!window.opener || window.opener.closed) { return; }   // normal WC checkout — inert
+
+    var origins = <?php echo wp_json_encode(array_values($subzz_conductor_origins)); ?>;
+    var payload = {
+        source:        "subzz.payment",
+        version:       1,
+        event:         "payment.consent_result",
+        consentId:     <?php echo wp_json_encode($subzz_consent_id); ?>,
+        status:        <?php echo wp_json_encode($subzz_consent_status); ?>,
+        rawStatus:     <?php echo wp_json_encode($subzz_consent_status); ?>,
+        referenceId:   <?php echo wp_json_encode($reference_id); ?>
+    };
+
+    for (var i = 0; i < origins.length; i++) {
+        try { window.opener.postMessage(payload, origins[i]); } catch (e) { /* non-matching origin */ }
+    }
+
+    // Give the opener a tick to process, then close. If close() is blocked (not all
+    // browsers permit closing a window the script did not open), the page stays up and
+    // the customer still sees a valid success page — degraded, not broken.
+    setTimeout(function () { try { window.close(); } catch (e) {} }, 250);
+})();
+</script>
 <?php
 get_footer();
 ?>

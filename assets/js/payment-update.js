@@ -50,7 +50,19 @@
 
     /**
      * Handle form submission.
-     * Creates a LekkaPay session for card update and redirects the customer.
+     * Creates a Stitch card-consent session for card update and redirects the customer.
+     *
+     * 2026-07-29 FIX: this call previously sent NO `vendor`, so the API rejected every
+     * attempt with 400 "Payment vendor is required" (PaymentSessionOutcome.VendorRequired
+     * fires on a null/empty vendor). It was written when LekkaPay was the only gateway and
+     * the endpoint took no vendor at all; the Phase-5 picker later made `vendor` mandatory
+     * on /payment/create-session and this page was never updated.
+     *
+     * Hardcoded to 'stitch' deliberately, not for convenience: `lekkapay` is DISABLED in the
+     * PaymentVendors registry (2026-07-05) and `stitch` is the only enabled vendor, and the
+     * entire purpose of a payment-update link is to move a customer ONTO Stitch. With
+     * purpose='payment-update' the API routes to Stitch's card-consent flow, where the
+     * zero `amount` below is the correct tokenisation shape rather than a real charge.
      */
     function initSubmitHandler() {
         $submit.on('click', function(e) {
@@ -74,6 +86,7 @@
                     customerName: '',   // Not needed for update flow
                     amount: 0,          // Zero-amount tokenisation
                     currency: 'ZAR',
+                    vendor: 'stitch',   // REQUIRED — omitting it 400s with "Payment vendor is required"
                     purpose: 'payment-update',
                     returnUrl: window.location.href.split('?')[0] + '?token=' + encodeURIComponent(data.token) + '&result=success',
                     cancelUrl: window.location.href.split('?')[0] + '?token=' + encodeURIComponent(data.token) + '&result=cancelled'

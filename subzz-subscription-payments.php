@@ -2,8 +2,16 @@
 /**
  * Plugin Name: Subzz Subscription Payments
  * Description: Subscription checkout with plan selection, contract signing, LekkaPay payment, customer portal, and Azure backend integration.
- * Version: 2.5.13
+ * Version: 2.5.14
  * Author: Subzz Team
+ *
+ * 2.5.14 (2026-07-29): PAYMENT-UPDATE LINK FIXED — payment-update.js sent no `vendor` on
+ *   /payment/create-session, so every card-update attempt failed with 400 "Payment vendor
+ *   is required". The page predates the Phase-5 vendor picker, which made `vendor`
+ *   mandatory on that endpoint. Now sends vendor='stitch' (lekkapay is DISABLED in the
+ *   PaymentVendors registry since 2026-07-05; stitch is the only enabled vendor, and
+ *   moving customers onto Stitch is the entire purpose of these links).
+ *   Found via Brett's live migration link. ONE-LINE payload change; no PHP touched.
  *
  * 2.5.13 (2026-06-22): ORDER-CUSTOMER LINK — checkout now calls set_customer_id() on the
  *   programmatically-created WC order (resolved by billing email), so orders link to the

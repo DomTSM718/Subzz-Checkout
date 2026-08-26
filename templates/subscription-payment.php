@@ -562,8 +562,6 @@ function extract_customer_data_from_order($order_data) {
                     (function() {
                         var checkoutUrl = <?php echo json_encode($checkout_url_raw); ?>;
 
-                        console.log('SUBZZ PAYMENT: Redirecting to payment gateway');
-
                         setTimeout(function() {
                             window.location.href = checkoutUrl;
                         }, 2000);

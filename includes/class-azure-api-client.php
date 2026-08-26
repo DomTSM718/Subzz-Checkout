@@ -20,9 +20,8 @@ class Subzz_Azure_API_Client {
     
     public function __construct() {
         // Configurable Azure URL — set SUBZZ_AZURE_API_URL in wp-config.php for production
-        $this->azure_base_url = defined('SUBZZ_AZURE_API_URL')
-            ? SUBZZ_AZURE_API_URL
-            : 'http://localhost:5000/api';
+        // H8 (2026-08-26): no localhost fallback — subzz_api_base_url() reports a missing constant.
+        $this->azure_base_url = subzz_api_base_url();
         $this->api_timeout = 30;
 
         subzz_log('=== SUBZZ AZURE CLIENT: Initialized with URL: ' . $this->azure_base_url . ' ===');
@@ -222,6 +221,7 @@ class Subzz_Azure_API_Client {
 
         if (is_wp_error($response)) {
             subzz_log('SUBZZ AZURE ERROR: Plan cards request failed - ' . $response->get_error_message());
+            $this->record_failure('get_plan_cards', null, 'transport: ' . $response->get_error_message());
             return false;
         }
 
@@ -242,6 +242,7 @@ class Subzz_Azure_API_Client {
         }
 
         subzz_log('SUBZZ AZURE ERROR: Plan cards failed with HTTP ' . $response_code . ' - ' . $response_body);
+        $this->record_failure('get_plan_cards', null, 'HTTP ' . $response_code);
         return false;
     }
 
@@ -774,16 +775,17 @@ class Subzz_Azure_API_Client {
         $response = wp_remote_post($endpoint, $this->get_default_request_args(array(
             'body' => $json_payload
         )));
-        
+
         $end_time = microtime(true);
         $request_duration = round(($end_time - $start_time) * 1000, 2);
-        
+
         subzz_log('SUBZZ AZURE API: Request completed in ' . $request_duration . 'ms');
-        
+
         // Handle request errors
         if (is_wp_error($response)) {
             subzz_log('SUBZZ AZURE ERROR: HTTP request failed');
             subzz_log('SUBZZ AZURE ERROR: Error message: ' . $response->get_error_message());
+            $this->record_failure('store_signature', $order_reference_id, 'transport: ' . $response->get_error_message());
             return false;
         }
         
@@ -819,6 +821,7 @@ class Subzz_Azure_API_Client {
         } else {
             subzz_log('SUBZZ AZURE ERROR: Store signature failed with HTTP ' . $response_code);
             subzz_log('SUBZZ AZURE ERROR: Response body: ' . $response_body);
+            $this->record_failure('store_signature', $order_reference_id, 'HTTP ' . $response_code);
             return false;
         }
     }
@@ -1123,22 +1126,26 @@ class Subzz_Azure_API_Client {
         $request_duration = round(($end_time - $start_time) * 1000, 2);
         
         subzz_log('SUBZZ AZURE API: Request completed in ' . $request_duration . 'ms');
-        
+
         // Handle request errors
         if (is_wp_error($response)) {
             subzz_log('SUBZZ AZURE ERROR: HTTP request failed');
             subzz_log('SUBZZ AZURE ERROR: Error message: ' . $response->get_error_message());
+            $this->record_failure('update_order_status', $reference_id, 'transport: ' . $response->get_error_message() . ' (to ' . $new_status . ')');
             return false;
         }
-        
+
         // Log response details
         $response_code = wp_remote_retrieve_response_code($response);
         $response_message = wp_remote_retrieve_response_message($response);
         $response_body = wp_remote_retrieve_body($response);
-        
+
         subzz_log('SUBZZ AZURE RESPONSE: HTTP ' . $response_code . ' (' . $response_message . ')');
         subzz_log('SUBZZ AZURE RESPONSE: Body content: ' . $response_body);
-        
+        if ($response_code !== 200) {
+            $this->record_failure('update_order_status', $reference_id, 'HTTP ' . $response_code . ' (to ' . $new_status . ')');
+        }
+
         // Process response
         if ($response_code === 200) {
             $response_data = json_decode($response_body, true);
@@ -1158,6 +1165,7 @@ class Subzz_Azure_API_Client {
                 subzz_log('SUBZZ AZURE SUCCESS: Total processing time: ' . $request_duration . 'ms');
                 return true;
             } else {
+                $this->record_failure('update_order_status', $reference_id, 'HTTP 200 but success!=true (to ' . $new_status . ')');
                 subzz_log('SUBZZ AZURE ERROR: Order status update failed - Success flag not true or missing');
                 subzz_log('SUBZZ AZURE ERROR: Response success value: ' . json_encode($response_data['success'] ?? 'MISSING'));
                 
@@ -1269,7 +1277,7 @@ class Subzz_Azure_API_Client {
             subzz_log('SUBZZ AZURE ERROR: HTTP request failed');
             subzz_log('SUBZZ AZURE ERROR: Error code: ' . $response->get_error_code());
             subzz_log('SUBZZ AZURE ERROR: Error message: ' . $response->get_error_message());
-            subzz_log('SUBZZ AZURE ERROR: Is Azure backend running on localhost:5000?');
+            $this->record_failure('create_lekkapay_session', $session_data['orderReferenceId'] ?? null, 'transport: ' . $response->get_error_message());
             return false;
         }
         
@@ -1308,6 +1316,7 @@ class Subzz_Azure_API_Client {
         } else {
             subzz_log('SUBZZ AZURE ERROR: Create LekkaPay session failed with HTTP ' . $response_code);
             subzz_log('SUBZZ AZURE ERROR: Response body: ' . $response_body);
+            $this->record_failure('create_lekkapay_session', $session_data['orderReferenceId'] ?? null, 'HTTP ' . $response_code);
             return false;
         }
     }
@@ -1359,6 +1368,7 @@ class Subzz_Azure_API_Client {
 
         if (is_wp_error($response)) {
             subzz_log('SUBZZ AZURE ERROR: Eligibility ' . $attempt_label . ' transport failure - ' . $response->get_error_message());
+            $this->record_failure('checkout_eligibility', null, $attempt_label . ' transport: ' . $response->get_error_message());
             return false;
         }
 
@@ -1369,6 +1379,7 @@ class Subzz_Azure_API_Client {
 
         if ($response_code !== 200) {
             subzz_log('SUBZZ AZURE ERROR: Eligibility ' . $attempt_label . ' non-200 - body: ' . $response_body);
+            $this->record_failure('checkout_eligibility', null, $attempt_label . ' HTTP ' . $response_code);
             return false;
         }
 
@@ -1384,6 +1395,40 @@ class Subzz_Azure_API_Client {
             'profileId'   => isset($data['profileId']) ? $data['profileId'] : null,
             'gateEnabled' => isset($data['gateEnabled']) ? (bool) $data['gateEnabled'] : true,
         );
+    }
+
+    /**
+     * H6 (2026-08-26): a failed external call must reach a QUERYABLE surface, not just
+     * subzz_log() — which is a no-op unless SUBZZ_DEBUG is on, so on prod every failure below
+     * used to vanish. Two surfaces: an unconditional PHP error_log line (grep-able on the host)
+     * and, when the reference resolves to a WC order, an order note visible in WC admin.
+     * Never throws, never changes the caller's return value.
+     *
+     * @param string      $operation    Short name, e.g. 'update_order_status'
+     * @param string|null $reference_id Subzz order reference (_subzz_reference_id meta), if known
+     * @param string      $detail       What failed (status code / transport error), no secrets
+     */
+    private function record_failure($operation, $reference_id, $detail) {
+        $line = 'SUBZZ API FAILURE [' . $operation . ']'
+            . ($reference_id ? ' ref=' . $reference_id : '')
+            . ' — ' . $detail;
+        error_log($line); // deliberately NOT subzz_log(): this must survive SUBZZ_DEBUG=false
+
+        if (empty($reference_id) || !function_exists('wc_get_orders')) {
+            return;
+        }
+        try {
+            $orders = wc_get_orders(array(
+                'meta_key'   => '_subzz_reference_id',
+                'meta_value' => $reference_id,
+                'limit'      => 1,
+            ));
+            if (!empty($orders)) {
+                $orders[0]->add_order_note('SUBZZ: ' . $operation . ' FAILED — ' . $detail);
+            }
+        } catch (\Throwable $t) {
+            error_log('SUBZZ API FAILURE: could not attach order note for ' . $reference_id . ' — ' . $t->getMessage());
+        }
     }
 
     /**
@@ -1410,13 +1455,16 @@ class Subzz_Azure_API_Client {
         )));
 
         if (is_wp_error($response)) {
-            subzz_log('SUBZZ AZURE ERROR: create-session proxy transport failure - ' . $response->get_error_message());
+            $this->record_failure('create_payment_session', $payload['orderReferenceId'] ?? null, 'transport: ' . $response->get_error_message());
             return array('status' => 0, 'body' => null);
         }
 
         $status = (int) wp_remote_retrieve_response_code($response);
         $decoded = json_decode(wp_remote_retrieve_body($response), true);
         subzz_log('SUBZZ AZURE RESPONSE: create-session proxy HTTP ' . $status);
+        if ($status >= 500) {
+            $this->record_failure('create_payment_session', $payload['orderReferenceId'] ?? null, 'HTTP ' . $status);
+        }
 
         return array('status' => $status, 'body' => is_array($decoded) ? $decoded : null);
     }

@@ -1,3 +1,6 @@
+// H5 (2026-08-26): verbose tracing only when SUBZZ_DEBUG is on (window.subzzDebug is printed by the plugin in wp_head). console.warn/error stay live.
+var subzzLog = (typeof window !== "undefined" && window.subzzDebug) ? console.log.bind(console) : function () {};
+
 /**
  * Subzz Billing Date Handler
  * Manages Step 1: Billing Date Selection
@@ -36,7 +39,7 @@
     }
     window._subzzBillingDateInitialized = true;
 
-    console.log('SUBZZ BILLING DATE: Handler initializing');
+    subzzLog('SUBZZ BILLING DATE: Handler initializing');
     
     // Namespace for billing date functionality
     window.SubzzContract = window.SubzzContract || {};
@@ -48,7 +51,7 @@
     
     // Initialize on document ready
     $(document).ready(function() {
-        console.log('SUBZZ BILLING DATE: DOM ready, setting up billing date selection');
+        subzzLog('SUBZZ BILLING DATE: DOM ready, setting up billing date selection');
         
         // Validate required global variables
         if (!validateGlobalVariables()) {
@@ -56,16 +59,16 @@
             return;
         }
         
-        console.log('SUBZZ BILLING DATE: Global variables validated');
-        console.log('SUBZZ BILLING DATE: Reference ID:', window.subzzReferenceId);
-        console.log('SUBZZ BILLING DATE: Customer Email:', window.subzzCustomerEmail);
+        subzzLog('SUBZZ BILLING DATE: Global variables validated');
+        subzzLog('SUBZZ BILLING DATE: Reference ID:', window.subzzReferenceId);
+        subzzLog('SUBZZ BILLING DATE: Customer Email:', window.subzzCustomerEmail);
 
         // Check if billing_day was passed from checkout page (skip Step 1)
         var urlParams = new URLSearchParams(window.location.search);
         var preselectedDay = urlParams.get('billing_day');
 
         if (preselectedDay && [1, 8, 15, 22].indexOf(parseInt(preselectedDay)) !== -1) {
-            console.log('SUBZZ BILLING DATE: Pre-selected from checkout page:', preselectedDay);
+            subzzLog('SUBZZ BILLING DATE: Pre-selected from checkout page:', preselectedDay);
             window.SubzzContract.selectedBillingDay = parseInt(preselectedDay);
 
             // Hide Step 1 immediately (no flash) then auto-generate contract
@@ -99,7 +102,7 @@
         // Initialize change billing date link
         initializeChangeBillingDate();
 
-        console.log('SUBZZ BILLING DATE: Handler initialization complete');
+        subzzLog('SUBZZ BILLING DATE: Handler initialization complete');
     });
     
     /**
@@ -133,7 +136,7 @@
      * Initialize billing date radio button selection
      */
     function initializeBillingDateSelection() {
-        console.log('SUBZZ BILLING DATE: Initializing radio button handlers');
+        subzzLog('SUBZZ BILLING DATE: Initializing radio button handlers');
         
         const $billingRadios = $('input[name="billing_day"]');
         const $previewDiv = $('#billing-preview');
@@ -144,13 +147,13 @@
             return;
         }
         
-        console.log('SUBZZ BILLING DATE: Found ' + $billingRadios.length + ' billing day options');
+        subzzLog('SUBZZ BILLING DATE: Found ' + $billingRadios.length + ' billing day options');
         
         // Handle radio button changes
         $billingRadios.on('change', function() {
             if (this.checked) {
                 const billingDay = parseInt(this.value);
-                console.log('SUBZZ BILLING DATE: Selected billing day:', billingDay);
+                subzzLog('SUBZZ BILLING DATE: Selected billing day:', billingDay);
                 
                 // Store selection
                 window.SubzzContract.selectedBillingDay = billingDay;
@@ -163,14 +166,14 @@
             }
         });
         
-        console.log('SUBZZ BILLING DATE: Radio button handlers initialized');
+        subzzLog('SUBZZ BILLING DATE: Radio button handlers initialized');
     }
     
     /**
      * Update billing preview with calculated dates
      */
     function updateBillingPreview(billingDay, $previewDiv, $previewText) {
-        console.log('SUBZZ BILLING DATE: Updating preview for billing day:', billingDay);
+        subzzLog('SUBZZ BILLING DATE: Updating preview for billing day:', billingDay);
         
         const today = new Date();
         const currentDay = today.getDate();
@@ -208,7 +211,7 @@
         // Show preview
         $previewDiv.fadeIn(300);
         
-        console.log('SUBZZ BILLING DATE: Preview updated', {
+        subzzLog('SUBZZ BILLING DATE: Preview updated', {
             billingDay: billingDay,
             nextBillingDate: nextBillingFormatted,
             daysOfCoverage: daysDiff
@@ -226,7 +229,7 @@
             return;
         }
         
-        console.log('SUBZZ BILLING DATE: Initializing continue button');
+        subzzLog('SUBZZ BILLING DATE: Initializing continue button');
         
         // Button starts disabled
         $continueBtn.prop('disabled', true);
@@ -244,11 +247,11 @@
                 return;
             }
             
-            console.log('SUBZZ BILLING DATE: Continue clicked, generating contract with billing day:', billingDay);
+            subzzLog('SUBZZ BILLING DATE: Continue clicked, generating contract with billing day:', billingDay);
             generateContractWithBillingDate(billingDay);
         });
         
-        console.log('SUBZZ BILLING DATE: Continue button initialized');
+        subzzLog('SUBZZ BILLING DATE: Continue button initialized');
     }
     
     /**
@@ -257,14 +260,14 @@
     function enableContinueButton() {
         const $continueBtn = $('#btn-continue-step-1');
         $continueBtn.prop('disabled', false);
-        console.log('SUBZZ BILLING DATE: Continue button enabled');
+        subzzLog('SUBZZ BILLING DATE: Continue button enabled');
     }
     
     /**
      * Generate contract with selected billing date via AJAX
      */
     function generateContractWithBillingDate(billingDay) {
-        console.log('SUBZZ CONTRACT GENERATION: Starting with billing day:', billingDay);
+        subzzLog('SUBZZ CONTRACT GENERATION: Starting with billing day:', billingDay);
         
         // Hide Step 1
         $('#step-1-billing-date').fadeOut(300);
@@ -287,7 +290,7 @@
             billing_day: billingDay
         };
         
-        console.log('SUBZZ CONTRACT GENERATION: AJAX data prepared', {
+        subzzLog('SUBZZ CONTRACT GENERATION: AJAX data prepared', {
             action: ajaxData.action,
             referenceId: ajaxData.reference_id,
             billingDay: ajaxData.billing_day
@@ -300,7 +303,7 @@
             data: ajaxData,
             timeout: 30000, // 30 seconds
             success: function(response) {
-                console.log('SUBZZ CONTRACT GENERATION: Response received', response);
+                subzzLog('SUBZZ CONTRACT GENERATION: Response received', response);
                 
                 if (response.success) {
                     handleContractGenerationSuccess(response.data, billingDay);
@@ -324,7 +327,7 @@
      * Handle successful contract generation
      */
     function handleContractGenerationSuccess(data, billingDay) {
-        console.log('SUBZZ CONTRACT GENERATION: Success!');
+        subzzLog('SUBZZ CONTRACT GENERATION: Success!');
         
         // Store billing info
         window.SubzzContract.billingInfo = data.billing_info;
@@ -361,8 +364,8 @@
         // Initialize scroll indicator — hide when user scrolls to bottom
         initScrollIndicator();
 
-        console.log('SUBZZ CONTRACT GENERATION: Contract displayed successfully');
-        console.log('SUBZZ CONTRACT GENERATION: Billing info:', data.billing_info);
+        subzzLog('SUBZZ CONTRACT GENERATION: Contract displayed successfully');
+        subzzLog('SUBZZ CONTRACT GENERATION: Billing info:', data.billing_info);
 
         // Emit event for signature handler
         emitContractGeneratedEvent();
@@ -384,7 +387,7 @@
      * Emit event that contract has been generated
      */
     function emitContractGeneratedEvent() {
-        console.log('SUBZZ CONTRACT GENERATION: Emitting contractGenerated event');
+        subzzLog('SUBZZ CONTRACT GENERATION: Emitting contractGenerated event');
         
         // Create custom event
         const event = new CustomEvent('subzz:contractGenerated', {
@@ -397,7 +400,7 @@
         // Dispatch event
         document.dispatchEvent(event);
         
-        console.log('SUBZZ CONTRACT GENERATION: Event emitted - signature handler should now initialize');
+        subzzLog('SUBZZ CONTRACT GENERATION: Event emitted - signature handler should now initialize');
     }
     
     /**
@@ -433,11 +436,11 @@
             return;
         }
         
-        console.log('SUBZZ BILLING DATE: Initializing change billing date link');
+        subzzLog('SUBZZ BILLING DATE: Initializing change billing date link');
         
         $changeLink.on('click', function(e) {
             e.preventDefault();
-            console.log('SUBZZ BILLING DATE: Change billing date clicked');
+            subzzLog('SUBZZ BILLING DATE: Change billing date clicked');
 
             // Step 1 billing date selection lives on the checkout page now.
             // If the Step 1 element exists on this page, show it; otherwise redirect back to checkout.
@@ -446,19 +449,19 @@
             } else {
                 // Redirect back to checkout page to re-select billing date
                 var checkoutUrl = window.location.origin + '/checkout-subscription/';
-                console.log('SUBZZ BILLING DATE: Redirecting to checkout page:', checkoutUrl);
+                subzzLog('SUBZZ BILLING DATE: Redirecting to checkout page:', checkoutUrl);
                 window.location.href = checkoutUrl;
             }
         });
         
-        console.log('SUBZZ BILLING DATE: Change billing date link initialized');
+        subzzLog('SUBZZ BILLING DATE: Change billing date link initialized');
     }
     
     /**
      * Return to Step 1 (change billing date)
      */
     function returnToStep1() {
-        console.log('SUBZZ BILLING DATE: Returning to Step 1');
+        subzzLog('SUBZZ BILLING DATE: Returning to Step 1');
         
         // Hide loading, summary, and steps 2-3
         $('#loading-contract').hide();
@@ -475,7 +478,7 @@
         
         // Keep the previously selected radio button checked
         // (selectedBillingDay variable still holds the value)
-        console.log('SUBZZ BILLING DATE: Returned to Step 1, previous selection preserved');
+        subzzLog('SUBZZ BILLING DATE: Returned to Step 1, previous selection preserved');
     }
     
     /**
@@ -526,6 +529,6 @@
     // Export functions for testing (optional)
     window.SubzzContract.returnToStep1 = returnToStep1;
     
-    console.log('SUBZZ BILLING DATE: Module loaded and ready');
+    subzzLog('SUBZZ BILLING DATE: Module loaded and ready');
     
 })(jQuery);

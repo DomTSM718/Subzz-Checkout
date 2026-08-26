@@ -329,13 +329,11 @@ class Subzz_Payment_Handler {
 
         // Resolve the signup app origin. Prod sets SUBZZ_SIGNUP_APP_URL in wp-config; fallback is the
         // STAGING SWA, never prod — a missing constant must not silently route a staging code to prod.
-        $signup_origin = (defined('SUBZZ_SIGNUP_APP_URL') && !empty(SUBZZ_SIGNUP_APP_URL))
-            ? SUBZZ_SIGNUP_APP_URL
-            : 'https://polite-smoke-0f5cf7603.6.azurestaticapps.net';
-        if (!defined('SUBZZ_SIGNUP_APP_URL')) {
-            subzz_log('SUBZZ BANKLINK HANDOFF: SUBZZ_SIGNUP_APP_URL not defined — using staging SWA fallback');
+        $signup_origin = subzz_signup_app_url(); // H8 (2026-08-26): no staging-SWA fallback on a prod site
+        if ($signup_origin === '') {
+            wp_send_json_error(array('message' => 'Bank link is not configured on this site.'));
+            return;
         }
-
         // Return-to-shop URL: prefer the page the customer came from, constrained to THIS site
         // (defence-in-depth; the SPA also validates against its shop-origin allowlist).
         $return_url = isset($_POST['return_url']) ? esc_url_raw(wp_unslash($_POST['return_url'])) : '';

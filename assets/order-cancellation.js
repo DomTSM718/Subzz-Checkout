@@ -1,3 +1,6 @@
+// H5 (2026-08-26): verbose tracing only when SUBZZ_DEBUG is on (window.subzzDebug is printed by the plugin in wp_head). console.warn/error stay live.
+var subzzLog = (typeof window !== "undefined" && window.subzzDebug) ? console.log.bind(console) : function () {};
+
 /**
  * Order Cancellation Handler
  * 
@@ -11,17 +14,17 @@
 (function($) {
     'use strict';
     
-    console.log('SUBZZ CANCELLATION: Script loaded');
+    subzzLog('SUBZZ CANCELLATION: Script loaded');
     
     $(document).ready(function() {
         
-        console.log('SUBZZ CANCELLATION: DOM ready, looking for cancel button');
+        subzzLog('SUBZZ CANCELLATION: DOM ready, looking for cancel button');
         
         // Handle cancel order button click
         $('#cancel-order-button').on('click', function(e) {
             e.preventDefault();
             
-            console.log('SUBZZ CANCELLATION: Cancel button clicked');
+            subzzLog('SUBZZ CANCELLATION: Cancel button clicked');
             
             // Show confirmation dialog
             const confirmed = confirm(
@@ -31,7 +34,7 @@
             );
             
             if (!confirmed) {
-                console.log('SUBZZ CANCELLATION: User cancelled the cancellation');
+                subzzLog('SUBZZ CANCELLATION: User cancelled the cancellation');
                 return;
             }
             
@@ -44,7 +47,7 @@
                 return;
             }
             
-            console.log('SUBZZ CANCELLATION: Processing cancellation for:', referenceId);
+            subzzLog('SUBZZ CANCELLATION: Processing cancellation for:', referenceId);
             
             // Disable button and show loading state
             button.prop('disabled', true);
@@ -62,10 +65,10 @@
                     token: window.subzzContractToken || '' // H3 (2026-08-26): server binds the cancel to this JWT
                 },
                 success: function(response) {
-                    console.log('SUBZZ CANCELLATION: Server response:', response);
+                    subzzLog('SUBZZ CANCELLATION: Server response:', response);
                     
                     if (response.success) {
-                        console.log('SUBZZ CANCELLATION SUCCESS: Cart items restored:', response.data.cart_items_restored);
+                        subzzLog('SUBZZ CANCELLATION SUCCESS: Cart items restored:', response.data.cart_items_restored);
                         
                         // Show success message
                         alert(
@@ -106,7 +109,7 @@
             });
         });
         
-        console.log('SUBZZ CANCELLATION: Event handler registered for #cancel-order-button');
+        subzzLog('SUBZZ CANCELLATION: Event handler registered for #cancel-order-button');
     });
     
 })(jQuery);

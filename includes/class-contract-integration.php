@@ -1252,9 +1252,6 @@ class Subzz_Contract_Integration {
         window.subzzVariantInfo = <?php echo json_encode($variant_info); ?>;
         <?php endif; ?>
         
-        console.log('SUBZZ PAGE JS: Global variables loaded for HYBRID architecture');
-        console.log('SUBZZ PAGE JS: billing-date-handler.js will handle Step 1');
-        console.log('SUBZZ PAGE JS: signature-handler.js will handle Steps 2 & 3');
         </script>
 
         <?php

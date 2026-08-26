@@ -1,3 +1,6 @@
+// H5 (2026-08-26): verbose tracing only when SUBZZ_DEBUG is on (window.subzzDebug is printed by the plugin in wp_head). console.warn/error stay live.
+var subzzLog = (typeof window !== "undefined" && window.subzzDebug) ? console.log.bind(console) : function () {};
+
 /**
  * Subzz Phase 5 — Multi-Vendor Payment Picker.
  *

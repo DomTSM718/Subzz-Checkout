@@ -1,3 +1,6 @@
+// H5 (2026-08-26): verbose tracing only when SUBZZ_DEBUG is on (window.subzzDebug is printed by the plugin in wp_head). console.warn/error stay live.
+var subzzLog = (typeof window !== "undefined" && window.subzzDebug) ? console.log.bind(console) : function () {};
+
 /**
  * Subzz Signature Handler - Enhanced with Variant Support and Legal Compliance
  * Manages signature pad, legal compliance fields, and form submission with Azure backend
@@ -18,18 +21,18 @@ jQuery(document).ready(function($) {
     }
     window._subzzSignatureInitialized = true;
 
-    console.log('SUBZZ SIGNATURE: Handler loading with Azure integration and variant support');
+    subzzLog('SUBZZ SIGNATURE: Handler loading with Azure integration and variant support');
     
     // HYBRID ARCHITECTURE: Wait for contract to be generated before initializing
     if (window.SubzzContract && window.SubzzContract.contractGenerated) {
         // Contract already generated (unlikely but handle it)
-        console.log('SUBZZ SIGNATURE: Contract already generated, initializing immediately');
+        subzzLog('SUBZZ SIGNATURE: Contract already generated, initializing immediately');
         initializeSignatureHandler();
     } else {
         // Wait for contract generation event from billing-date-handler.js
-        console.log('SUBZZ SIGNATURE: Waiting for contract generation to complete...');
+        subzzLog('SUBZZ SIGNATURE: Waiting for contract generation to complete...');
         document.addEventListener('subzz:contractGenerated', function(e) {
-            console.log('SUBZZ SIGNATURE: Contract generated event received', e.detail);
+            subzzLog('SUBZZ SIGNATURE: Contract generated event received', e.detail);
             initializeSignatureHandler();
         });
     }
@@ -41,7 +44,7 @@ jQuery(document).ready(function($) {
 function initializeSignatureHandler() {
     const $ = jQuery;
     
-    console.log('SUBZZ SIGNATURE: Initializing signature handler (contract ready)');
+    subzzLog('SUBZZ SIGNATURE: Initializing signature handler (contract ready)');
     
     // Helper: show branded inline error (replaces alert())
     function showSignatureError(message, $scrollTarget) {
@@ -80,16 +83,16 @@ function initializeSignatureHandler() {
         return;
     }
     
-    console.log('SUBZZ SIGNATURE: Page data confirmed');
-    console.log('SUBZZ SIGNATURE: Reference ID:', window.subzzReferenceId);
-    console.log('SUBZZ SIGNATURE: Customer Email:', window.subzzCustomerEmail);
-    console.log('SUBZZ SIGNATURE: Token length:', window.subzzContractToken.length);
+    subzzLog('SUBZZ SIGNATURE: Page data confirmed');
+    subzzLog('SUBZZ SIGNATURE: Reference ID:', window.subzzReferenceId);
+    subzzLog('SUBZZ SIGNATURE: Customer Email:', window.subzzCustomerEmail);
+    subzzLog('SUBZZ SIGNATURE: Token length:', window.subzzContractToken.length);
     
     // Log variant info if available
     if (window.subzzVariantInfo && Object.keys(window.subzzVariantInfo).length > 0) {
-        console.log('SUBZZ SIGNATURE: Variant info available:', window.subzzVariantInfo);
+        subzzLog('SUBZZ SIGNATURE: Variant info available:', window.subzzVariantInfo);
     } else {
-        console.log('SUBZZ SIGNATURE: No variant info provided (using defaults)');
+        subzzLog('SUBZZ SIGNATURE: No variant info provided (using defaults)');
     }
 
     // Initialize signature pad with enhanced error checking
@@ -108,7 +111,7 @@ function initializeSignatureHandler() {
         return;
     }
     
-    console.log('SUBZZ SIGNATURE: Canvas element found, initializing SignaturePad');
+    subzzLog('SUBZZ SIGNATURE: Canvas element found, initializing SignaturePad');
     
     // Check if SignaturePad library is loaded
     if (typeof SignaturePad === 'undefined') {
@@ -127,7 +130,7 @@ function initializeSignatureHandler() {
         maxWidth: 3
     });
     
-    console.log('SUBZZ SIGNATURE: SignaturePad initialized successfully');
+    subzzLog('SUBZZ SIGNATURE: SignaturePad initialized successfully');
 
     // ── Signature Mode State (Draw / Type) ──────────────────────────────
     var signatureMode = 'draw';
@@ -136,7 +139,7 @@ function initializeSignatureHandler() {
     // Preload Dancing Script font for typed signature rendering
     if (document.fonts && document.fonts.load) {
         document.fonts.load('48px "Dancing Script"').then(function() {
-            console.log('SUBZZ SIGNATURE: Dancing Script font preloaded');
+            subzzLog('SUBZZ SIGNATURE: Dancing Script font preloaded');
         }).catch(function() {
             console.warn('SUBZZ SIGNATURE: Dancing Script font preload failed — will use fallback');
         });
@@ -144,7 +147,7 @@ function initializeSignatureHandler() {
 
     // Enhanced resize canvas function with logging
     function resizeCanvas() {
-        console.log('SUBZZ SIGNATURE: Resizing canvas');
+        subzzLog('SUBZZ SIGNATURE: Resizing canvas');
         const ratio = Math.max(window.devicePixelRatio || 1, 1);
         const container = canvas.parentElement;
         
@@ -164,7 +167,7 @@ function initializeSignatureHandler() {
         canvas.getContext("2d").scale(ratio, ratio);
         signaturePad.clear();
         
-        console.log('SUBZZ SIGNATURE: Canvas resized', {
+        subzzLog('SUBZZ SIGNATURE: Canvas resized', {
             oldSize: oldWidth + 'x' + oldHeight,
             newSize: canvas.width + 'x' + canvas.height,
             containerWidth: container.offsetWidth,
@@ -173,24 +176,24 @@ function initializeSignatureHandler() {
     }
 
     // Initial resize with logging
-    console.log('SUBZZ SIGNATURE: Performing initial canvas resize');
+    subzzLog('SUBZZ SIGNATURE: Performing initial canvas resize');
     resizeCanvas();
     
     // Resize on window resize with debouncing
     let resizeTimeout;
     window.addEventListener('resize', function() {
-        console.log('SUBZZ SIGNATURE: Window resize detected, scheduling canvas resize');
+        subzzLog('SUBZZ SIGNATURE: Window resize detected, scheduling canvas resize');
         clearTimeout(resizeTimeout);
         resizeTimeout = setTimeout(resizeCanvas, 250);
     });
 
     // Enhanced clear signature button with logging
     $('#clear-signature').on('click', function() {
-        console.log('SUBZZ SIGNATURE: Clear signature button clicked');
+        subzzLog('SUBZZ SIGNATURE: Clear signature button clicked');
         if (signaturePad.isEmpty()) {
-            console.log('SUBZZ SIGNATURE: Signature pad already empty');
+            subzzLog('SUBZZ SIGNATURE: Signature pad already empty');
         } else {
-            console.log('SUBZZ SIGNATURE: Clearing signature pad');
+            subzzLog('SUBZZ SIGNATURE: Clearing signature pad');
             signaturePad.clear();
         }
         validateForm();
@@ -201,7 +204,7 @@ function initializeSignatureHandler() {
         var mode = $(this).data('mode');
         if (mode === signatureMode) return;
 
-        console.log('SUBZZ SIGNATURE: Switching mode from', signatureMode, 'to', mode);
+        subzzLog('SUBZZ SIGNATURE: Switching mode from', signatureMode, 'to', mode);
         signatureMode = mode;
 
         // Update tab active state
@@ -232,7 +235,7 @@ function initializeSignatureHandler() {
     // ── Typed Signature Input Handler ───────────────────────────────────
     $('#typed-signature-input').on('input', function() {
         var text = $(this).val().trim();
-        console.log('SUBZZ SIGNATURE: Typed signature input:', text);
+        subzzLog('SUBZZ SIGNATURE: Typed signature input:', text);
 
         if (text.length > 0) {
             $('#typed-sig-text').text(text).show();
@@ -273,7 +276,7 @@ function initializeSignatureHandler() {
         ctx.textBaseline = 'middle';
         ctx.fillText(text, w / 2, h / 2);
 
-        console.log('SUBZZ SIGNATURE: Typed signature rendered to canvas');
+        subzzLog('SUBZZ SIGNATURE: Typed signature rendered to canvas');
     }
 
     /**
@@ -288,7 +291,7 @@ function initializeSignatureHandler() {
     // NEW: Typed full name field validation
     $('#typed-full-name').on('input blur', function() {
         const value = $(this).val().trim();
-        console.log('SUBZZ SIGNATURE: Typed full name changed:', value);
+        subzzLog('SUBZZ SIGNATURE: Typed full name changed:', value);
         
         // Validation: name must be at least 2 characters (single names accepted)
         if (value.length > 0 && value.length < 2) {
@@ -304,12 +307,12 @@ function initializeSignatureHandler() {
     $('#typed-initials').on('input blur', function() {
         const value = $(this).val().trim().toUpperCase();
         $(this).val(value); // Convert to uppercase automatically
-        console.log('SUBZZ SIGNATURE: Typed initials changed:', value);
+        subzzLog('SUBZZ SIGNATURE: Typed initials changed:', value);
         
         // Validate initials (should be 2-4 characters)
         if (value.length > 0 && (value.length < 2 || value.length > 4)) {
             $(this).addClass('field-warning');
-            console.log('SUBZZ SIGNATURE: Warning - initials should be 2-4 characters');
+            subzzLog('SUBZZ SIGNATURE: Warning - initials should be 2-4 characters');
         } else {
             $(this).removeClass('field-warning');
         }
@@ -320,20 +323,20 @@ function initializeSignatureHandler() {
     // NEW: Electronic consent checkbox handler
     $('#electronic-consent').on('change', function() {
         const isChecked = $(this).is(':checked');
-        console.log('SUBZZ SIGNATURE: Electronic consent changed:', isChecked);
+        subzzLog('SUBZZ SIGNATURE: Electronic consent changed:', isChecked);
         validateForm();
     });
 
     // Enhanced terms consent checkbox with logging
     $('#terms-consent').on('change', function() {
         const isChecked = $(this).is(':checked');
-        console.log('SUBZZ SIGNATURE: Terms consent changed:', isChecked);
+        subzzLog('SUBZZ SIGNATURE: Terms consent changed:', isChecked);
         validateForm();
     });
 
     // Enhanced signature pad change detection
     signaturePad.addEventListener('endStroke', function() {
-        console.log('SUBZZ SIGNATURE: Signature stroke completed');
+        subzzLog('SUBZZ SIGNATURE: Signature stroke completed');
         validateForm();
     });
 
@@ -355,7 +358,7 @@ function initializeSignatureHandler() {
         // All fields must be valid
         const isValid = hasSignature && hasTypedName && hasInitials && hasElectronicConsent && hasTermsConsent;
         
-        console.log('SUBZZ SIGNATURE: Form validation check', {
+        subzzLog('SUBZZ SIGNATURE: Form validation check', {
             hasSignature: hasSignature,
             hasTypedName: hasTypedName,
             hasInitials: hasInitials,
@@ -382,7 +385,7 @@ function initializeSignatureHandler() {
             $button.text('Sign Agreement & Continue to Payment →');
         }
         
-        console.log('SUBZZ SIGNATURE: Form validation complete - Button enabled:', isValid);
+        subzzLog('SUBZZ SIGNATURE: Form validation complete - Button enabled:', isValid);
         
         // Visual feedback for validation state
         updateValidationVisuals(hasSignature, hasTypedName, hasInitials, hasElectronicConsent, hasTermsConsent);
@@ -402,7 +405,7 @@ function initializeSignatureHandler() {
 
     // Enhanced sign agreement button click with comprehensive logging
     $('#sign-agreement').on('click', function() {
-        console.log('SUBZZ SIGNATURE: Sign agreement button clicked');
+        subzzLog('SUBZZ SIGNATURE: Sign agreement button clicked');
         
         // Comprehensive pre-flight validation
         const typedFullName = $('#typed-full-name').val().trim();
@@ -465,8 +468,8 @@ function initializeSignatureHandler() {
             return;
         }
 
-        console.log('SUBZZ SIGNATURE: Pre-flight validation passed, starting signature save process');
-        console.log('SUBZZ SIGNATURE: Legal compliance data:', {
+        subzzLog('SUBZZ SIGNATURE: Pre-flight validation passed, starting signature save process');
+        subzzLog('SUBZZ SIGNATURE: Legal compliance data:', {
             typedFullName: typedFullName,
             typedInitials: typedInitials,
             electronicConsent: electronicConsent,
@@ -479,7 +482,7 @@ function initializeSignatureHandler() {
         $button.prop('disabled', true).text('Processing Signature...');
         $('.contract-actions').fadeOut(300);
         $('#loading-signature').fadeIn(300);
-        console.log('SUBZZ SIGNATURE: Button disabled, showing loading state');
+        subzzLog('SUBZZ SIGNATURE: Button disabled, showing loading state');
 
         // Restore UI on any error path. Success path auto-wipes the overlay
         // via the existing $('.contract-content').html(successMsg) call below,
@@ -495,15 +498,15 @@ function initializeSignatureHandler() {
         try {
             if (signatureMode === 'draw') {
                 signatureData = signaturePad.toDataURL();
-                console.log('SUBZZ SIGNATURE: Drawn signature data captured');
+                subzzLog('SUBZZ SIGNATURE: Drawn signature data captured');
             } else {
                 // Re-render to ensure canvas is current, then capture
                 var typedText = $('#typed-signature-input').val().trim();
                 renderTypedToCanvas(typedText);
                 signatureData = typedSignatureCanvas.toDataURL();
-                console.log('SUBZZ SIGNATURE: Typed signature data captured');
+                subzzLog('SUBZZ SIGNATURE: Typed signature data captured');
             }
-            console.log('SUBZZ SIGNATURE: Signature data', {
+            subzzLog('SUBZZ SIGNATURE: Signature data', {
                 mode: signatureMode,
                 length: signatureData.length,
                 format: signatureData.substring(0, 50) + '...'
@@ -520,7 +523,7 @@ function initializeSignatureHandler() {
             ? window.SubzzContract.billingDay 
             : null;
         
-        console.log('SUBZZ SIGNATURE: Billing day from billing-date-handler:', billingDayOfMonth);
+        subzzLog('SUBZZ SIGNATURE: Billing day from billing-date-handler:', billingDayOfMonth);
         
         if (!billingDayOfMonth) {
             console.error('SUBZZ SIGNATURE ERROR: Billing day not found - contract may not have been generated properly');
@@ -554,7 +557,7 @@ function initializeSignatureHandler() {
             nonce: window.subzzNonce
         };
         
-        console.log('SUBZZ SIGNATURE: Prepared AJAX data', {
+        subzzLog('SUBZZ SIGNATURE: Prepared AJAX data', {
             action: ajaxData.action,
             referenceId: ajaxData.reference_id,
             customerEmail: ajaxData.customer_email,
@@ -569,7 +572,7 @@ function initializeSignatureHandler() {
             hasNonce: !!ajaxData.nonce
         });
 
-        console.log('SUBZZ SIGNATURE API: Sending signature with legal compliance data and billing day to Azure backend via WordPress AJAX');
+        subzzLog('SUBZZ SIGNATURE API: Sending signature with legal compliance data and billing day to Azure backend via WordPress AJAX');
 
         // Enhanced AJAX call with comprehensive error handling
         $.ajax({
@@ -578,12 +581,12 @@ function initializeSignatureHandler() {
             data: ajaxData,
             timeout: 30000, // 30 second timeout
             success: function(response) {
-                console.log('SUBZZ SIGNATURE API: Response received from server');
-                console.log('SUBZZ SIGNATURE API: Response data:', response);
+                subzzLog('SUBZZ SIGNATURE API: Response received from server');
+                subzzLog('SUBZZ SIGNATURE API: Response data:', response);
                 
                 if (response.success) {
-                    console.log('SUBZZ SIGNATURE SUCCESS: Signature saved successfully to Azure');
-                    console.log('SUBZZ SIGNATURE SUCCESS: Response details:', {
+                    subzzLog('SUBZZ SIGNATURE SUCCESS: Signature saved successfully to Azure');
+                    subzzLog('SUBZZ SIGNATURE SUCCESS: Response details:', {
                         message: response.data?.message,
                         checkoutUrl: response.data?.checkout_url,
                         redirectUrl: response.data?.redirect_url,
@@ -598,7 +601,7 @@ function initializeSignatureHandler() {
                     var isDirect = !!response.data?.checkout_url;
                     var summary = response.data?.order_summary;
 
-                    console.log('SUBZZ SIGNATURE SUCCESS: Redirect mode:', isDirect ? 'DIRECT to LekkaPay' : 'FALLBACK to subscription-payment');
+                    subzzLog('SUBZZ SIGNATURE SUCCESS: Redirect mode:', isDirect ? 'DIRECT to LekkaPay' : 'FALLBACK to subscription-payment');
 
                     // Update progress indicator: mark Contract as done, Payment as active
                     var progressSteps = document.querySelectorAll('.checkout-progress .progress-step');
@@ -644,7 +647,7 @@ function initializeSignatureHandler() {
                             '<p>Taking you to payment&hellip;</p>' +
                             '</div>'
                         );
-                        console.log('SUBZZ SIGNATURE REDIRECT: Redirecting straight to picker:', redirectUrl);
+                        subzzLog('SUBZZ SIGNATURE REDIRECT: Redirecting straight to picker:', redirectUrl);
                         window.location.href = redirectUrl;
                     } else {
                         console.error('SUBZZ SIGNATURE ERROR: No redirect URL provided in successful response');
@@ -698,7 +701,7 @@ function initializeSignatureHandler() {
 
     // Enhanced print functionality with logging
     window.addEventListener('beforeprint', function() {
-        console.log('SUBZZ SIGNATURE: Preparing page for printing');
+        subzzLog('SUBZZ SIGNATURE: Preparing page for printing');
         $('.signature-section').hide();
         $('.contract-actions').hide();
         $('.legal-compliance-section').hide();
@@ -706,7 +709,7 @@ function initializeSignatureHandler() {
     });
 
     window.addEventListener('afterprint', function() {
-        console.log('SUBZZ SIGNATURE: Restoring page after printing');
+        subzzLog('SUBZZ SIGNATURE: Restoring page after printing');
         $('.signature-section').show();
         $('.contract-actions').show();
         $('.legal-compliance-section').show();
@@ -734,10 +737,10 @@ function initializeSignatureHandler() {
     updateSignaturePadVisuals();
     validateForm();
     
-    console.log('SUBZZ SIGNATURE: Handler initialization complete with Draw/Type modes, variant, legal compliance, and HYBRID architecture support');
+    subzzLog('SUBZZ SIGNATURE: Handler initialization complete with Draw/Type modes, variant, legal compliance, and HYBRID architecture support');
 
     // Debug information for production support
-    console.log('SUBZZ SIGNATURE DEBUG: Environment information', {
+    subzzLog('SUBZZ SIGNATURE DEBUG: Environment information', {
         userAgent: navigator.userAgent,
         screenResolution: window.screen.width + 'x' + window.screen.height,
         windowSize: window.innerWidth + 'x' + window.innerHeight,

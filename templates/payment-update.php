@@ -28,9 +28,7 @@ if (empty($token)) {
     $error_code = 'NO_TOKEN';
 } else {
     // Validate token server-side
-    $api_url = defined('SUBZZ_AZURE_API_URL')
-        ? SUBZZ_AZURE_API_URL
-        : 'http://localhost:5000/api';
+    $api_url = subzz_api_base_url(); // H8 (2026-08-26): no localhost fallback
 
     $response = wp_remote_post($api_url . '/payment-update/validate-token', array(
         'timeout' => 15,

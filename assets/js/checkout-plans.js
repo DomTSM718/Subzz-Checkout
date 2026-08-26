@@ -1,3 +1,6 @@
+// H5 (2026-08-26): verbose tracing only when SUBZZ_DEBUG is on (window.subzzDebug is printed by the plugin in wp_head). console.warn/error stay live.
+var subzzLog = (typeof window !== "undefined" && window.subzzDebug) ? console.log.bind(console) : function () {};
+
 /**
  * Subzz Checkout Plans — Card-Based Layout (Figma Redesign)
  *
@@ -41,7 +44,7 @@
         return;
     }
 
-    console.log('SUBZZ CHECKOUT: Initialising — email:', cfg.customerEmail, 'variations:', cfg.variationPlans);
+    subzzLog('SUBZZ CHECKOUT: Initialising — email:', cfg.customerEmail, 'variations:', cfg.variationPlans);
 
     // -- Helpers --------------------------------------------------------------
     function formatZAR(amount) {
@@ -60,7 +63,7 @@
 
     // -- 1. Fetch affordability then show cards --------------------------------
     function fetchAffordabilityAndInit() {
-        console.log('SUBZZ CHECKOUT: Fetching affordability');
+        subzzLog('SUBZZ CHECKOUT: Fetching affordability');
 
         $.ajax({
             url: cfg.ajaxUrl,
@@ -76,14 +79,14 @@
                 // renders its own state (cards / F&F gate / not-verified / error).
                 hideSection('initial-loading');
                 if (resp.success && resp.data) {
-                    console.log('SUBZZ CHECKOUT: Affordability received', resp.data);
+                    subzzLog('SUBZZ CHECKOUT: Affordability received', resp.data);
 
                     // Plan 4 (2026-05-02): F&F gate check — server returns gateBlocked:true
                     // with a reason-specific message when the customer is not eligible to
                     // proceed through checkout. Reuses the #not-verified-message surface
                     // with swapped copy so customers see a clear blocking state.
                     if (resp.data.gateBlocked === true) {
-                        console.log('SUBZZ CHECKOUT: F&F gate blocked', resp.data.gateBlockedReason);
+                        subzzLog('SUBZZ CHECKOUT: F&F gate blocked', resp.data.gateBlockedReason);
                         $('#not-verified-message h3').text('Account Not Eligible');
                         $('#not-verified-message p').text(
                             resp.data.gateBlockedMessage ||
@@ -196,7 +199,7 @@
         if (recIdx >= 0) cards[recIdx].isRecommended = true;
 
         state.planCards = cards;
-        console.log('SUBZZ CHECKOUT: Built plan cards', cards);
+        subzzLog('SUBZZ CHECKOUT: Built plan cards', cards);
     }
 
     // -- 3. Show all cards after verification ---------------------------------
@@ -268,7 +271,7 @@
         $('#term-buttons .term-btn').removeClass('active');
         $('#term-buttons .term-btn[data-term="' + term + '"]').addClass('active');
 
-        console.log('SUBZZ CHECKOUT: Selected term', term, 'months');
+        subzzLog('SUBZZ CHECKOUT: Selected term', term, 'months');
 
         updateSlider(match);
         updatePaymentDisplay();
@@ -645,7 +648,7 @@
             product_attributes: JSON.stringify(cfg.variationAttributes || {})
         };
 
-        console.log('SUBZZ CHECKOUT: Storing order', orderData);
+        subzzLog('SUBZZ CHECKOUT: Storing order', orderData);
 
         $.ajax({
             url: cfg.ajaxUrl,
@@ -654,7 +657,7 @@
             timeout: 30000,
             success: function (resp) {
                 if (resp.success && resp.data && resp.data.signature_url) {
-                    console.log('SUBZZ CHECKOUT: Order stored, redirecting to contract');
+                    subzzLog('SUBZZ CHECKOUT: Order stored, redirecting to contract');
                     var url = resp.data.signature_url;
                     if (state.billingDay) {
                         url += (url.indexOf('?') !== -1 ? '&' : '?') + 'billing_day=' + state.billingDay;
@@ -723,7 +726,7 @@
                     $('#coupon-code').prop('disabled', true);
                     $btn.text('Applied').prop('disabled', true);
 
-                    console.log('SUBZZ CHECKOUT: Coupon applied -', state.discountCode, state.discountPercentage + '%');
+                    subzzLog('SUBZZ CHECKOUT: Coupon applied -', state.discountCode, state.discountPercentage + '%');
 
                     // Recalculate plan cards with discount
                     applyDiscountToPlanCards();

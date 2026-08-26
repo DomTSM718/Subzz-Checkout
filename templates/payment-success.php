@@ -321,10 +321,14 @@ if (class_exists('Subzz_Azure_API_Client')) {
 // extra origin is one more window that could receive a consent id.
 // Re-derive rather than trusting these strings: `az staticwebapp list --query "[].{name:name,host:defaultHostname}"`
 // (staging signup SWA has no custom domain; prod is signup.subzz.co.za). Verified 2026-07-24.
-$subzz_conductor_origins = apply_filters('subzz_embed_conductor_origins', array(
+// H8 (2026-08-26): the site's own signup origin comes from SUBZZ_SIGNUP_APP_URL; the two literals
+// stay as a belt-and-braces allowlist (prod + staging SWA) because a postMessage targetOrigin
+// list is not a secret and the staging hop test depends on it. Deliberate, not an oversight.
+$subzz_conductor_origins = array_values(array_unique(array_filter(apply_filters('subzz_embed_conductor_origins', array(
+    (defined('SUBZZ_SIGNUP_APP_URL') && !empty(SUBZZ_SIGNUP_APP_URL)) ? rtrim(SUBZZ_SIGNUP_APP_URL, '/') : '',
     'https://signup.subzz.co.za',                            // prod
     'https://polite-smoke-0f5cf7603.6.azurestaticapps.net',  // staging (subzz-signup-stagingSWA)
-));
+)))));
 ?>
 <script>
 (function () {

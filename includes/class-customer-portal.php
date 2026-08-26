@@ -271,10 +271,7 @@ class Subzz_Customer_Portal {
         }
 
         // Call the existing generate-token-for-user endpoint via Azure API
-        $endpoint = defined('SUBZZ_AZURE_API_URL')
-            ? SUBZZ_AZURE_API_URL
-            : 'http://localhost:5000/api';
-        $endpoint .= '/payment-update/generate-token-for-user';
+        $endpoint = subzz_api_base_url() . '/payment-update/generate-token-for-user'; // H8: no localhost fallback
 
         $response = wp_remote_post($endpoint, array(
             'timeout' => 15,
@@ -348,13 +345,11 @@ class Subzz_Customer_Portal {
 
         // Resolve the signup app origin. Prod sets SUBZZ_SIGNUP_APP_URL in wp-config; the fallback is
         // the STAGING SWA, never prod — a missing constant must not silently route a staging code to prod.
-        $signup_origin = (defined('SUBZZ_SIGNUP_APP_URL') && !empty(SUBZZ_SIGNUP_APP_URL))
-            ? SUBZZ_SIGNUP_APP_URL
-            : 'https://polite-smoke-0f5cf7603.6.azurestaticapps.net';
-        if (!defined('SUBZZ_SIGNUP_APP_URL')) {
-            subzz_log('SUBZZ PORTAL BANKLINK: SUBZZ_SIGNUP_APP_URL not defined — using staging SWA fallback');
+        $signup_origin = subzz_signup_app_url(); // H8 (2026-08-26): no staging-SWA fallback on a prod site
+        if ($signup_origin === '') {
+            wp_send_json_error(array('message' => 'Bank link is not configured on this site.'));
+            return;
         }
-
         // Return the customer to their My-Account Dashboard on completion (on this site;
         // origin is on the SPA's shop-origin allowlist).
         $return_url = wc_get_account_endpoint_url('dashboard');

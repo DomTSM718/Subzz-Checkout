@@ -4,6 +4,11 @@
  * Description: Subscription checkout with plan selection, contract signing, LekkaPay payment, customer portal, and Azure backend integration.
  * Version: 2.6.0
  * Author: Subzz Team
+ * Requires at least: 6.5
+ * Requires PHP: 7.4
+ * Requires Plugins: woocommerce
+ * WC requires at least: 8.0
+ * WC tested up to: 10.2
  *
  * 2.5.14 (2026-07-29): PAYMENT-UPDATE LINK FIXED — payment-update.js sent no `vendor` on
  *   /payment/create-session, so every card-update attempt failed with 400 "Payment vendor
@@ -46,6 +51,25 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
+// Single source for the plugin version — read from the header above, never typed twice.
+// (H7/M7, 2026-08-26: three hand-typed version literals disagreed with the header.)
+if (!defined('SUBZZ_PLUGIN_VERSION')) {
+    $subzz_plugin_data = function_exists('get_file_data')
+        ? get_file_data(__FILE__, array('Version' => 'Version'), 'plugin')
+        : array('Version' => '');
+    define('SUBZZ_PLUGIN_VERSION', !empty($subzz_plugin_data['Version']) ? $subzz_plugin_data['Version'] : '0.0.0');
+    unset($subzz_plugin_data);
+}
+
+// HPOS (High-Performance Order Storage) compatibility. Verified 2026-08-26: the plugin touches
+// orders only through WC CRUD (wc_get_order / wc_get_orders / get_meta / add_meta_data) and
+// never reads wp_posts / postmeta for orders, so it is safe under custom order tables.
+add_action('before_woocommerce_init', function () {
+    if (class_exists('\Automattic\WooCommerce\Utilities\FeaturesUtil')) {
+        \Automattic\WooCommerce\Utilities\FeaturesUtil::declare_compatibility('custom_order_tables', __FILE__, true);
+    }
+});
+
 /**
  * Debug logging helper — only writes when SUBZZ_DEBUG is true in wp-config.php.
  * Usage: subzz_log('My message');
@@ -54,6 +78,50 @@ function subzz_log($message) {
     if (defined('SUBZZ_DEBUG') && SUBZZ_DEBUG) {
         error_log($message);
     }
+}
+
+/**
+ * H8 (2026-08-26): the wp-config constants are REQUIRED. Seven call sites used to fall back to
+ * 'http://localhost:5000/api' and three to the STAGING signup SWA, so a prod site missing a
+ * constant silently talked to localhost or sent customers to staging. Now: one unconditional
+ * error_log line + an admin notice, and an empty string — every consumer then fails visibly
+ * (wp_remote_* on '' returns a WP_Error, which the callers already handle).
+ */
+function subzz_api_base_url() {
+    if (defined('SUBZZ_AZURE_API_URL') && !empty(SUBZZ_AZURE_API_URL)) {
+        return SUBZZ_AZURE_API_URL;
+    }
+    subzz_missing_constant('SUBZZ_AZURE_API_URL');
+    return '';
+}
+
+function subzz_signup_app_url() {
+    if (defined('SUBZZ_SIGNUP_APP_URL') && !empty(SUBZZ_SIGNUP_APP_URL)) {
+        return SUBZZ_SIGNUP_APP_URL;
+    }
+    subzz_missing_constant('SUBZZ_SIGNUP_APP_URL');
+    return '';
+}
+
+function subzz_missing_constant($name) {
+    static $reported = array();
+    if (isset($reported[$name])) {
+        return;
+    }
+    $reported[$name] = true;
+    error_log('SUBZZ CONFIG ERROR: ' . $name . ' is not defined in wp-config.php — the feature that needs it is disabled on this site.');
+    add_action('admin_notices', function () use ($name) {
+        echo '<div class="notice notice-error"><p><strong>Subzz:</strong> <code>' . esc_html($name) . '</code> is not defined in wp-config.php.</p></div>';
+    });
+}
+
+// H5 (2026-08-26): the plugin's JS files gate their console.log tracing on window.subzzDebug,
+// which mirrors SUBZZ_DEBUG. Before this, 150+ unconditional console.log calls shipped on prod,
+// several printing the customer's email and the contract-signing JWT.
+add_action('wp_head', 'subzz_print_debug_flag', 1);
+function subzz_print_debug_flag() {
+    $on = defined('SUBZZ_DEBUG') && SUBZZ_DEBUG ? 'true' : 'false';
+    echo "<script>window.subzzDebug = {$on};</script>\n";
 }
 
 // Plugin activation hook
@@ -375,7 +443,7 @@ function subzz_handle_payment_update_page() {
  */
 function subzz_asset_ver($relpath) {
     $full = plugin_dir_path(__FILE__) . ltrim($relpath, '/');
-    return file_exists($full) ? (string) filemtime($full) : '2.6.0';
+    return file_exists($full) ? (string) filemtime($full) : SUBZZ_PLUGIN_VERSION;
 }
 
 function subzz_enqueue_payment_update_assets() {
@@ -724,7 +792,7 @@ function subzz_settings_page() {
         <h2>LekkaPay Integration Status</h2>
         <div style="background: #d4edda; border-left: 4px solid #28a745; padding: 15px; margin: 20px 0;">
             <p><strong>✅ LekkaPay Integration Complete</strong></p>
-            <p>Version 1.5.0 with full payment success/cancel page routing.</p>
+            <p>Version <?php echo esc_html(SUBZZ_PLUGIN_VERSION); ?> with full payment success/cancel page routing.</p>
             <ul style="margin-left: 20px;">
                 <li>✅ Payment session creation via Azure API</li>
                 <li>✅ Redirect to LekkaPay hosted checkout</li>
@@ -737,7 +805,7 @@ function subzz_settings_page() {
         <h2>HYBRID Architecture Status</h2>
         <div style="background: #e7f3ff; border-left: 4px solid #007bff; padding: 15px; margin: 20px 0;">
             <p><strong>✅ HYBRID Architecture Active</strong></p>
-            <p>Version 1.4.0 with separated billing date selection and signature handling.</p>
+            <p>Version <?php echo esc_html(SUBZZ_PLUGIN_VERSION); ?> with separated billing date selection and signature handling.</p>
             <ul style="margin-left: 20px;">
                 <li>✅ billing-date-handler.js - Step 1: Billing date selection</li>
                 <li>✅ signature-handler.js - Steps 2 & 3: Legal compliance and signature</li>
@@ -770,7 +838,7 @@ function subzz_settings_page() {
         
         <h2>Azure Backend Connection</h2>
         <form method="post">
-            <p>Test connection to Azure backend (localhost:5000)</p>
+            <p>Test connection to the Azure backend at <code><?php echo esc_html(subzz_api_base_url()); ?></code></p>
             <input type="submit" name="test_azure" value="Test Azure Connection" class="button-secondary">
         </form>
         
@@ -835,7 +903,7 @@ function subzz_settings_page() {
         echo '<p><strong>Plugin URL:</strong> ' . plugin_dir_url(__FILE__) . '</p>';
         echo '<p><strong>Assets Directory:</strong> ' . plugin_dir_path(__FILE__) . 'assets/</p>';
         echo '<p><strong>Templates Directory:</strong> ' . plugin_dir_path(__FILE__) . 'templates/</p>';
-        echo '<p><strong>Version:</strong> 1.5.0 (LekkaPay Integration Complete with HYBRID Architecture)</p>';
+        echo '<p><strong>Version:</strong> ' . esc_html(SUBZZ_PLUGIN_VERSION) . ' (LekkaPay Integration Complete with HYBRID Architecture)</p>';
         ?>
     </div>
     <?php

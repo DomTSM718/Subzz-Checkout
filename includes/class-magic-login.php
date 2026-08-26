@@ -143,7 +143,7 @@ class Subzz_Magic_Login {
 
     /** Base API URL (matches the rest of the plugin; trailing /api included). */
     private function api_base() {
-        return defined('SUBZZ_AZURE_API_URL') ? SUBZZ_AZURE_API_URL : 'http://localhost:5000/api';
+        return subzz_api_base_url(); // H8 (2026-08-26): no localhost fallback
     }
 
     /** Account / login page — the universal fail-safe destination. */

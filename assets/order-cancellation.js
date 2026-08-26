@@ -58,7 +58,8 @@
                 data: {
                     action: 'subzz_cancel_order',
                     nonce: window.subzzNonce,
-                    reference_id: referenceId
+                    reference_id: referenceId,
+                    token: window.subzzContractToken || '' // H3 (2026-08-26): server binds the cancel to this JWT
                 },
                 success: function(response) {
                     console.log('SUBZZ CANCELLATION: Server response:', response);

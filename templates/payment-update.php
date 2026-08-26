@@ -149,11 +149,11 @@ get_header();
 
         <!-- Pass data to JS -->
         <script>
+            // H1 (2026-08-26): no apiUrl/apiKey here any more — payment-update.js goes through the
+            // subzz_create_payment_session WP AJAX proxy (ajaxUrl + nonce via wp_localize_script).
             var subzzPaymentData = {
                 token: <?php echo wp_json_encode($token); ?>,
-                subscriptionId: <?php echo wp_json_encode($subscription_data['subscriptionId']); ?>,
-                apiUrl: <?php echo wp_json_encode(defined('SUBZZ_AZURE_API_URL') ? SUBZZ_AZURE_API_URL : 'http://localhost:5000/api'); ?>,
-                apiKey: <?php echo wp_json_encode(defined('SUBZZ_AZURE_API_KEY') ? SUBZZ_AZURE_API_KEY : ''); ?>
+                subscriptionId: <?php echo wp_json_encode($subscription_data['subscriptionId']); ?>
             };
         </script>
 

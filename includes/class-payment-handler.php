@@ -116,8 +116,10 @@ class Subzz_Payment_Handler {
         add_action('wp_ajax_nopriv_subzz_check_subscription_cart', [$this, 'ajax_check_subscription_cart']);
         add_action('wp_ajax_subzz_check_redirect_requirement', [$this, 'ajax_check_redirect_requirement']);
         add_action('wp_ajax_nopriv_subzz_check_redirect_requirement', [$this, 'ajax_check_redirect_requirement']);
-        add_action('wp_ajax_subzz_check_order_redirect_requirement', [$this, 'ajax_check_order_redirect_requirement']);
-        add_action('wp_ajax_nopriv_subzz_check_order_redirect_requirement', [$this, 'ajax_check_order_redirect_requirement']);
+        // H2 (2026-08-26): subzz_check_order_redirect_requirement is UNREGISTERED. It had no caller
+        // in any asset or template, no nonce, no login check, and returned any order's
+        // _subzz_signature_url (which embeds the contract-signing JWT) by integer order_id.
+        // The method body stays for reference; the surface is gone.
 
         // PHASE 5: Checkout subscription AJAX handlers (logged-in only — checkout page requires login)
         add_action('wp_ajax_subzz_get_plan_cards', [$this, 'ajax_get_plan_cards']);
@@ -131,6 +133,15 @@ class Subzz_Payment_Handler {
         // Band→Checkout P4: log when the over-limit status panel is shown (Analytics-First — the
         // over-limit funnel logs nothing today). Logged-in only; email server-side.
         add_action('wp_ajax_subzz_log_overlimit_shown', [$this, 'ajax_log_overlimit_shown']);
+
+        // H1 (2026-08-26): server-side proxies for the payment picker + card-update page, so the
+        // shared API key is never printed into browser JS. Both routes are anonymous by design
+        // (a customer arrives from the gateway / from an emailed link), so nopriv is registered;
+        // the protection is the nonce + the key staying on the server.
+        add_action('wp_ajax_subzz_get_payment_vendors', [$this, 'ajax_get_payment_vendors']);
+        add_action('wp_ajax_nopriv_subzz_get_payment_vendors', [$this, 'ajax_get_payment_vendors']);
+        add_action('wp_ajax_subzz_create_payment_session', [$this, 'ajax_create_payment_session']);
+        add_action('wp_ajax_nopriv_subzz_create_payment_session', [$this, 'ajax_create_payment_session']);
 
         // PRESERVED: Traditional checkout process fallback
         add_action('woocommerce_checkout_process', [$this, 'traditional_checkout_fallback'], 1);
@@ -179,7 +190,10 @@ class Subzz_Payment_Handler {
             return;
         }
 
-        $email = sanitize_email($_POST['email'] ?? '');
+        // M1 (2026-08-26): the gate is keyed on the email, so it must be the logged-in user's —
+        // this action is wp_ajax_ only (login required) and the checkout page is login-gated.
+        // Taking it from $_POST let any logged-in user read another account's eligibility/limit.
+        $email = sanitize_email(wp_get_current_user()->user_email ?? '');
         $price = floatval($_POST['product_price_incl_vat'] ?? 0);
         $coupon_code = sanitize_text_field($_POST['coupon_code'] ?? '');
 
@@ -401,7 +415,33 @@ class Subzz_Payment_Handler {
             return;
         }
 
-        $customer_email = sanitize_email($_POST['customer_email'] ?? '');
+        // M1 (2026-08-26): email comes from the session, never from the form — a POSTed
+        // customer_email let a logged-in user create an order against another account.
+        $customer_email = sanitize_email(wp_get_current_user()->user_email ?? '');
+        if (empty($customer_email)) {
+            wp_send_json_error(array('message' => 'Please log in to continue.'));
+            return;
+        }
+
+        // H9 (2026-08-26): the eligibility gate previously ran ONLY in ajax_get_plan_cards (the
+        // read path). A direct POST here created the WC order + Azure order + contract JWT
+        // without it. Same check, same fail-closed semantics, before anything is written.
+        $gate_client = new Subzz_Azure_API_Client();
+        $eligibility = $gate_client->check_checkout_eligibility($customer_email);
+        if ($eligibility === false) {
+            subzz_log('SUBZZ ELIGIBILITY (store): hard-fail after retry — blocking order for ' . $customer_email);
+            wp_send_json_error(array(
+                'message' => 'Service temporarily unavailable, please try again in a moment, or contact us if this persists.'
+            ));
+            return;
+        }
+        if (empty($eligibility['eligible']) || $eligibility['eligible'] !== true) {
+            $reason = isset($eligibility['reason']) ? $eligibility['reason'] : '';
+            subzz_log('SUBZZ ELIGIBILITY (store): block — ' . $customer_email . ' reason=' . $reason);
+            wp_send_json_error(array('message' => $this->ineligibility_message_for($reason)));
+            return;
+        }
+
         $product_id = intval($_POST['product_id'] ?? 0);
         $variation_id = intval($_POST['variation_id'] ?? 0);
         $product_name = sanitize_text_field($_POST['product_name'] ?? '');
@@ -1112,6 +1152,85 @@ class Subzz_Payment_Handler {
                 array('response' => 500)
             );
         }
+    }
+
+    /**
+     * H1 proxy (2026-08-26): GET /payment/vendors on behalf of the picker.
+     * Nonce 'subzz_picker' is minted where the picker/card-update assets are enqueued.
+     * Returns the same {vendors:[...]} shape picker.js already consumes.
+     */
+    public function ajax_get_payment_vendors() {
+        if (!wp_verify_nonce($_REQUEST['nonce'] ?? '', 'subzz_picker')) {
+            wp_send_json_error('Security check failed', 403);
+            return;
+        }
+
+        $cohort_id = sanitize_text_field($_REQUEST['cohortId'] ?? '');
+        $customer_email = sanitize_email($_REQUEST['customerEmail'] ?? '');
+
+        $azure_client = new Subzz_Azure_API_Client();
+        $vendors = $azure_client->get_payment_vendors($cohort_id ?: null, $customer_email ?: null);
+
+        if ($vendors === false) {
+            wp_send_json_error('Vendor lookup failed', 502);
+            return;
+        }
+
+        wp_send_json(array('vendors' => $vendors));
+    }
+
+    /**
+     * H1 proxy (2026-08-26): POST /payment/create-session on behalf of the picker and the
+     * card-update page. The payload is allow-listed field by field; the API's own validation
+     * (vendor required, amount/purpose rules) still applies and its non-200 responses are
+     * relayed with their status so the picker's re-pick UX keeps working.
+     */
+    public function ajax_create_payment_session() {
+        if (!wp_verify_nonce($_REQUEST['nonce'] ?? '', 'subzz_picker')) {
+            wp_send_json_error('Security check failed', 403);
+            return;
+        }
+
+        $raw = json_decode(file_get_contents('php://input'), true);
+        if (!is_array($raw)) {
+            $raw = $_POST;
+        }
+
+        $payload = array(
+            'vendor'           => sanitize_text_field($raw['vendor'] ?? ''),
+            'customerEmail'    => sanitize_email($raw['customerEmail'] ?? ''),
+            'customerName'     => sanitize_text_field($raw['customerName'] ?? ''),
+            'orderReferenceId' => sanitize_text_field($raw['orderReferenceId'] ?? ''),
+            'amount'           => floatval($raw['amount'] ?? 0),
+            'currency'         => 'ZAR',
+        );
+        if (!empty($raw['signatureId'])) {
+            $payload['signatureId'] = sanitize_text_field($raw['signatureId']);
+        }
+        if (!empty($raw['purpose'])) {
+            $payload['purpose'] = sanitize_text_field($raw['purpose']);
+        }
+        // Return/cancel URLs are only honoured when they point back at this site — the
+        // card-update page passes its own token-bearing URL, which must not be forgeable.
+        foreach (array('returnUrl', 'cancelUrl') as $url_key) {
+            if (!empty($raw[$url_key])) {
+                $candidate = esc_url_raw($raw[$url_key]);
+                if (strpos($candidate, home_url('/')) === 0) {
+                    $payload[$url_key] = $candidate;
+                }
+            }
+        }
+
+        $azure_client = new Subzz_Azure_API_Client();
+        $result = $azure_client->create_payment_session_raw($payload);
+
+        if ($result['status'] === 0) {
+            wp_send_json_error('Payment service unreachable', 502);
+            return;
+        }
+
+        status_header($result['status']);
+        wp_send_json($result['body'] ?? array('error' => 'Empty response from payment service'), $result['status']);
     }
 
     /**

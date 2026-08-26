@@ -1385,5 +1385,40 @@ class Subzz_Azure_API_Client {
             'gateEnabled' => isset($data['gateEnabled']) ? (bool) $data['gateEnabled'] : true,
         );
     }
+
+    /**
+     * Thin server-side pass-through for POST /payment/create-session (2026-08-26, H1 fix).
+     *
+     * The payment picker and the card-update page used to call this endpoint straight from the
+     * browser, which meant SUBZZ_AZURE_API_KEY had to be printed into page JavaScript on two
+     * ANONYMOUS routes — the same key the API accepts as the only auth on /api/order and
+     * /api/portal. This method exists so the browser calls a WP AJAX action instead and the key
+     * never leaves the server. Unlike create_lekkapay_session() it forwards the caller's payload
+     * (vendor / purpose / returnUrl / cancelUrl / signatureId) verbatim after an allow-list, and
+     * returns the raw status + decoded body so the picker's UX-3 re-pick logic (which keys off
+     * non-200 statuses) keeps working unchanged.
+     *
+     * @param array $payload Already-sanitised, allow-listed session fields
+     * @return array{status:int, body:array|null} status 0 = transport failure
+     */
+    public function create_payment_session_raw(array $payload) {
+        $endpoint = $this->azure_base_url . '/payment/create-session';
+        subzz_log('SUBZZ AZURE REQUEST: POST ' . $endpoint . ' (proxy, vendor=' . ($payload['vendor'] ?? '-') . ', purpose=' . ($payload['purpose'] ?? 'checkout') . ')');
+
+        $response = wp_remote_post($endpoint, $this->get_default_request_args(array(
+            'body' => wp_json_encode($payload),
+        )));
+
+        if (is_wp_error($response)) {
+            subzz_log('SUBZZ AZURE ERROR: create-session proxy transport failure - ' . $response->get_error_message());
+            return array('status' => 0, 'body' => null);
+        }
+
+        $status = (int) wp_remote_retrieve_response_code($response);
+        $decoded = json_decode(wp_remote_retrieve_body($response), true);
+        subzz_log('SUBZZ AZURE RESPONSE: create-session proxy HTTP ' . $status);
+
+        return array('status' => $status, 'body' => is_array($decoded) ? $decoded : null);
+    }
 }
 ?>

@@ -17,15 +17,18 @@
  *   UX-4: no per-vendor descriptions, single trust line already in template
  *
  * Configuration injected via wp_localize_script as window.subzzPicker:
- *   apiUrl - Azure API base (e.g. https://api.subzz.co.za/api)
- *   apiKey - WP API key for the X-Subzz-API-Key header (CHK-002 protection)
+ *   ajaxUrl - WP admin-ajax.php; vendors + create-session go through server-side proxies
+ *   nonce   - 'subzz_picker' nonce for those proxies (H1, 2026-08-26: the API key is no longer
+ *             exposed to the browser)
  */
 (function () {
     'use strict';
 
     var config = window.subzzPicker || {};
-    var apiUrl = config.apiUrl || '';
-    var apiKey = config.apiKey || '';
+    // H1 (2026-08-26): all API traffic goes through WP AJAX proxies; the API key never reaches
+    // the browser. ajaxUrl + nonce come from wp_localize_script('subzz-picker').
+    var ajaxUrl = config.ajaxUrl || '/wp-admin/admin-ajax.php';
+    var ajaxNonce = config.nonce || '';
 
     var elements = {
         vendorsList: document.getElementById('subzz-picker-vendors'),
@@ -65,6 +68,8 @@
      */
     function fetchAndRenderVendors() {
         var query = new URLSearchParams();
+        query.set('action', 'subzz_get_payment_vendors');
+        query.set('nonce', ajaxNonce);
         if (orderContext.cohortId) {
             query.set('cohortId', orderContext.cohortId);
         }
@@ -72,13 +77,10 @@
             query.set('customerEmail', orderContext.customerEmail);
         }
 
-        var url = apiUrl + '/payment/vendors' + (query.toString() ? '?' + query.toString() : '');
+        var url = ajaxUrl + '?' + query.toString();
         var headers = { 'Accept': 'application/json' };
-        if (apiKey) {
-            headers['X-Subzz-API-Key'] = apiKey;
-        }
 
-        fetch(url, { method: 'GET', headers: headers })
+        fetch(url, { method: 'GET', headers: headers, credentials: 'same-origin' })
             .then(function (res) {
                 if (!res.ok) {
                     throw new Error('Vendor lookup failed with HTTP ' + res.status);
@@ -271,12 +273,11 @@
             payload.signatureId = orderContext.signatureId;
         }
         var headers = { 'Content-Type': 'application/json' };
-        if (apiKey) {
-            headers['X-Subzz-API-Key'] = apiKey;
-        }
-        return fetch(apiUrl + '/payment/create-session', {
+        var url = ajaxUrl + '?action=subzz_create_payment_session&nonce=' + encodeURIComponent(ajaxNonce);
+        return fetch(url, {
             method: 'POST',
             headers: headers,
+            credentials: 'same-origin',
             body: JSON.stringify(payload)
         }).then(function (res) {
             return res.json().then(

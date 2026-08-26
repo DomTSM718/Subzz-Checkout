@@ -1555,13 +1555,25 @@ class Subzz_Contract_Integration {
         }
         
         $reference_id = isset($_POST['reference_id']) ? sanitize_text_field($_POST['reference_id']) : '';
-        
-        if (empty($reference_id)) {
-            subzz_log('SUBZZ CANCELLATION ERROR: No reference ID provided');
+        $jwt_token = isset($_POST['token']) ? sanitize_text_field($_POST['token']) : '';
+
+        if (empty($reference_id) || empty($jwt_token)) {
+            subzz_log('SUBZZ CANCELLATION ERROR: No reference ID / token provided');
             wp_send_json_error(array('message' => 'Invalid request'));
             return;
         }
-        
+
+        // H3 (2026-08-26): this handler is nopriv and the 'subzz_signature' nonce is the shared
+        // uid-0 nonce for logged-out visitors, so until now a bare reference_id cancelled any
+        // order. Bind the request to the contract JWT the signature page holds, exactly as
+        // save_signature() does — the token names the reference it was minted for.
+        $token_data = $this->decode_jwt_token($jwt_token);
+        if (!$token_data || ($token_data['reference_id'] ?? null) !== $reference_id) {
+            subzz_log('SUBZZ CANCELLATION ERROR: Token invalid or reference mismatch for ' . $reference_id);
+            wp_send_json_error(array('message' => 'Security check failed'));
+            return;
+        }
+
         subzz_log('SUBZZ CANCELLATION: Processing for Reference ID: ' . $reference_id);
         
         // Find WooCommerce order by reference ID

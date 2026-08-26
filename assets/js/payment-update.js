@@ -3,7 +3,8 @@
  * Handles card form initialisation, LekkaPay tokenisation, and payment method update.
  *
  * Expects:
- *   - window.subzzPaymentData: { token, subscriptionId, apiUrl }
+ *   - window.subzzPaymentData: { token, subscriptionId }
+ *   - window.subzzPaymentUpdate: { ajaxUrl, nonce } (H1 proxy, 2026-08-26)
  *   - LekkaPay SDK loaded (when available) or placeholder form
  *
  * NOTE: LekkaPay SDK integration depends on their documentation.
@@ -73,13 +74,14 @@
             $result.hide();
 
             // Call the Azure API to create a payment session for card update
+            // H1 (2026-08-26): via the subzz_create_payment_session WP proxy — the API key stays
+            // server-side. ajaxUrl/nonce come from wp_localize_script('subzz-payment-update').
+            var proxy = window.subzzPaymentUpdate || {};
             $.ajax({
-                url: data.apiUrl + '/payment/create-session',
+                url: (proxy.ajaxUrl || '/wp-admin/admin-ajax.php')
+                    + '?action=subzz_create_payment_session&nonce=' + encodeURIComponent(proxy.nonce || ''),
                 type: 'POST',
                 contentType: 'application/json',
-                headers: {
-                    'X-Subzz-API-Key': data.apiKey || ''
-                },
                 data: JSON.stringify({
                     orderReferenceId: data.subscriptionId,
                     customerEmail: '',  // Not needed for update flow

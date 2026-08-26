@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Subzz Subscription Payments
  * Description: Subscription checkout with plan selection, contract signing, LekkaPay payment, customer portal, and Azure backend integration.
- * Version: 2.5.14
+ * Version: 2.6.0
  * Author: Subzz Team
  *
  * 2.5.14 (2026-07-29): PAYMENT-UPDATE LINK FIXED — payment-update.js sent no `vendor` on
@@ -328,15 +328,16 @@ function subzz_enqueue_payment_redirect_assets() {
         'subzz-picker',
         $plugin_url . 'assets/js/picker.js',
         array(), // No jQuery dependency — vanilla fetch API only
-        '6.0.0',
+        '6.1.0', // 2026-08-26 H1: proxies via admin-ajax; bumped so cached 6.0.0 (which needs apiKey) is dropped
         true
     );
 
-    // Pass API URL + WP API key for the picker's vendor lookup + create-session calls.
-    // CHK-002: X-Subzz-API-Key header required by WordPressApiKeyMiddleware on /payment/create-session.
+    // H1 (2026-08-26): the picker talks to WP AJAX proxies (subzz_get_payment_vendors /
+    // subzz_create_payment_session) which hold the X-Subzz-API-Key server-side. The key used to
+    // be localized here, which printed it into an ANONYMOUS page for any visitor to read.
     wp_localize_script('subzz-picker', 'subzzPicker', array(
-        'apiUrl' => defined('SUBZZ_AZURE_API_URL') ? SUBZZ_AZURE_API_URL : 'http://localhost:5000/api',
-        'apiKey' => defined('SUBZZ_AZURE_API_KEY') ? SUBZZ_AZURE_API_KEY : '',
+        'ajaxUrl' => admin_url('admin-ajax.php'),
+        'nonce'   => wp_create_nonce('subzz_picker'),
     ));
 }
 
@@ -374,7 +375,7 @@ function subzz_handle_payment_update_page() {
  */
 function subzz_asset_ver($relpath) {
     $full = plugin_dir_path(__FILE__) . ltrim($relpath, '/');
-    return file_exists($full) ? (string) filemtime($full) : '2.1.0';
+    return file_exists($full) ? (string) filemtime($full) : '2.6.0';
 }
 
 function subzz_enqueue_payment_update_assets() {
@@ -402,8 +403,11 @@ function subzz_enqueue_payment_update_assets() {
         true
     );
 
+    // H1 (2026-08-26): card-update page calls the subzz_create_payment_session proxy; the API
+    // key stays server-side (it was previously printed inline by templates/payment-update.php).
     wp_localize_script('subzz-payment-update', 'subzzPaymentUpdate', array(
-        'apiUrl' => defined('SUBZZ_AZURE_API_URL') ? SUBZZ_AZURE_API_URL : 'http://localhost:5000/api',
+        'ajaxUrl' => admin_url('admin-ajax.php'),
+        'nonce'   => wp_create_nonce('subzz_picker'),
     ));
 }
 

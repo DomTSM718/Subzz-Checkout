@@ -251,7 +251,7 @@ class Subzz_Contract_Integration {
         require_once dirname(__FILE__) . '/jwt/Key.php';
         require_once dirname(__FILE__) . '/jwt/ExpiredException.php';
 
-        $secret_key = defined('SUBZZ_CHECKOUT_JWT_SECRET') ? SUBZZ_CHECKOUT_JWT_SECRET : wp_salt('auth');
+        $secret_key = subzz_jwt_secret(); // M4 (2026-08-26): no wp_salt fallback
 
         try {
             $decoded = \Firebase\JWT\JWT::decode($token, new \Firebase\JWT\Key($secret_key, 'HS256'));

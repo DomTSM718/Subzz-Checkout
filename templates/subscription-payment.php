@@ -438,7 +438,7 @@ function extract_customer_data_from_order($order_data) {
                 <?php
                 // CHK-001: Use signed JWT for re-sign link (same as generate_jwt_token in payment handler)
                 require_once dirname(dirname(__FILE__)) . '/includes/jwt/JWT.php';
-                $resign_secret = defined('SUBZZ_CHECKOUT_JWT_SECRET') ? SUBZZ_CHECKOUT_JWT_SECRET : wp_salt('auth');
+                $resign_secret = subzz_jwt_secret(); // M4 (2026-08-26): no wp_salt fallback
                 $resign_token = \Firebase\JWT\JWT::encode(array(
                     'iss' => home_url(),
                     'iat' => time(),

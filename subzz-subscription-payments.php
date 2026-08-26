@@ -103,6 +103,19 @@ function subzz_signup_app_url() {
     return '';
 }
 
+/**
+ * M4 (2026-08-26): the contract / cart-resume JWT secret. Four sites used to fall back to
+ * wp_salt('auth') with a debug-only warning — i.e. a misconfigured site would silently sign
+ * customer-facing tokens with a key nobody had chosen. Now a missing secret stops the request.
+ */
+function subzz_jwt_secret() {
+    if (defined('SUBZZ_CHECKOUT_JWT_SECRET') && !empty(SUBZZ_CHECKOUT_JWT_SECRET)) {
+        return SUBZZ_CHECKOUT_JWT_SECRET;
+    }
+    subzz_missing_constant('SUBZZ_CHECKOUT_JWT_SECRET');
+    wp_die('Subzz checkout is not configured on this site. Please contact support.', 'Subzz configuration error', array('response' => 500));
+}
+
 function subzz_missing_constant($name) {
     static $reported = array();
     if (isset($reported[$name])) {
@@ -208,6 +221,13 @@ function subzz_custom_query_vars($vars) {
 // Force rewrite rules refresh for all custom pages
 add_action('init', 'subzz_ensure_rewrite_rules', 999);
 function subzz_ensure_rewrite_rules() {
+    // M10/F2 (2026-08-26): this defensive check ran on EVERY init (priority 999) and could
+    // flush_rewrite_rules (a DB write) under load if the rules cache ever thrashed. Now at most
+    // once per hour per site; the admin "Fix Page URLs" button remains the manual override.
+    if (get_transient('subzz_rewrite_rules_checked')) {
+        return;
+    }
+    set_transient('subzz_rewrite_rules_checked', 1, HOUR_IN_SECONDS);
     $rules = get_option('rewrite_rules');
     if (!isset($rules['^contract-signature/?$']) ||
         !isset($rules['^subscription-payment/?$']) ||
@@ -587,7 +607,12 @@ function subzz_force_load_signature_assets_early() {
     
     // Force enqueue the assets immediately
     add_action('wp_enqueue_scripts', 'subzz_enqueue_signature_assets_now', 1);
-    
+
+    // M8 (2026-08-26): this function is declared INSIDE the outer function; a second call to the
+    // outer function in one request was a fatal "cannot redeclare". Guarded until it is hoisted.
+    if (function_exists('subzz_enqueue_signature_assets_now')) {
+        return;
+    }
     function subzz_enqueue_signature_assets_now() {
         subzz_log('SUBZZ DEBUG: Enqueuing signature assets NOW (HYBRID: billing-date-handler.js + signature-handler.js)');
         
@@ -682,7 +707,11 @@ function subzz_enqueue_base_on_payment_templates() {
 }
 
 // Debug URL handling
-add_action('template_redirect', 'subzz_debug_url_handling');
+// M10/F1 (2026-08-26): the debug hook only registers when SUBZZ_DEBUG is on — its body was already
+// gated, but PHP still built eight log strings per page load.
+if (defined('SUBZZ_DEBUG') && SUBZZ_DEBUG) {
+    add_action('template_redirect', 'subzz_debug_url_handling');
+}
 function subzz_debug_url_handling() {
     global $wp;
     
@@ -912,6 +941,11 @@ function subzz_settings_page() {
 // Create signature-pad.min.js if it doesn't exist
 add_action('admin_init', 'subzz_create_missing_assets');
 function subzz_create_missing_assets() {
+    // M2 (2026-08-26): admin_init also fires for admin-ajax.php (anonymous). Only an administrator
+    // may trigger a remote download into the plugin directory, and only a 200 body is written.
+    if (!current_user_can('manage_options')) {
+        return;
+    }
     $plugin_path = plugin_dir_path(__FILE__);
     $assets_dir = $plugin_path . 'assets/';
     $signature_pad_file = $assets_dir . 'signature-pad.min.js';
@@ -927,7 +961,7 @@ function subzz_create_missing_assets() {
         $signature_pad_url = 'https://cdn.jsdelivr.net/npm/signature_pad@4.1.7/dist/signature_pad.umd.min.js';
         $signature_pad_content = wp_remote_get($signature_pad_url);
         
-        if (!is_wp_error($signature_pad_content)) {
+        if (!is_wp_error($signature_pad_content) && wp_remote_retrieve_response_code($signature_pad_content) === 200) {
             $body = wp_remote_retrieve_body($signature_pad_content);
             if (!empty($body)) {
                 file_put_contents($signature_pad_file, $body);

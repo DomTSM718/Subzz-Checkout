@@ -114,8 +114,8 @@ class Subzz_Payment_Handler {
         // PRESERVED: All AJAX handlers for backwards compatibility and debugging
         add_action('wp_ajax_subzz_check_subscription_cart', [$this, 'ajax_check_subscription_cart']);
         add_action('wp_ajax_nopriv_subzz_check_subscription_cart', [$this, 'ajax_check_subscription_cart']);
-        add_action('wp_ajax_subzz_check_redirect_requirement', [$this, 'ajax_check_redirect_requirement']);
-        add_action('wp_ajax_nopriv_subzz_check_redirect_requirement', [$this, 'ajax_check_redirect_requirement']);
+        // M3 (2026-08-26): subzz_check_redirect_requirement UNREGISTERED — no caller in any asset or
+        // template, and it called session_start() on every anonymous hit. Method body kept.
         // H2 (2026-08-26): subzz_check_order_redirect_requirement is UNREGISTERED. It had no caller
         // in any asset or template, no nonce, no login check, and returned any order's
         // _subzz_signature_url (which embeds the contract-signing JWT) by integer order_id.
@@ -993,11 +993,7 @@ class Subzz_Payment_Handler {
         // Load vendored JWT library
         require_once dirname(__FILE__) . '/jwt/JWT.php';
 
-        $secret_key = defined('SUBZZ_CHECKOUT_JWT_SECRET') ? SUBZZ_CHECKOUT_JWT_SECRET : wp_salt('auth');
-
-        if (!defined('SUBZZ_CHECKOUT_JWT_SECRET')) {
-            subzz_log('SUBZZ JWT WARNING: SUBZZ_CHECKOUT_JWT_SECRET not defined, falling back to wp_salt');
-        }
+        $secret_key = subzz_jwt_secret(); // M4 (2026-08-26): no wp_salt fallback
 
         $issued_at = time();
         $expires_at = $issued_at + (30 * 60); // 30 minutes
@@ -1034,11 +1030,7 @@ class Subzz_Payment_Handler {
         require_once dirname(__FILE__) . '/jwt/JWT.php';
         require_once dirname(__FILE__) . '/jwt/Key.php';
 
-        $secret_key = defined('SUBZZ_CHECKOUT_JWT_SECRET') ? SUBZZ_CHECKOUT_JWT_SECRET : wp_salt('auth');
-
-        if (!defined('SUBZZ_CHECKOUT_JWT_SECRET')) {
-            subzz_log('SUBZZ CART RESUME WARNING: SUBZZ_CHECKOUT_JWT_SECRET not defined, falling back to wp_salt');
-        }
+        $secret_key = subzz_jwt_secret(); // M4 (2026-08-26): no wp_salt fallback
 
         try {
             // Decode and validate the resume token

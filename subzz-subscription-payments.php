@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Subzz Subscription Payments
  * Description: Subscription checkout with plan selection, contract signing, LekkaPay payment, customer portal, and Azure backend integration.
- * Version: 2.6.1
+ * Version: 2.6.2
  * Author: Subzz Team
  * Requires at least: 6.5
  * Requires PHP: 7.4
@@ -178,6 +178,7 @@ function subzz_init_plugin() {
     require_once plugin_dir_path(__FILE__) . 'includes/class-customer-portal.php';
     require_once plugin_dir_path(__FILE__) . 'includes/class-product-attribute-tiles.php';
     require_once plugin_dir_path(__FILE__) . 'includes/class-magic-login.php';
+    require_once plugin_dir_path(__FILE__) . 'includes/class-processing-email-suppression.php';
 
     // Initialize classes
     new Subzz_Payment_Handler();
@@ -185,6 +186,7 @@ function subzz_init_plugin() {
     new Subzz_Customer_Portal();
     new Subzz_Product_Attribute_Tiles();
     new Subzz_Magic_Login();
+    new Subzz_Processing_Email_Suppression(); // v2.6.2: no WC "Processing order" email for Subzz orders
 
     subzz_log('SUBZZ DEBUG: Plugin initialized successfully with Azure integration');
 }

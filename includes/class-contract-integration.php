@@ -146,11 +146,11 @@ class Subzz_Contract_Integration {
         // Extract POST data
         $jwt_token = sanitize_text_field($_POST['token']);
         $reference_id = sanitize_text_field($_POST['reference_id']);
-        $customer_email = sanitize_email($_POST['customer_email']);
+        // P2 (2026-09-11): the posted email is compared, never used — the signed token's claim is authoritative.
+        $posted_email = isset($_POST['customer_email']) ? sanitize_email($_POST['customer_email']) : '';
         $billing_day = intval($_POST['billing_day']);
-        
+
         subzz_log('SUBZZ BILLING DATE: Reference ID: ' . $reference_id);
-        subzz_log('SUBZZ BILLING DATE: Customer email: ' . $customer_email);
         subzz_log('SUBZZ BILLING DATE: Selected billing day: ' . $billing_day);
         
         // Validate billing day
@@ -167,6 +167,8 @@ class Subzz_Contract_Integration {
             wp_send_json_error('Invalid token');
             return;
         }
+
+        $customer_email = $this->resolve_token_email($token_data, $posted_email, $reference_id, 'regenerate_contract');
         
         // Retrieve order data
         subzz_log('SUBZZ BILLING DATE: Retrieving order data from Azure');
@@ -236,6 +238,40 @@ class Subzz_Contract_Integration {
             $suffix = 'rd';
         }
         return $day . $suffix;
+    }
+
+    /**
+     * P2 (2026-09-11): the customer email for a contract call comes from the VERIFIED token, never from
+     * the browser. Honest pages post window.subzzCustomerEmail, which is set from the same token, so they
+     * never differ; a difference means the posted field was tampered with. That is recorded on two
+     * queryable surfaces — an unconditional error_log line and a WC order note (the H6 record_failure
+     * shape) — without writing either email anywhere. Never throws; always returns the token's email.
+     * Docs/Planning/Contract-Generation-Ownership-Problem-Statements-2026-09-10.md (P2).
+     */
+    private function resolve_token_email($token_data, $posted_email, $reference_id, $operation) {
+        $token_email = sanitize_email($token_data['customer_email']);
+
+        if ($posted_email !== '' && strcasecmp($posted_email, $token_email) !== 0) {
+            $detail = 'posted customer email differed from the signed token; the token email was used';
+            error_log('SUBZZ TOKEN EMAIL MISMATCH [' . $operation . '] ref=' . $reference_id . ' — ' . $detail);
+
+            if (function_exists('wc_get_orders')) {
+                try {
+                    $orders = wc_get_orders(array(
+                        'meta_key'   => '_subzz_reference_id',
+                        'meta_value' => $reference_id,
+                        'limit'      => 1,
+                    ));
+                    if (!empty($orders)) {
+                        $orders[0]->add_order_note('SUBZZ: ' . $operation . ' — ' . $detail);
+                    }
+                } catch (\Throwable $t) {
+                    error_log('SUBZZ TOKEN EMAIL MISMATCH: could not attach order note for ' . $reference_id . ' — ' . $t->getMessage());
+                }
+            }
+        }
+
+        return $token_email;
     }
 
     /**
@@ -1276,7 +1312,8 @@ class Subzz_Contract_Integration {
         // Extract POST data
         $jwt_token = sanitize_text_field($_POST['token']);
         $reference_id = sanitize_text_field($_POST['reference_id']);
-        $customer_email = sanitize_email($_POST['customer_email']);
+        // P2 (2026-09-11): the posted email is compared, never used — the signed token's claim is authoritative.
+        $posted_email = isset($_POST['customer_email']) ? sanitize_email($_POST['customer_email']) : '';
         $signature_data = sanitize_textarea_field($_POST['signature_data']);
         
         // Extract legal compliance fields
@@ -1296,7 +1333,6 @@ class Subzz_Contract_Integration {
         $variant_info = isset($_POST['variant_info']) ? json_decode(stripslashes($_POST['variant_info']), true) : null;
         
         subzz_log('SUBZZ SIGNATURE DATA: Reference ID: ' . $reference_id);
-        subzz_log('SUBZZ SIGNATURE DATA: Customer email: ' . $customer_email);
         subzz_log('SUBZZ SIGNATURE DATA: Billing day: ' . ($billing_day_of_month ?? 'not provided'));
         subzz_log('SUBZZ SIGNATURE LEGAL: Typed full name: ' . $typed_full_name);
         subzz_log('SUBZZ SIGNATURE LEGAL: Typed initials: ' . $typed_initials);
@@ -1324,6 +1360,8 @@ class Subzz_Contract_Integration {
         }
         
         subzz_log('SUBZZ SIGNATURE VALIDATION: JWT token verified successfully');
+
+        $customer_email = $this->resolve_token_email($token_data, $posted_email, $reference_id, 'save_signature');
 
         // Retrieve contract HTML from transient
         $transient_key = 'subzz_contract_html_' . $reference_id;

@@ -434,7 +434,15 @@ function extract_customer_data_from_order($order_data) {
                 <a href="<?php echo esc_url(wc_get_checkout_url()); ?>" class="button secondary">
                     ← Return to Checkout
                 </a>
-                <?php if (!empty($reference_id)): ?>
+                <?php
+                // P2 (2026-09-11): the re-sign token is minted for the ORDER's email and keyed on the URL
+                // reference alone, so only the logged-in order owner may receive it. Anyone else holding a
+                // reference gets "Return to Checkout" only.
+                $viewer_email = is_user_logged_in() ? wp_get_current_user()->user_email : '';
+                $order_email = $customer_data['email'] ?? '';
+                $viewer_owns_order = $viewer_email !== '' && $order_email !== '' && strcasecmp($viewer_email, $order_email) === 0;
+                ?>
+                <?php if (!empty($reference_id) && $viewer_owns_order): ?>
                 <?php
                 // CHK-001: Use signed JWT for re-sign link (same as generate_jwt_token in payment handler)
                 require_once dirname(dirname(__FILE__)) . '/includes/jwt/JWT.php';

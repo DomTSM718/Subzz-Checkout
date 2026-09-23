@@ -63,6 +63,17 @@ var subzzLog = (typeof window !== "undefined" && window.subzzDebug) ? console.lo
 
     // -- 1. Fetch affordability then show cards --------------------------------
     function fetchAffordabilityAndInit() {
+        // v2.7.1 fail-closed: a variable product with no recognisable term variations would otherwise
+        // be priced from cfg.productPriceInclVat, which is the chosen variation's MONTHLY price, as if
+        // it were the retail price (2026-09-23: a R6,000 item offered at R34/month). Refuse instead.
+        if (cfg.isVariableProduct && (!cfg.variationPlans || cfg.variationPlans.length === 0)) {
+            console.error('SUBZZ CHECKOUT: variable product has no recognisable term variations - refusing to price');
+            hideSection('initial-loading');
+            $('#plan-error p').text('This product can’t be checked out right now. Please contact us and we’ll sort it out.');
+            $('#retry-plans').hide();
+            showSection('plan-error');
+            return;
+        }
         subzzLog('SUBZZ CHECKOUT: Fetching affordability');
 
         $.ajax({

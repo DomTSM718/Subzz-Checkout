@@ -76,9 +76,11 @@ foreach (WC()->cart->get_cart() as $cart_item) {
 
 // Get all subscription variation prices for this product (12m, 18m, 24m)
 $variation_plans = array();
+$is_variable_product = false;
 if ($product_id) {
     $parent_product = wc_get_product($product_id);
     if ($parent_product && $parent_product->is_type('variable')) {
+        $is_variable_product = true;
         foreach ($parent_product->get_available_variations() as $var) {
             $var_name = $var['variation_description'] ?? '';
             $var_obj = wc_get_product($var['variation_id']);
@@ -389,6 +391,9 @@ get_header();
         variationId: <?php echo (int) $variation_id; ?>,
         selectedTerm: <?php echo (int) $selected_term; ?>,
         variationPlans: <?php echo wp_json_encode($variation_plans); ?>,
+        // v2.7.1: a variable product whose variations yield NO term plans must not fall back to
+        // pricing from the cart price (that is a MONTHLY price, not retail) — checkout-plans.js refuses.
+        isVariableProduct: <?php echo $is_variable_product ? 'true' : 'false'; ?>,
         variationAttributes: <?php echo wp_json_encode($variation_attributes); ?>,
         cartUrl: '<?php echo esc_js(wc_get_cart_url()); ?>',
         currency: 'ZAR'

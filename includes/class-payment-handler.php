@@ -960,6 +960,23 @@ class Subzz_Payment_Handler {
         );
         subzz_log('SUBZZ DATA PREPARATION: Order totals extracted: ' . wp_json_encode($order_totals));
         
+        // P17-15 (v2.7.0): the in-store tracking id the footer script captured from a scanned
+        // QR / shelf label / send-link. Re-validated here — a cookie is caller-controlled input —
+        // and also saved as order meta so the order itself records which door the sale came
+        // through. Absent cookie = field omitted; the API treats absence as "not an in-store sale".
+        $subzz_tracking_id = null;
+        if (isset($_COOKIE['subzz_tracking_id'])) {
+            $candidate = sanitize_text_field(wp_unslash($_COOKIE['subzz_tracking_id']));
+            if (preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i', $candidate)) {
+                $subzz_tracking_id = $candidate;
+                $order->update_meta_data('_subzz_tracking_id', $candidate);
+                $order->save();
+                subzz_log('SUBZZ DATA PREPARATION: In-store tracking id attached: ' . $candidate);
+            } else {
+                subzz_log('SUBZZ DATA PREPARATION: subzz_tracking_id cookie present but not a GUID - ignored');
+            }
+        }
+
         // Compile complete order data structure (PRESERVED UNCHANGED)
         $order_data = array(
             'woocommerce_order_id' => $order->get_id(),
@@ -973,6 +990,11 @@ class Subzz_Payment_Handler {
             'order_status' => $order->get_status(),
             'payment_method_title' => $order->get_payment_method_title()
         );
+
+        // Only present when a valid tracking cookie was found (P17-15).
+        if ($subzz_tracking_id !== null) {
+            $order_data['tracking_id'] = $subzz_tracking_id;
+        }
         
         subzz_log('SUBZZ DATA PREPARATION: Complete order data structure prepared');
         subzz_log('SUBZZ DATA PREPARATION: Final data size: ' . strlen(wp_json_encode($order_data)) . ' bytes');

@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Subzz Subscription Payments
  * Description: Subscription checkout with plan selection, contract signing, LekkaPay payment, customer portal, and Azure backend integration.
- * Version: 2.6.2
+ * Version: 2.7.0
  * Author: Subzz Team
  * Requires at least: 6.5
  * Requires PHP: 7.4
@@ -135,6 +135,27 @@ add_action('wp_head', 'subzz_print_debug_flag', 1);
 function subzz_print_debug_flag() {
     $on = defined('SUBZZ_DEBUG') && SUBZZ_DEBUG ? 'true' : 'false';
     echo "<script>window.subzzDebug = {$on};</script>\n";
+}
+
+// P17-15 (2026-09-23, v2.7.0): capture the in-store tracking id from a scanned QR / shelf label /
+// send-link (?trackingId=<guid>) into a JS-SET cookie. Deliberately client-side: these product
+// pages are served from LiteSpeed's page cache, which strips Set-Cookie headers from cached
+// responses (the 2026-02 design's server-set cookie could never have worked there) — but inline
+// JS in the cached HTML still runs per visitor. The cookie is read server-side at checkout
+// (class-payment-handler.php prepare_order_data_for_azure), where the request is never cached.
+// Strict GUID check before storing: this value ends up in an API payload and an order meta row.
+add_action('wp_footer', 'subzz_print_tracking_capture', 5);
+function subzz_print_tracking_capture() {
+    ?>
+<script>(function () {
+    try {
+        var t = new URLSearchParams(window.location.search).get('trackingId');
+        if (t && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(t)) {
+            document.cookie = 'subzz_tracking_id=' + t + '; path=/; max-age=1209600; SameSite=Lax';
+        }
+    } catch (e) { /* never break the page over analytics */ }
+})();</script>
+    <?php
 }
 
 // Plugin activation hook

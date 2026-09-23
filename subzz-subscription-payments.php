@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Subzz Subscription Payments
  * Description: Subscription checkout with plan selection, contract signing, LekkaPay payment, customer portal, and Azure backend integration.
- * Version: 2.7.2
+ * Version: 2.7.3
  * Author: Subzz Team
  * Requires at least: 6.5
  * Requires PHP: 7.4
@@ -156,6 +156,48 @@ function subzz_print_tracking_capture() {
     } catch (e) { /* never break the page over analytics */ }
 })();</script>
     <?php
+}
+
+// v2.7.3 (2026-09-23 retrospective): a shop->API key canary. On 2026-09-23 the STAGING shop's
+// SUBZZ_AZURE_API_KEY no longer matched the API, so every staging checkout failed at eligibility
+// (401) — for an unknown time, because nothing looked. This route makes the shop itself prove its
+// key works; a scheduled GitHub workflow calls it daily on both shops and fails loudly if not.
+// Discloses only ok + the API's HTTP status (no key, no data). Cached 60s so it can't be used to
+// hammer the API.
+add_action('rest_api_init', function () {
+    register_rest_route('subzz/v1', '/api-key-check', array(
+        'methods'             => 'GET',
+        'permission_callback' => '__return_true',
+        'callback'            => 'subzz_api_key_check',
+    ));
+});
+function subzz_api_key_check() {
+    nocache_headers();
+    do_action('litespeed_control_set_nocache', 'subzz api-key-check');
+    $cached = get_transient('subzz_api_key_check');
+    if (is_array($cached)) {
+        $cached['cached'] = true;
+        return new WP_REST_Response($cached, 200);
+    }
+    $base = subzz_api_base_url();
+    $key_set = defined('SUBZZ_AZURE_API_KEY') && !empty(SUBZZ_AZURE_API_KEY);
+    $http = 0;
+    if ($base && $key_set) {
+        $resp = wp_remote_get($base . '/invite-codes/checkout-eligibility?email=' . rawurlencode('canary@subzz.invalid'), array(
+            'timeout' => 45,
+            'headers' => array('X-Subzz-API-Key' => SUBZZ_AZURE_API_KEY),
+        ));
+        $http = is_wp_error($resp) ? -1 : (int) wp_remote_retrieve_response_code($resp);
+    }
+    $result = array(
+        'ok'        => $http === 200,
+        'http'      => $http,
+        'keySet'    => $key_set,
+        'version'   => SUBZZ_PLUGIN_VERSION,
+        'checkedAt' => gmdate('c'),
+    );
+    set_transient('subzz_api_key_check', $result, 60);
+    return new WP_REST_Response($result, 200);
 }
 
 // Plugin activation hook

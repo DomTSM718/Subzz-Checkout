@@ -597,6 +597,12 @@ class Subzz_Payment_Handler {
             'order_status' => 'pending'
         );
 
+        // P17-15: this is the path real orders take — the tracking id must ride it too.
+        $subzz_tracking_id = $this->attach_instore_tracking_id($wc_order);
+        if ($subzz_tracking_id !== null) {
+            $order_data['tracking_id'] = $subzz_tracking_id;
+        }
+
         // Store in Azure
         $azure_client = new Subzz_Azure_API_Client();
         $reference_id = $azure_client->store_order_data($order_data);
@@ -897,6 +903,33 @@ class Subzz_Payment_Handler {
     /**
      * Prepare comprehensive order data for Azure storage - PRESERVED UNCHANGED
      */
+    /**
+     * P17-15: the in-store tracking id the footer script captured from a scanned QR / shelf label /
+     * send-link. Re-validated (a cookie is caller-controlled input) and saved as order meta so the
+     * order records which door the sale came through. Returns the id, or null when absent/invalid;
+     * the caller adds 'tracking_id' to the /order/store payload only when non-null.
+     *
+     * v2.7.2: ONE helper for BOTH order-store paths. v2.7.0 wired it into the block-checkout path
+     * only, while real orders go through the /checkout-subscription/ path — so no scanned link was
+     * ever credited (found by the staging QR->paid walk 2026-09-23).
+     */
+    private function attach_instore_tracking_id($order) {
+        if (!isset($_COOKIE['subzz_tracking_id'])) {
+            return null;
+        }
+        $candidate = sanitize_text_field(wp_unslash($_COOKIE['subzz_tracking_id']));
+        if (!preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i', $candidate)) {
+            subzz_log('SUBZZ TRACKING: subzz_tracking_id cookie present but not a GUID - ignored');
+            return null;
+        }
+        if ($order) {
+            $order->update_meta_data('_subzz_tracking_id', $candidate);
+            $order->save();
+        }
+        subzz_log('SUBZZ TRACKING: in-store tracking id attached: ' . $candidate);
+        return $candidate;
+    }
+
     private function prepare_order_data_for_azure($order) {
         subzz_log('SUBZZ DATA PREPARATION: Starting order data preparation for Azure');
         
@@ -960,22 +993,7 @@ class Subzz_Payment_Handler {
         );
         subzz_log('SUBZZ DATA PREPARATION: Order totals extracted: ' . wp_json_encode($order_totals));
         
-        // P17-15 (v2.7.0): the in-store tracking id the footer script captured from a scanned
-        // QR / shelf label / send-link. Re-validated here — a cookie is caller-controlled input —
-        // and also saved as order meta so the order itself records which door the sale came
-        // through. Absent cookie = field omitted; the API treats absence as "not an in-store sale".
-        $subzz_tracking_id = null;
-        if (isset($_COOKIE['subzz_tracking_id'])) {
-            $candidate = sanitize_text_field(wp_unslash($_COOKIE['subzz_tracking_id']));
-            if (preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i', $candidate)) {
-                $subzz_tracking_id = $candidate;
-                $order->update_meta_data('_subzz_tracking_id', $candidate);
-                $order->save();
-                subzz_log('SUBZZ DATA PREPARATION: In-store tracking id attached: ' . $candidate);
-            } else {
-                subzz_log('SUBZZ DATA PREPARATION: subzz_tracking_id cookie present but not a GUID - ignored');
-            }
-        }
+        $subzz_tracking_id = $this->attach_instore_tracking_id($order);
 
         // Compile complete order data structure (PRESERVED UNCHANGED)
         $order_data = array(

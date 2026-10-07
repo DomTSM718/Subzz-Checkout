@@ -27,12 +27,6 @@ $subzz_return_params = array_merge(is_array($_GET) ? $_GET : array(), is_array($
 // Contract: Docs/Planning/Embed-PostMessage-Contract-2026-07-24.md
 $subzz_consent_id     = isset($subzz_return_params['consent_id']) ? sanitize_text_field($subzz_return_params['consent_id']) : '';
 $subzz_consent_status = isset($subzz_return_params['status']) ? sanitize_text_field($subzz_return_params['status']) : '';
-// v2.7.4 (2026-10-07): Stitch redirects here for a FAILED consent too. Walked on staging: 3DS
-// declined -> Stitch's own "Verification Failed" page -> Exit -> this URL with status=ABANDONED,
-// and this page used to answer "Subscription Confirmed! We've received your payment".
-// Only a status that is present AND not CONSENTED counts as incomplete: an absent status is the
-// legacy LekkaPay return, whose behaviour is unchanged.
-$subzz_payment_incomplete = ($subzz_consent_status !== '' && strtoupper($subzz_consent_status) !== 'CONSENTED');
 
 $reference_id = isset($subzz_return_params['reference_id']) ? sanitize_text_field($subzz_return_params['reference_id']) : '';
 $response_code = isset($subzz_return_params['response_code']) ? sanitize_text_field($subzz_return_params['response_code']) : '';
@@ -51,7 +45,7 @@ if (class_exists('Subzz_Azure_API_Client')) {
     // Log the event
     $user = wp_get_current_user();
     $azure_client->log_payment_event(array(
-        'eventType'         => $subzz_payment_incomplete ? 'return_cancelled' : 'return_success',
+        'eventType'         => 'return_success',
         'orderReferenceId'  => $reference_id ?: null,
         'customerEmail'     => $user ? $user->user_email : null,
         'responseCode'      => $response_code ?: null,
@@ -231,29 +225,6 @@ if (class_exists('Subzz_Azure_API_Client')) {
 }
 </style>
 
-<?php if ($subzz_payment_incomplete): ?>
-<div class="subzz-payment-success">
-    <div class="success-icon">⚠️</div>
-
-    <div class="success-message">
-        <h1 style="color:#856404;">Payment not completed</h1>
-    </div>
-
-    <div class="success-content">
-        <p><strong>Your card could not be verified, so no payment was taken.</strong></p>
-        <p>Your subscription has not started. You can try again, or use a different card.</p>
-    </div>
-
-    <div class="action-buttons">
-        <a href="<?php echo esc_url(wc_get_checkout_url()); ?>" class="button">
-            Return to Checkout
-        </a>
-        <a href="<?php echo esc_url(home_url('/')); ?>" class="button secondary">
-            Return to Home
-        </a>
-    </div>
-</div>
-<?php else: ?>
 <div class="subzz-payment-success">
     <div class="success-icon">✅</div>
     
@@ -330,7 +301,6 @@ if (class_exists('Subzz_Azure_API_Client')) {
         </a>
     </div>
 </div>
-<?php endif; ?>
 
 <?php
 // ─────────────────────────────────────────────────────────────────────────────
@@ -368,10 +338,7 @@ $subzz_conductor_origins = array_values(array_unique(array_filter(apply_filters(
     var payload = {
         source:        "subzz.payment",
         version:       1,
-        // v2.7.4: a failed consent goes back as payment.cancelled, which the conductor already
-        // handles (back to the signed step, free to retry). Sent as consent_result it read as
-        // "Payment details received — we're confirming your subscription".
-        event:         <?php echo wp_json_encode($subzz_payment_incomplete ? 'payment.cancelled' : 'payment.consent_result'); ?>,
+        event:         "payment.consent_result",
         consentId:     <?php echo wp_json_encode($subzz_consent_id); ?>,
         status:        <?php echo wp_json_encode($subzz_consent_status); ?>,
         rawStatus:     <?php echo wp_json_encode($subzz_consent_status); ?>,

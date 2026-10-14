@@ -1066,8 +1066,19 @@ class Subzz_Azure_API_Client {
      * @param string $email Customer email
      * @return array|false Download data with URL or false on failure
      */
-    public function get_contract_download_url($email) {
-        $endpoint = $this->azure_base_url . '/portal/contract?' . http_build_query(array('email' => $email));
+    /**
+     * @param string      $email              The signed-in customer.
+     * @param string|null $order_reference_id The order whose contract is wanted. Null keeps the
+     *                                        pre-2026-10-14 behaviour (the most recent contract),
+     *                                        which is what the API still answers without it.
+     */
+    public function get_contract_download_url($email, $order_reference_id = null) {
+        $query = array('email' => $email);
+        if (!empty($order_reference_id)) {
+            $query['orderReferenceId'] = $order_reference_id;
+        }
+
+        $endpoint = $this->azure_base_url . '/portal/contract?' . http_build_query($query);
 
         $response = wp_remote_get($endpoint, $this->get_default_request_args());
 

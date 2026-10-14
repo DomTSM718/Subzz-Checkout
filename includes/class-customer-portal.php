@@ -187,7 +187,16 @@ class Subzz_Customer_Portal {
         }
 
         $invoices = $this->api_client->get_customer_invoices($email, 1, 10);
-        $contract = $this->api_client->get_contract_download_url($email);
+
+        // Ask for the contract belonging to the subscription being SHOWN, not whichever the
+        // customer signed most recently. With a selector on this page, the link used to point at
+        // the same agreement no matter which subscription was selected, so a customer with more
+        // than one order was offered the wrong document on all but the newest.
+        // Detail: Docs/Planning/Contract-Scoping-Problem-Statement-2026-10-14.md
+        $contract_order_ref = ($subscription && !empty($subscription['orderReferenceId']))
+            ? $subscription['orderReferenceId']
+            : null;
+        $contract = $this->api_client->get_contract_download_url($email, $contract_order_ref);
 
         // Load the template
         $template_path = plugin_dir_path(dirname(__FILE__)) . 'templates/my-subscription.php';
